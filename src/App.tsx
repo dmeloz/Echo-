@@ -3,6 +3,7 @@ import { Toaster } from "sonner";
 import { BarreAjout } from "./components/BarreAjout";
 import { FeuilleTache } from "./components/FeuilleTache";
 import { MenuGlissant } from "./components/MenuGlissant";
+import { MiseAJour } from "./components/MiseAJour";
 import type { Compris } from "./lib/comprendre";
 import type { Tache } from "./lib/types";
 import { premierLancement } from "./data/actions";
@@ -76,6 +77,7 @@ export default function App() {
 
       <BarreAjout noms={noms} onPlusOptions={(pre) => ouvrir(null, pre)} />
       <FeuilleTache {...feuille} noms={noms} onFermer={() => setFeuille((f) => ({ ...f, ouverte: false }))} />
+      <MiseAJour />
       <Toaster position="bottom-center" toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: 4000 }} />
     </>
   );

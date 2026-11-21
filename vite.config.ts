@@ -13,7 +13,7 @@ export default defineConfig({
     tailwindcss(),
     // L'app s'installe sur l'écran d'accueil de l'iPhone et marche sans réseau.
     VitePWA({
-      registerType: "autoUpdate",
+      registerType: "prompt",
       includeAssets: ["favicon.svg", "apple-touch-icon.png"],
       manifest: {
         name: "Echo · notre foyer",
