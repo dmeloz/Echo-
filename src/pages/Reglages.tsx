@@ -4,6 +4,7 @@ import type { Noms, Personne, Tache } from "../lib/types";
 import { effacerExemples, remettreExemples, toutEffacer } from "../data/actions";
 import { choisirProprio, enregistrerNoms, marquerGuide } from "../data/hooks";
 import { MODULES, basculerModule } from "../modules/registre";
+import { exporter, importer } from "../data/sauvegarde";
 
 export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onGuide: () => void }) {
   const [sur, setSur] = useState(false);
@@ -45,7 +46,13 @@ export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: 
       </section>
       <section className="g reglages">
         <span className="lab">Tes données</span>
-        <p>{nb} tâche{nb > 1 ? "s" : ""} enregistrée{nb > 1 ? "s" : ""} sur cet appareil. Rien n'est envoyé ailleurs pour l'instant. Le partage avec {noms.elle} et la sauvegarde arriveront avec la synchro.</p>
+        <p>{nb} tâche{nb > 1 ? "s" : ""} enregistrée{nb > 1 ? "s" : ""} sur cet appareil. Rien n'est envoyé ailleurs pour l'instant. Le partage entre vous deux arrivera avec la synchro. En attendant, fais une sauvegarde de temps en temps.</p>
+        <div className="rangee">
+          <button className="bouton" onClick={() => exporter()}>Faire une sauvegarde</button>
+          <label className="bouton second">Récupérer une sauvegarde
+            <input type="file" accept="application/json,.json" className="vh" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) importer(f); }} /></label>
+        </div>
+        <p className="aide-champ">La sauvegarde est un fichier. Sur iPhone, choisis « Enregistrer dans Fichiers » pour la garder.</p>
         <div className="rangee">
           {taches.some((t) => t.ex)
             ? <button className="bouton second" onClick={() => { effacerExemples(); toast("Exemples effacés"); }}>Effacer les exemples</button>

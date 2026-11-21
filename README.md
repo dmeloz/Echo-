@@ -11,6 +11,10 @@ App web installable (PWA) pour iPhone et iPad d'abord.
 - Glisser une tâche → pour la monter en importance, ← pour la mettre en « plus tard ».
 - Feuille du bas pour modifier : jour, heure, pour qui, importance, répétition, note.
 - Menu glissant à droite (le bouton rond en bas à droite), style Givre lagon.
+- Premier lancement : on choisit le téléphone de qui (Melo ou Sarah), puis un petit guide (à revoir dans Réglages).
+- Étapes (sous-tâches) et photos dans une tâche ; photos réduites avant d'être rangées.
+- Sauvegarde en un fichier (exporter / récupérer) dans Réglages.
+- Message « Nouvelle version d'Echo » quand une mise à jour est en ligne.
 - Les données restent sur l'appareil (IndexedDB, avec Dexie).
 
 ## Pas encore construit

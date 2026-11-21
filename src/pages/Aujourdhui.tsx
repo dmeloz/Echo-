@@ -4,7 +4,7 @@ import { auJour, heureFr, minutes } from "../lib/dates";
 import { niveau } from "../lib/importance";
 import type { Noms, Tache } from "../lib/types";
 import { changerNiveau, cocher, effacerExemples } from "../data/actions";
-import { nomDe } from "../data/hooks";
+import { nomDe, useAvecPhoto } from "../data/hooks";
 import type { Module } from "../modules/contrat";
 import { tachesDuJour } from "../lib/journee";
 
@@ -27,7 +27,8 @@ export function Aujourdhui({ taches, noms, now, modules, onOuvrir, onAller }: Pr
 
   const premiere = liste[0];
   const reste = liste.slice(1);
-  const ligne = (t: Tache) => <LigneTache key={t.id} t={t} n={niveau(t, now)} noms={noms} onCocher={cocher} onOuvrir={onOuvrir} onNiveau={changerNiveau} />;
+  const avecPhoto = useAvecPhoto();
+  const ligne = (t: Tache) => <LigneTache key={t.id} t={t} n={niveau(t, now)} noms={noms} onCocher={cocher} onOuvrir={onOuvrir} onNiveau={changerNiveau} aPhoto={avecPhoto.has(t.id)} />;
 
   return (
     <>

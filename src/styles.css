@@ -288,3 +288,21 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .bv-boutons .bouton { margin-left: auto; padding: 14px 22px; }
 .duo i.moi { background: var(--encre); }
 .duo i.elle { background: var(--turquoise); }
+
+/* Étapes et photos */
+.etapes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.etapes li { display: flex; align-items: center; gap: 8px; background: #fff; border-radius: 12px; padding: 4px 4px 4px 12px; }
+.etapes label { flex: 1; display: flex; align-items: center; gap: 10px; min-width: 0; padding: 6px 0; font-size: 15px; cursor: pointer; }
+.etapes label span { overflow-wrap: anywhere; }
+.etapes input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--turquoise); flex: none; margin: 0; }
+.etapes li.fait span { color: var(--discret); text-decoration: line-through; }
+.retirer { flex: none; border: 0; background: none; color: var(--discret); width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; padding: 0; }
+.photos { display: flex; flex-wrap: wrap; gap: 8px; }
+.photo { position: relative; width: 84px; height: 84px; border-radius: 16px; overflow: hidden; background: #fff; box-shadow: 0 4px 12px var(--ombre); }
+.photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo .retirer { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; background: rgb(18 40 58 / .65); color: #fff; }
+.ajout-photo { width: 84px; height: 84px; border-radius: 16px; border: 1.5px dashed rgb(18 40 58 / .25); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; font-size: 12px; font-weight: 700; color: var(--bleu); cursor: pointer; background: rgb(255 255 255 / .5); }
+.etapes-meta { gap: 3px; font-weight: 700; font-size: 11.5px; align-items: center; }
+.champ .etapes label { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--encre); font-size: 15px; }
+.champ .ajout-photo { text-transform: none; letter-spacing: 0; color: var(--bleu); font-size: 12px; }
+.rangee label.bouton { cursor: pointer; display: inline-flex; align-items: center; }

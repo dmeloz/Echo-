@@ -1,7 +1,7 @@
 import { toast } from "sonner";
 import { auJour, libelleJour, nouvelId, plusJours } from "../lib/dates";
 import { NIVEAUX, niveau } from "../lib/importance";
-import type { Niveau, Qui, Repete, Tache } from "../lib/types";
+import type { Etape, Niveau, Qui, Repete, Tache } from "../lib/types";
 import { db } from "./db";
 
 export function exemples(): Tache[] {
@@ -28,17 +28,23 @@ export async function premierLancement() {
   });
 }
 
-export interface Brouillon { titre: string; qui: Qui; jour: string; heure: string; niveau: Niveau | null; repete: Repete; note: string }
+export interface Brouillon { titre: string; qui: Qui; jour: string; heure: string; niveau: Niveau | null; repete: Repete; note: string; etapes?: Etape[] }
 
-export async function ajouter(d: Brouillon) {
+export async function ajouter(d: Brouillon, photos: Blob[] = []) {
   const t: Tache = { id: nouvelId(), ...d, fait: null, faitLe: null, cree: Date.now() };
-  await db.taches.add(t);
+  await db.transaction("rw", db.taches, db.photos, async () => {
+    await db.taches.add(t);
+    await db.photos.bulkAdd(photos.map((blob, i) => ({ id: nouvelId() + i, tacheId: t.id, blob, cree: Date.now() + i })));
+  });
   const quand = t.jour === auJour() ? "" : ` · ${libelleJour(t.jour).toLowerCase()}`;
   toast(`Ajouté${quand}`, { action: { label: "Annuler", onClick: () => db.taches.delete(t.id) } });
 }
 
-export async function modifier(id: string, d: Brouillon) {
-  await db.taches.update(id, { ...d, ex: false });
+export async function modifier(id: string, d: Brouillon, photos: Blob[] = []) {
+  await db.transaction("rw", db.taches, db.photos, async () => {
+    await db.taches.update(id, { ...d, ex: false });
+    await db.photos.bulkAdd(photos.map((blob, i) => ({ id: nouvelId() + i, tacheId: id, blob, cree: Date.now() + i })));
+  });
   toast("Enregistré");
 }
 
@@ -52,7 +58,7 @@ export async function cocher(t: Tache) {
       const pas = t.repete === "jour" ? 1 : 7;
       let suiv = plusJours(t.jour, pas);
       while (suiv <= auJour()) suiv = plusJours(suiv, pas);
-      const copie: Tache = { ...t, id: nouvelId(), jour: suiv, fait: null, faitLe: null, suite: null, cree: Date.now() };
+      const copie: Tache = { ...t, id: nouvelId(), jour: suiv, fait: null, faitLe: null, suite: null, cree: Date.now(), etapes: t.etapes?.map((e) => ({ ...e, fait: false })) };
       await db.taches.add(copie);
       maj.suite = copie.id;
       message = `Fait. Revient ${libelleJour(suiv).toLowerCase()}`.replace(/\.?$/, ".");
@@ -84,10 +90,19 @@ export async function changerNiveau(t: Tache, sens: 1 | -1) {
 export async function supprimer(id: string) {
   const t = await db.taches.get(id);
   if (!t) return;
-  await db.taches.delete(id);
-  toast("Tâche supprimée", { action: { label: "Annuler", onClick: () => db.taches.add(t) } });
+  const photos = await db.photos.where("tacheId").equals(id).toArray();
+  await db.transaction("rw", db.taches, db.photos, async () => {
+    await db.taches.delete(id);
+    await db.photos.where("tacheId").equals(id).delete();
+  });
+  toast("Tâche supprimée", { action: { label: "Annuler", onClick: () => db.transaction("rw", db.taches, db.photos, async () => { await db.taches.add(t); await db.photos.bulkAdd(photos); }) } });
 }
 
+// Cocher une étape directement, sans ouvrir la feuille.
+export const cocherEtape = async (t: Tache, etapeId: string) =>
+  db.taches.update(t.id, { etapes: (t.etapes || []).map((e) => (e.id === etapeId ? { ...e, fait: !e.fait } : e)) });
+
 export const effacerExemples = () => db.taches.filter((t) => !!t.ex).delete();
+
 export const remettreExemples = () => db.taches.bulkAdd(exemples());
-export const toutEffacer = () => db.taches.clear();
+export const toutEffacer = () => db.transaction("rw", db.taches, db.photos, async () => { await db.taches.clear(); await db.photos.clear(); });

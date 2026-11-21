@@ -1,5 +1,5 @@
 import { useDrag } from "@use-gesture/react";
-import { Check, Repeat, StickyNote } from "pulsoicon-react";
+import { Check, Image, ListChecks, Repeat, StickyNote } from "pulsoicon-react";
 import { useRef, useState } from "react";
 import { auJour, heureFr } from "../lib/dates";
 import type { Niveau, Noms, Tache } from "../lib/types";
@@ -14,11 +14,12 @@ interface Props {
   onCocher: (t: Tache) => void;
   onOuvrir: (t: Tache) => void;
   onNiveau: (t: Tache, sens: 1 | -1) => void;
+  aPhoto?: boolean;
 }
 
 // Une tâche : toucher le rond = fait ; toucher le texte = modifier ;
 // glisser → = plus important ; glisser ← = plus tard.
-export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau }: Props) {
+export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau, aPhoto }: Props) {
   const [dx, setDx] = useState(0);
   const [lache, setLache] = useState(true);
   const [cocheeLocale, setCocheeLocale] = useState(false);
@@ -64,11 +65,13 @@ export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau }: Props) 
         </button>
         <button className="corps" onClick={() => { if (!vientDeGlisser.current) onOuvrir(t); }}>
           <span className="titre">{t.titre}</span>
-          {(retard || t.repete || t.note) && (
+          {(retard || t.repete || t.note || !!t.etapes?.length || aPhoto) && (
             <span className="meta">
               {retard && <span className="retard">{t.jour === auJour(-1) ? "d'hier" : "en retard"}</span>}
               {t.repete && <span className="ic-meta" title={t.repete === "jour" ? "chaque jour" : "chaque semaine"}><Repeat size={13} strokeWidth={2.2} animated={false} /></span>}
+              {!!t.etapes?.length && <span className="ic-meta etapes-meta" title="étapes"><ListChecks size={13} strokeWidth={2.2} animated={false} />{t.etapes.filter((e) => e.fait).length}/{t.etapes.length}</span>}
               {t.note && <span className="ic-meta" title="note"><StickyNote size={13} strokeWidth={2.2} animated={false} /></span>}
+              {aPhoto && <span className="ic-meta" title="photo"><Image size={13} strokeWidth={2.2} animated={false} /></span>}
             </span>
           )}
         </button>

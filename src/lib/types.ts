@@ -17,7 +17,6 @@ export interface Tache {
   cree: number;
   ex?: boolean; // tâche d'exemple
   etapes?: Etape[]; // sous-tâches
-  photos?: string[]; // ids dans la table photos
 }
 
 export interface Noms { moi: string; elle: string }

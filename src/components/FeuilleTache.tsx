@@ -1,7 +1,13 @@
-import { useEffect, useState } from "react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { Camera, X } from "pulsoicon-react";
+import { useEffect, useMemo, useState } from "react";
 import { Drawer } from "vaul";
 import type { Compris } from "../lib/comprendre";
-import { auJour } from "../lib/dates";
+import { auJour, nouvelId } from "../lib/dates";
+import { reduirePhoto } from "../lib/photos";
+import { db, type Photo } from "../data/db";
+
+const AUCUNE: Photo[] = [];
 import { NIVEAUX, niveauPropose } from "../lib/importance";
 import type { Niveau, Noms, Personne, Qui, Repete, Tache } from "../lib/types";
 import { ajouter, modifier, supprimer, type Brouillon } from "../data/actions";
@@ -13,12 +19,20 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
   const vide: Brouillon = { titre: "", jour: auJour(), heure: "", qui: proprio, niveau: null, repete: "", note: "" };
   const [b, setB] = useState<Brouillon>(vide);
   const [sur, setSur] = useState(false);
+  const [nouvelleEtape, setNouvelleEtape] = useState("");
+  const [photosAjoutees, setPhotosAjoutees] = useState<Blob[]>([]);
+  const photosEnregistrees = useLiveQuery(() => (tache ? db.photos.where("tacheId").equals(tache.id).sortBy("cree") : []), [tache?.id]) ?? AUCUNE;
+  const urls = useMemo(() => ({
+    anciennes: photosEnregistrees.map((p) => ({ id: p.id, url: URL.createObjectURL(p.blob) })),
+    nouvelles: photosAjoutees.map((b) => URL.createObjectURL(b)),
+  }), [photosEnregistrees, photosAjoutees]);
+  useEffect(() => () => { urls.anciennes.forEach((u) => URL.revokeObjectURL(u.url)); urls.nouvelles.forEach((u) => URL.revokeObjectURL(u)); }, [urls]);
 
   useEffect(() => {
     if (!ouverte) return;
     const base = tache ?? { ...vide, ...(pre || {}) };
-    setB({ titre: base.titre, jour: base.jour, heure: base.heure || "", qui: base.qui, niveau: base.niveau ?? null, repete: base.repete || "", note: base.note || "" });
-    setSur(false);
+    setB({ titre: base.titre, jour: base.jour, heure: base.heure || "", qui: base.qui, niveau: base.niveau ?? null, repete: base.repete || "", note: base.note || "", etapes: tache?.etapes ? [...tache.etapes] : [] });
+    setSur(false); setNouvelleEtape(""); setPhotosAjoutees([]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ouverte, tache, pre]);
 
@@ -39,9 +53,10 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
             <div className="poignee" aria-hidden="true" />
             <form onSubmit={async (e) => {
               e.preventDefault();
-              const d = { ...b, titre: b.titre.trim(), note: b.note.trim() };
+              const etapes = [...(b.etapes || []), ...(nouvelleEtape.trim() ? [{ id: nouvelId(), texte: nouvelleEtape.trim(), fait: false }] : [])];
+              const d = { ...b, titre: b.titre.trim(), note: b.note.trim(), etapes };
               if (!d.titre) return;
-              if (tache) await modifier(tache.id, d); else await ajouter(d);
+              if (tache) await modifier(tache.id, d, photosAjoutees); else await ajouter(d, photosAjoutees);
               onFermer();
             }}>
               <Drawer.Title asChild><h2>{tache ? "Modifier la tâche" : "Nouvelle tâche"}</h2></Drawer.Title>
@@ -80,6 +95,46 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
                 <div className="puces">
                   {([["", "Non"], ["jour", "Chaque jour"], ["semaine", "Chaque semaine"]] as Array<[Repete, string]>).map(([v, l]) => puce(b.repete === v, () => maj({ repete: v }), l))}
                 </div></div>
+
+              <div className="champ"><span className="lab">Étapes</span>
+                {(b.etapes || []).length > 0 && (
+                  <ul className="etapes">
+                    {(b.etapes || []).map((e) => (
+                      <li key={e.id} className={e.fait ? "fait" : undefined}>
+                        <label><input type="checkbox" checked={e.fait} onChange={() => maj({ etapes: b.etapes!.map((x) => (x.id === e.id ? { ...x, fait: !x.fait } : x)) })} /><span>{e.texte}</span></label>
+                        <button type="button" className="retirer" aria-label={`Retirer l'étape ${e.texte}`} onClick={() => maj({ etapes: b.etapes!.filter((x) => x.id !== e.id) })}><X size={16} strokeWidth={2.2} /></button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <input className="saisie" id="f-etape" placeholder="Ajouter une étape, puis Entrée" enterKeyHint="enter" value={nouvelleEtape} onChange={(e) => setNouvelleEtape(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== "Enter") return;
+                    e.preventDefault();
+                    const texte = nouvelleEtape.trim();
+                    if (texte) { maj({ etapes: [...(b.etapes || []), { id: nouvelId(), texte, fait: false }] }); setNouvelleEtape(""); }
+                  }} />
+              </div>
+
+              <div className="champ"><span className="lab">Photos</span>
+                <div className="photos">
+                  {urls.anciennes.map((p) => (
+                    <span key={p.id} className="photo"><a href={p.url} target="_blank" rel="noreferrer"><img src={p.url} alt="Photo de la tâche" /></a>
+                      <button type="button" className="retirer" aria-label="Retirer la photo" onClick={() => db.photos.delete(p.id)}><X size={14} strokeWidth={2.4} /></button></span>
+                  ))}
+                  {urls.nouvelles.map((u, i) => (
+                    <span key={u} className="photo"><img src={u} alt="Nouvelle photo" />
+                      <button type="button" className="retirer" aria-label="Retirer la photo" onClick={() => setPhotosAjoutees((l) => l.filter((_, k) => k !== i))}><X size={14} strokeWidth={2.4} /></button></span>
+                  ))}
+                  <label className="ajout-photo"><Camera size={22} strokeWidth={2} /><span>Ajouter</span>
+                    <input type="file" accept="image/*" multiple className="vh" onChange={async (e) => {
+                      const fichiers = [...(e.target.files || [])];
+                      e.target.value = "";
+                      const reduites = await Promise.all(fichiers.map((f) => reduirePhoto(f)));
+                      setPhotosAjoutees((l) => [...l, ...reduites]);
+                    }} /></label>
+                </div>
+              </div>
 
               <div className="champ"><label htmlFor="f-note">Note</label>
                 <textarea className="saisie" id="f-note" maxLength={1000} placeholder="Un détail, un numéro, une adresse…" value={b.note} onChange={(e) => maj({ note: e.target.value })} /></div>

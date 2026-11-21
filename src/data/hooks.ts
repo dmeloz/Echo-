@@ -3,6 +3,9 @@ import { useEffect, useState } from "react";
 import type { Noms, Personne, Qui, Tache } from "../lib/types";
 import { NOMS_DEFAUT, db } from "./db";
 
+// Les tâches qui ont au moins une photo (pour la petite icône sur la ligne).
+export const useAvecPhoto = () => useLiveQuery(async () => new Set((await db.photos.toArray()).map((p) => p.tacheId)), [], new Set<string>());
+
 export const useTaches = () => useLiveQuery(() => db.taches.toArray(), [], undefined as Tache[] | undefined);
 
 export function useNoms(): Noms {
