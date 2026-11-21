@@ -3,16 +3,16 @@ import { useState } from "react";
 import { comprendre, type Compris } from "../lib/comprendre";
 import { heureFr, libelleJour } from "../lib/dates";
 import { NIVEAUX, niveauPropose } from "../lib/importance";
-import type { Noms } from "../lib/types";
+import type { Noms, Personne } from "../lib/types";
 import { ajouter } from "../data/actions";
 import { nomDe } from "../data/hooks";
 
 // La barre sous le pouce : on tape une phrase, l'app comprend le jour, l'heure et pour qui.
-export function BarreAjout({ noms, onPlusOptions }: { noms: Noms; onPlusOptions: (pre: Compris | null) => void }) {
+export function BarreAjout({ noms, proprio, onPlusOptions }: { noms: Noms; proprio: Personne; onPlusOptions: (pre: Compris | null) => void }) {
   const [texte, setTexte] = useState("");
   const [focus, setFocus] = useState(false);
   const v = texte.trim();
-  const r = v ? comprendre(v, noms) : null;
+  const r = v ? comprendre(v, noms, undefined, proprio) : null;
   const n = r ? (r.niveau ?? niveauPropose(r)) : 1;
 
   return (
@@ -40,11 +40,11 @@ export function BarreAjout({ noms, onPlusOptions }: { noms: Noms; onPlusOptions:
         </div>
       )}
       <div className="ajout g">
-        <Plus size={20} strokeWidth={2.2} className="plus" />
+        <Plus size={20} strokeWidth={2.2} className="plus" autoAnimated={false} play={focus} />
         <label className="vh" htmlFor="saisie-rapide">Ajouter une tâche</label>
         <input id="saisie-rapide" enterKeyHint="done" placeholder="Ajouter une tâche…" value={texte}
           onChange={(e) => setTexte(e.target.value)} onFocus={() => setFocus(true)} onBlur={() => setTimeout(() => setFocus(false), 150)} />
-        <button className="envoyer" type="submit" aria-label="Ajouter" disabled={!v}><Check size={20} strokeWidth={2.4} /></button>
+        <button className="envoyer" type="submit" aria-label="Ajouter" disabled={!v}><Check size={20} strokeWidth={2.4} autoAnimated={false} play={!!v} /></button>
       </div>
     </form>
   );

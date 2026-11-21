@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { toast } from "sonner";
-import type { Noms, Tache } from "../lib/types";
+import type { Noms, Personne, Tache } from "../lib/types";
 import { effacerExemples, remettreExemples, toutEffacer } from "../data/actions";
-import { enregistrerNoms } from "../data/hooks";
+import { choisirProprio, enregistrerNoms, marquerGuide } from "../data/hooks";
 import { MODULES, basculerModule } from "../modules/registre";
 
-export function Reglages({ taches, noms, masques }: { taches: Tache[]; noms: Noms; masques: string[] }) {
+export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onGuide: () => void }) {
   const [sur, setSur] = useState(false);
   const nb = taches.length;
   const changer = (cle: keyof Noms, valeur: string, defaut: string) => {
@@ -15,10 +15,18 @@ export function Reglages({ taches, noms, masques }: { taches: Tache[]; noms: Nom
   return (
     <>
       <section className="g reglages">
-        <div className="champ"><label htmlFor="r-moi">Ton prénom</label>
+        <div className="champ"><label htmlFor="r-moi">Son prénom à lui</label>
           <input className="saisie" id="r-moi" maxLength={24} defaultValue={noms.moi} onBlur={(e) => e.target.value.trim() !== noms.moi && changer("moi", e.target.value, "Melo")} /></div>
-        <div className="champ"><label htmlFor="r-elle">Prénom de ta femme</label>
+        <div className="champ"><label htmlFor="r-elle">Son prénom à elle</label>
           <input className="saisie" id="r-elle" maxLength={24} defaultValue={noms.elle} onBlur={(e) => e.target.value.trim() !== noms.elle && changer("elle", e.target.value, "Sarah")} /></div>
+        <div className="champ"><span className="lab">Ce téléphone est celui de</span>
+          <div className="puces">
+            {(["moi", "elle"] as Personne[]).map((p) => (
+              <button key={p} type="button" className={`puce${p === "elle" ? " p-elle" : ""}`} aria-pressed={proprio === p}
+                onClick={() => { if (p !== proprio) { choisirProprio(p); toast(`C'est maintenant le téléphone de ${noms[p]}`); } }}>{noms[p]}</button>
+            ))}
+          </div></div>
+        <div className="rangee"><button className="bouton second" onClick={() => { marquerGuide(false); onGuide(); }}>Revoir le guide</button></div>
       </section>
       <section className="g reglages">
         <span className="lab">Modules</span>

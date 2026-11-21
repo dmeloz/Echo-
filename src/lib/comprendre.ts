@@ -1,5 +1,5 @@
 import { auJour, sansAccents, z } from "./dates";
-import type { Niveau, Qui, Repete } from "./types";
+import { autre, type Niveau, type Personne, type Qui, type Repete } from "./types";
 
 // Comprendre une phrase sans IA : le jour, l'heure, pour qui, la répétition.
 // L'assistant IA prendra le relais plus tard, pour les phrases plus libres.
@@ -8,9 +8,9 @@ export interface Compris { titre: string; jour: string; heure: string; qui: Qui;
 const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 const echapperRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-export function comprendre(texte: string, noms: { moi: string; elle: string }, now = new Date()): Compris {
+export function comprendre(texte: string, noms: { moi: string; elle: string }, now = new Date(), proprio: Personne = "moi"): Compris {
   let reste = " " + texte.normalize("NFC") + " ";
-  const r: Compris = { titre: "", jour: auJour(0, now), heure: "", qui: "moi", repete: "", niveau: null };
+  const r: Compris = { titre: "", jour: auJour(0, now), heure: "", qui: proprio, repete: "", niveau: null };
   // On cherche sans accents ; on coupe le même morceau dans le texte d'origine (mêmes positions).
   const trouve = (re: RegExp) => re.exec(sansAccents(reste));
   const couper = (m: RegExpExecArray) => { reste = reste.slice(0, m.index) + " " + reste.slice(m.index + m[0].length); };
@@ -42,8 +42,10 @@ export function comprendre(texte: string, noms: { moi: string; elle: string }, n
 
   const elle = echapperRe(sansAccents(noms.elle || "sarah")), moi = echapperRe(sansAccents(noms.moi || "melo"));
   if ((m = trouve(/\s(pour nous|nous deux|tous les deux|ensemble|a deux)\b/))) { r.qui = "nous"; couper(m); }
-  else if ((m = trouve(new RegExp(`\\s(pour elle|pour ${elle})\\b`)))) { r.qui = "elle"; couper(m); }
-  else if ((m = trouve(new RegExp(`\\s(pour moi|pour ${moi})\\b`)))) { r.qui = "moi"; couper(m); }
+  else if ((m = trouve(new RegExp(`\\s(pour ${elle})\\b`)))) { r.qui = "elle"; couper(m); }
+  else if ((m = trouve(new RegExp(`\\s(pour ${moi})\\b`)))) { r.qui = "moi"; couper(m); }
+  else if ((m = trouve(/\s(pour moi)\b/))) { r.qui = proprio; couper(m); }
+  else if ((m = trouve(/\s(pour elle|pour lui)\b/))) { r.qui = autre(proprio); couper(m); }
 
   if ((m = trouve(/\s(urgent|important)\b/))) { r.niveau = 2; couper(m); }
   if (/!\s*$/.test(reste)) { r.niveau = 2; reste = reste.replace(/!+\s*$/, " "); }

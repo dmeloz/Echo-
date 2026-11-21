@@ -3,14 +3,14 @@ import { Drawer } from "vaul";
 import type { Compris } from "../lib/comprendre";
 import { auJour } from "../lib/dates";
 import { NIVEAUX, niveauPropose } from "../lib/importance";
-import type { Niveau, Noms, Qui, Repete, Tache } from "../lib/types";
+import type { Niveau, Noms, Personne, Qui, Repete, Tache } from "../lib/types";
 import { ajouter, modifier, supprimer, type Brouillon } from "../data/actions";
 
-interface Props { ouverte: boolean; tache: Tache | null; pre: Compris | null; noms: Noms; onFermer: () => void }
+interface Props { ouverte: boolean; tache: Tache | null; pre: Compris | null; noms: Noms; proprio: Personne; onFermer: () => void }
 
 // La feuille du bas pour ajouter ou modifier une tâche (Vaul : on peut la tirer vers le bas pour la fermer).
-export function FeuilleTache({ ouverte, tache, pre, noms, onFermer }: Props) {
-  const vide: Brouillon = { titre: "", jour: auJour(), heure: "", qui: "moi", niveau: null, repete: "", note: "" };
+export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: Props) {
+  const vide: Brouillon = { titre: "", jour: auJour(), heure: "", qui: proprio, niveau: null, repete: "", note: "" };
   const [b, setB] = useState<Brouillon>(vide);
   const [sur, setSur] = useState(false);
 

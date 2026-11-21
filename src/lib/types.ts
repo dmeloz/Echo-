@@ -16,6 +16,15 @@ export interface Tache {
   suite?: string | null; // id de la prochaine occurrence créée en cochant
   cree: number;
   ex?: boolean; // tâche d'exemple
+  etapes?: Etape[]; // sous-tâches
+  photos?: string[]; // ids dans la table photos
 }
 
 export interface Noms { moi: string; elle: string }
+
+// « moi » = Melo et « elle » = Sarah, quel que soit le téléphone.
+// Le propriétaire du téléphone est choisi au premier lancement.
+export type Personne = "moi" | "elle";
+export const autre = (p: Personne): Personne => (p === "moi" ? "elle" : "moi");
+
+export interface Etape { id: string; texte: string; fait: boolean }

@@ -7,7 +7,9 @@ import { MiseAJour } from "./components/MiseAJour";
 import type { Compris } from "./lib/comprendre";
 import type { Tache } from "./lib/types";
 import { premierLancement } from "./data/actions";
-import { initialeDe, useMaintenant, useNoms, useTaches } from "./data/hooks";
+import { initialeDe, useMaintenant, useNoms, useProfil, useTaches } from "./data/hooks";
+import { Bienvenue } from "./components/Bienvenue";
+import { autre } from "./lib/types";
 import { Aujourdhui } from "./pages/Aujourdhui";
 import { tachesDuJour } from "./lib/journee";
 import { Bientot } from "./pages/Bientot";
@@ -21,6 +23,9 @@ export default function App() {
   const taches = useTaches();
   const noms = useNoms();
   const { actifs, masques } = useModulesActifs();
+  const { proprio: proprioBrut, guideVu } = useProfil();
+  const proprio = proprioBrut ?? "moi";
+  const [guideFerme, setGuideFerme] = useState(false);
   const now = useMaintenant();
   const [page, setPage] = useState(depuisAdresse);
   const [apercu, setApercu] = useState<string | null>(null);
@@ -53,31 +58,34 @@ export default function App() {
     <>
       <MenuGlissant
         entrees={[{ id: "aujourdhui", libelle: "Aujourd'hui", pastille: reste }, ...actifs.map((m) => ({ id: m.id, libelle: m.libelle, bientot: m.etat === "bientot" }))]}
-        active={page} nom={noms.moi} initiale={initialeDe(noms, "moi")}
+        active={page} nom={noms[proprio]} initiale={initialeDe(noms, proprio)}
         onChoisir={aller} onApercu={setApercu}
       >
         <div className="cadre">
           <header className="entete">
             <div>
-              <div className="date">{vue.id === "aujourdhui" ? `${salut} ${noms.moi} · ${d}` : d.charAt(0).toUpperCase() + d.slice(1)}</div>
+              <div className="date">{vue.id === "aujourdhui" ? `${salut} ${noms[proprio]} · ${d}` : d.charAt(0).toUpperCase() + d.slice(1)}</div>
               <h1 className="page-titre">{vue.libelle}</h1>
             </div>
             <a className="duo" href="#reglages" aria-label="Les deux profils du foyer" onClick={(e) => { e.preventDefault(); aller("reglages"); }}>
-              <i>{initialeDe(noms, "moi")}</i><i>{initialeDe(noms, "elle")}</i>
+              <i className={proprio}>{initialeDe(noms, proprio)}</i><i className={autre(proprio)}>{initialeDe(noms, autre(proprio))}</i>
             </a>
           </header>
           <div className="cadre" key={vue.id}>
             {taches === undefined ? null
               : module ? (module.Page && module.etat === "construit" ? <module.Page noms={noms} now={now} aller={aller} /> : <Bientot module={module} onAller={aller} />)
-              : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} />
+              : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} proprio={proprio} onGuide={() => setGuideFerme(false)} />
               : <Aujourdhui taches={liste} noms={noms} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} />}
           </div>
         </div>
       </MenuGlissant>
 
-      <BarreAjout noms={noms} onPlusOptions={(pre) => ouvrir(null, pre)} />
-      <FeuilleTache {...feuille} noms={noms} onFermer={() => setFeuille((f) => ({ ...f, ouverte: false }))} />
+      <BarreAjout noms={noms} proprio={proprio} onPlusOptions={(pre) => ouvrir(null, pre)} />
+      <FeuilleTache {...feuille} noms={noms} proprio={proprio} onFermer={() => setFeuille((f) => ({ ...f, ouverte: false }))} />
       <MiseAJour />
+      {proprioBrut !== undefined && (proprioBrut === null || (!guideVu && !guideFerme)) && (
+        <Bienvenue noms={noms} proprio={proprioBrut} onFini={() => setGuideFerme(true)} />
+      )}
       <Toaster position="bottom-center" toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: 4000 }} />
     </>
   );

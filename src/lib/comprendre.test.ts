@@ -29,3 +29,15 @@ describe("importance proposée", () => {
   it("heure dans moins de 2 h = important", () => expect(niveauPropose({ titre: "Vétérinaire", jour: "2026-11-21", heure: "18:30" }, samedi)).toBe(2));
   it("en retard = monte d'un cran", () => expect(niveauPropose({ titre: "Arroser", jour: "2026-11-20", heure: "" }, samedi)).toBe(2));
 });
+
+describe("le téléphone de Sarah", () => {
+  it("par défaut, la tâche est pour la propriétaire", () => {
+    expect(comprendre("acheter du pain", noms, samedi, "elle").qui).toBe("elle");
+  });
+  it("« pour lui » = l'autre personne", () => {
+    expect(comprendre("rendez-vous garage pour lui", noms, samedi, "elle")).toMatchObject({ titre: "Rendez-vous garage", qui: "moi" });
+  });
+  it("« pour moi » sur le téléphone de Melo", () => {
+    expect(comprendre("courses pour moi", noms, samedi, "moi").qui).toBe("moi");
+  });
+});
