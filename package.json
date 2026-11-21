@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "verifier": "node scripts/verifier-ui.mjs"
   },
   "dependencies": {
     "@use-gesture/react": "^10.3.1",

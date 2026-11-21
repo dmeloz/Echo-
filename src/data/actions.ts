@@ -65,7 +65,6 @@ export async function cocher(t: Tache) {
     }
     await db.taches.update(t.id, maj);
   });
-  navigator.vibrate?.(12);
   toast(message, { action: { label: "Annuler", onClick: () => decocher(t.id) } });
 }
 
@@ -83,7 +82,6 @@ export async function changerNiveau(t: Tache, sens: 1 | -1) {
   const n = Math.max(0, Math.min(2, cur + sens)) as Niveau;
   if (n === cur) { toast(sens > 0 ? "Déjà en important" : "Déjà en plus tard"); return; }
   await db.taches.update(t.id, { niveau: n });
-  navigator.vibrate?.(10);
   toast(`Rangé en « ${NIVEAUX[n]} »`, { action: { label: "Annuler", onClick: () => db.taches.update(t.id, { niveau: avant }) } });
 }
 
@@ -106,3 +104,10 @@ export const effacerExemples = () => db.taches.filter((t) => !!t.ex).delete();
 
 export const remettreExemples = () => db.taches.bulkAdd(exemples());
 export const toutEffacer = () => db.transaction("rw", db.taches, db.photos, async () => { await db.taches.clear(); await db.photos.clear(); });
+
+// « À demain » : la tâche quitte aujourd'hui sans être perdue.
+export async function aDemain(t: Tache) {
+  const avant = t.jour;
+  await db.taches.update(t.id, { jour: auJour(1) });
+  toast("Remis à demain", { action: { label: "Annuler", onClick: () => db.taches.update(t.id, { jour: avant }) } });
+}

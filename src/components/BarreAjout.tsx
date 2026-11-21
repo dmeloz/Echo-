@@ -1,5 +1,7 @@
 import { Check, Plus } from "pulsoicon-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import { toast } from "sonner";
+import { trembler } from "../lib/gestes";
 import { comprendre, type Compris } from "../lib/comprendre";
 import { heureFr, libelleJour } from "../lib/dates";
 import { NIVEAUX, niveauPropose } from "../lib/importance";
@@ -11,6 +13,7 @@ import { nomDe } from "../data/hooks";
 export function BarreAjout({ noms, proprio, onPlusOptions }: { noms: Noms; proprio: Personne; onPlusOptions: (pre: Compris | null) => void }) {
   const [texte, setTexte] = useState("");
   const [focus, setFocus] = useState(false);
+  const boite = useRef<HTMLDivElement>(null);
   const v = texte.trim();
   const r = v ? comprendre(v, noms, undefined, proprio) : null;
   const n = r ? (r.niveau ?? niveauPropose(r)) : 1;
@@ -19,8 +22,14 @@ export function BarreAjout({ noms, proprio, onPlusOptions }: { noms: Noms; propr
     <form className="barre-bas" autoComplete="off" onSubmit={(e) => {
       e.preventDefault();
       if (!r) return;
-      ajouter({ ...r, note: "" });
+      const garde = texte;
       setTexte("");
+      // Si l'enregistrement rate : la barre tremble, la phrase revient, et on dit quoi faire.
+      ajouter({ ...r, note: "" }).catch(() => {
+        setTexte(garde);
+        trembler(boite.current);
+        toast("Pas enregistré. Le téléphone manque peut-être de place : libère un peu de stockage, puis réessaie. Ta phrase est gardée.", { duration: 7000 });
+      });
       (document.activeElement as HTMLElement | null)?.blur();
     }}>
       {r && focus && (
@@ -39,7 +48,7 @@ export function BarreAjout({ noms, proprio, onPlusOptions }: { noms: Noms; propr
           </div>
         </div>
       )}
-      <div className="ajout g">
+      <div className="ajout g" ref={boite}>
         <Plus size={20} strokeWidth={2.2} className="plus" autoAnimated={false} play={focus} />
         <label className="vh" htmlFor="saisie-rapide">Ajouter une tâche</label>
         <input id="saisie-rapide" enterKeyHint="done" placeholder="Ajouter une tâche…" value={texte}

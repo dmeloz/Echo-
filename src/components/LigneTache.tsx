@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { auJour, heureFr } from "../lib/dates";
 import type { Niveau, Noms, Tache } from "../lib/types";
 import { initialeDe, nomDe } from "../data/hooks";
+import { DUREE_RESPIRE, vibrer } from "../lib/gestes";
 
 const SEUIL = 72;
 
@@ -34,7 +35,7 @@ export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau, aPhoto }:
     setLache(!active);
     setDx(active ? d : 0);
     const pret = Math.abs(d) >= SEUIL;
-    if (pret !== pretRef.current) { pretRef.current = pret; if (pret) navigator.vibrate?.(6); }
+    if (pret !== pretRef.current) { pretRef.current = pret; if (pret) vibrer(6); }
     if (last) {
       vientDeGlisser.current = Math.abs(mx) > 8;
       setTimeout(() => (vientDeGlisser.current = false), 60);
@@ -49,7 +50,7 @@ export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau, aPhoto }:
   const sens = dx > 4 ? "vers-haut" : dx < -4 ? "vers-bas" : "";
 
   return (
-    <li className={`tache n${n}${fait ? " fait" : ""} ${sens}${Math.abs(dx) >= SEUIL ? " pret" : ""}`} {...lier()}>
+    <li className={`tache n${n}${fait ? " fait" : ""}${cocheeLocale ? " respire" : ""} ${sens}${Math.abs(dx) >= SEUIL ? " pret" : ""}`} {...lier()}>
       <div className="fond" aria-hidden="true"><span className="haut">↑ Important</span><span className="bas">Plus tard ↓</span></div>
       <div className="glisse" style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: lache ? "transform .45s var(--ressort, ease)" : "none" }}>
         <button
@@ -57,7 +58,8 @@ export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau, aPhoto }:
           aria-label={`${t.fait ? "Marquer comme pas fait" : "Marquer comme fait"} : ${t.titre}`}
           onClick={() => {
             if (vientDeGlisser.current) return;
-            if (!t.fait) { setCocheeLocale(true); setTimeout(() => { onCocher(t); setCocheeLocale(false); }, 420); }
+            vibrer(10);
+            if (!t.fait) { setCocheeLocale(true); setTimeout(() => { onCocher(t); setCocheeLocale(false); }, DUREE_RESPIRE); }
             else onCocher(t);
           }}
         >

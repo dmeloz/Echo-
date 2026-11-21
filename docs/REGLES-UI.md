@@ -1,0 +1,116 @@
+# Les règles d'interface d'Echo
+
+Reprises du document « Les axes UI/UX de Kora », sans ses couleurs : Echo garde son thème clair **Givre lagon**.
+Le **bleu** (`--accent`, #2f6bff) joue le rôle que le laiton joue dans Kora : *la chose de maintenant*.
+
+Ce fichier fait foi pour toute nouvelle page et pour chaque module. Les mesures vivent à un seul endroit : le haut de `src/styles.css` (jetons).
+
+## 1. Sept principes
+
+1. **Une seule chose forte par écran.** Sur l'accueil, c'est la carte « En premier ». Tout le reste est calme (verre clair, texte encre ou gris).
+2. **Dire plutôt que compter.** Une phrase (« 3 choses à faire, la prochaine à 19 h. ») plutôt qu'un chiffre seul.
+3. **Tout se défait.** Chaque action montre « Annuler » quelques secondes. Ce qui efface demande deux touches.
+4. **Calme par défaut.** La couleur arrive avec l'urgence : rouge pour « en retard », bleu pour « maintenant ». Pas de confettis, pas de son.
+5. **L'essentiel tient sur le premier écran** sans défiler : la phrase, « En premier », trois lignes de « Ensuite ».
+6. **Chaque info n'apparaît qu'une fois** (aujourd'hui, puis demain, puis les modules).
+7. **Sous le pouce.** Les actions vivent en bas : barre d'ajout, bouton rond du menu en bas à droite.
+
+## 2. Les cartes de l'accueil
+
+Pas de système de cartes à la Kora : les **tuiles des modules** en tiennent lieu. Deux règles seulement :
+
+- **Une seule chose mise en avant à la fois** : ce qui est à faire maintenant (« En premier », avec « C'est fait » et « À demain »).
+- **Une tuile ouvre la page de son module.** Elle ne fait rien d'autre.
+
+Ordre de l'accueil : phrase → En premier → Ensuite (3 lignes, « Voir les autres ») → Demain (carte calme) → modules.
+
+## 3. Mouvement
+
+Courbe de référence : `cubic-bezier(0.32, 0.72, 0, 1)` (`--douce`). Mouvements nommés, durées dans les jetons :
+
+| Nom | Pour quoi | Durée |
+| --- | --- | --- |
+| ligne | une ligne qui glisse | 350 ms |
+| apparition | une carte qui arrive | 300 ms |
+| onglet | changer de page | 320 ms |
+| feuille | feuille du bas | 420 ms |
+| assistant | l'assistant qui répond | 450 ms |
+| widget | une tuile qui change | 480 ms |
+| barre | une barre de progression | 500 ms |
+| chiffre | un chiffre qui roule | 550 ms |
+
+- Les cartes arrivent **en cascade**, 70 ms d'écart.
+- **Moins d'animations** (réglage de l'iPhone) : fondu ou rien, et l'action se fait tout de suite.
+- **La vibration vient sous le doigt**, au toucher, pas à la fin de l'animation.
+
+### Les quatre gestes
+
+| Geste | Sens | Comment | Durée | Dans Echo |
+| --- | --- | --- | --- | --- |
+| Elle respire | C'est fait | 1 → 1,035 → 0,99 → 1 et un fin trait se trace dessous, puis la ligne part | 420 ms | fait (lignes et « En premier ») |
+| Elle tremble | C'est raté | trois petits allers-retours | 320 ms | fait (barre d'ajout si l'enregistrement rate) |
+| Le liseré tourne | Elle travaille | un fil fait le tour de la bulle et se referme à la réponse | 280 ms pour se fermer | **plus tard**, avec l'assistant |
+| Le sceau se dessine | Tout est fini | un cercle puis une coche se tracent | 450 ms | fait (« Tout est fait ») |
+
+Un doublon ne tremble pas : « déjà là » n'est pas une erreur.
+
+## 4. Gestes du doigt (choix d'Echo)
+
+Echo **garde** ses gestes : glisser → = plus important, glisser ← = plus tard ; toucher le rond = fait. (Kora fait → = fait, ← = supprimer : pas repris.)
+Echo **garde** la barre d'ajout « + » en bas, le résumé du matin (voulu par Melo), et le bouton du menu en bas **à droite**.
+
+## 5. États
+
+| État | Ce qu'on montre |
+| --- | --- |
+| Vide | un pictogramme au trait, un titre, une phrase qui dit comment commencer. Jamais « Aucun élément ». |
+| Rien aujourd'hui | « Rien de prévu, rien ne presse » |
+| Chargement | la silhouette de la page (squelette), pas une roue |
+| Page qui plante | écran de secours : « Réessayer » et « Retour à l'accueil » |
+| Enregistrement raté | un message qui dit quoi faire, et l'élément tremble |
+| Hors ligne | « Pas de réseau. Tout marche quand même : c'est gardé sur ce téléphone. » |
+| Données pas assez sûres | l'élément ne prétend pas savoir, et dit comment l'aider |
+
+## 6. Comment l'app parle
+
+- Tutoiement, phrases courtes, mots de tous les jours.
+- Dates en clair : « demain », « jeudi », jamais 2026-11-26.
+- Une action dit ce qu'elle fait : « C'est fait », « À demain », « Plus tard », « Annuler ». Pas « OK » ni « Valider ».
+- Une erreur dit le geste qui débloque, et rassure (« Rien n'est perdu »).
+- Sur son propre téléphone : « Tu as fait… », pas « Melo a fait… ».
+- Les mêmes noms partout (menu, titres, messages, assistant).
+- Pas d'emoji dans l'interface : la joie passe par le geste (le sceau).
+
+## 7. L'assistant (pour plus tard)
+
+- **Trois niveaux d'autonomie**, choisis par chacun : *Il observe* / *Il propose* (défaut) / *Il agit, puis te dit*.
+  Avec la règle de Melo : **toujours demander dès que ça coûte de l'argent**, et ce qui efface attend toujours un oui.
+- **Journal du jour** : tout ce qu'il a fait, chaque ligne avec « Annuler » ; oublié au bout de 7 jours.
+- **Heures calmes** 22 h – 7 h : ce qui arrive la nuit attend le matin (sauf urgence).
+- Il ne répète pas ce qu'une carte montre déjà, ne dérange pas pendant qu'on touche ou écrit.
+- Les cartes qu'il vient de toucher **respirent** l'une après l'autre (110 ms, trois au plus).
+- Différence avec Kora : Echo **garde le résumé du matin** (voulu par Melo).
+- Ce qu'il ne sait pas faire devient une idée notée, pas un échec muet.
+
+## 8. Accessibilité et les 9 détails de finition
+
+- [x] Zone de toucher de 44 points (coche, croix, petits boutons)
+- [ ] Les zones ne se marchent pas dessus : à vérifier page par page
+- [x] Contour bleu au clavier seulement (`:focus-visible`)
+- [ ] Le même trait pour toutes les icônes (1,5) : appliqué aux nouvelles icônes, les anciennes à reprendre
+- [ ] Arrondis concentriques : jetons posés (4 / 12 / 22 / 28), à appliquer partout
+- [x] Chiffres tabulaires (heures, compteurs)
+- [x] Titres de carte équilibrés (`text-wrap: balance`)
+- [x] Pas de mot seul en fin de phrase (`text-wrap: pretty`)
+- [x] Chaque « rien ici » est une vraie page vide
+
+Aussi : rien sous 13 px (sauf une initiale dans une pastille, marquée « exception »), contraste AA, feuilles qui gardent le focus (Vaul), suivre « Réduire les animations ».
+
+## 9. Méthode
+
+1. **Un seul fichier de jetons** : le haut de `src/styles.css`. On n'écrit pas une couleur ou une durée ailleurs.
+2. **Ce fichier de règles** est relu avant chaque nouveau module.
+3. **Vérification automatique avant chaque version** : `npm run verifier` (rien sous 13 px, pas d'emoji), lancée par la mise en ligne avec les tests.
+4. **Corbeille de 30 jours** (plus tard, avec le partage à deux) : ce qu'on efface reste récupérable, avec qui l'a effacé et quand. Aujourd'hui : « Annuler » après chaque suppression.
+5. **Le guide** ne se remontre que si l'allure de l'app change vraiment.
+6. **Chaque module** suit `docs/MODULES.md` et ces règles.

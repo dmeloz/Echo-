@@ -15,6 +15,8 @@ import { tachesDuJour } from "./lib/journee";
 import { Bientot } from "./pages/Bientot";
 import { useModulesActifs } from "./modules/registre";
 import { Reglages } from "./pages/Reglages";
+import { Secours } from "./components/Secours";
+import { HorsLigne } from "./components/HorsLigne";
 
 const depuisAdresse = () => location.hash.slice(1) || "aujourdhui";
 const BASE = [{ id: "aujourdhui", libelle: "Aujourd'hui" }, { id: "reglages", libelle: "Réglages" }];
@@ -71,12 +73,15 @@ export default function App() {
               <i className={proprio}>{initialeDe(noms, proprio)}</i><i className={autre(proprio)}>{initialeDe(noms, autre(proprio))}</i>
             </a>
           </header>
-          <div className="cadre" key={vue.id}>
-            {taches === undefined ? null
+          <HorsLigne />
+          <Secours key={vue.id}>
+          <div className="cadre arrivee">
+            {taches === undefined ? <Squelette />
               : module ? (module.Page && module.etat === "construit" ? <module.Page noms={noms} now={now} aller={aller} /> : <Bientot module={module} onAller={aller} />)
               : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} proprio={proprio} onGuide={() => setGuideFerme(false)} />
               : <Aujourdhui taches={liste} noms={noms} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} />}
           </div>
+          </Secours>
         </div>
       </MenuGlissant>
 
@@ -88,5 +93,14 @@ export default function App() {
       )}
       <Toaster position="bottom-center" toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: 4000 }} />
     </>
+  );
+}
+
+// Pendant le chargement : la silhouette de la page, pas une roue qui tourne.
+function Squelette() {
+  return (
+    <div className="squelette" aria-busy="true" aria-label="Chargement">
+      <i className="s-phrase" /><i className="s-carte grande" /><i className="s-carte" />
+    </div>
   );
 }
