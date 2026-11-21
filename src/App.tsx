@@ -10,14 +10,16 @@ import { initialeDe, useMaintenant, useNoms, useTaches } from "./data/hooks";
 import { Aujourdhui } from "./pages/Aujourdhui";
 import { tachesDuJour } from "./lib/journee";
 import { Bientot } from "./pages/Bientot";
-import { PAGES, TOUTES } from "./pages/pages";
+import { useModulesActifs } from "./modules/registre";
 import { Reglages } from "./pages/Reglages";
 
-const depuisAdresse = () => (TOUTES.find((p) => p.id === location.hash.slice(1)) || PAGES[0]).id;
+const depuisAdresse = () => location.hash.slice(1) || "aujourdhui";
+const BASE = [{ id: "aujourdhui", libelle: "Aujourd'hui" }, { id: "reglages", libelle: "Réglages" }];
 
 export default function App() {
   const taches = useTaches();
   const noms = useNoms();
+  const { actifs, masques } = useModulesActifs();
   const now = useMaintenant();
   const [page, setPage] = useState(depuisAdresse);
   const [apercu, setApercu] = useState<string | null>(null);
@@ -38,7 +40,9 @@ export default function App() {
   };
   const ouvrir = (t: Tache | null, pre: Compris | null = null) => setFeuille({ ouverte: true, tache: t, pre });
 
-  const vue = TOUTES.find((p) => p.id === (apercu ?? page))!;
+  const id = apercu ?? page;
+  const module = actifs.find((m) => m.id === id);
+  const vue = module ?? BASE.find((p) => p.id === id) ?? BASE[0];
   const liste = taches ?? [];
   const reste = tachesDuJour(liste, now).ouvertes.length;
   const d = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
@@ -47,7 +51,7 @@ export default function App() {
   return (
     <>
       <MenuGlissant
-        entrees={PAGES.map((p) => ({ ...p, pastille: p.id === "aujourdhui" ? reste : undefined }))}
+        entrees={[{ id: "aujourdhui", libelle: "Aujourd'hui", pastille: reste }, ...actifs.map((m) => ({ id: m.id, libelle: m.libelle, bientot: m.etat === "bientot" }))]}
         active={page} nom={noms.moi} initiale={initialeDe(noms, "moi")}
         onChoisir={aller} onApercu={setApercu}
       >
@@ -63,9 +67,9 @@ export default function App() {
           </header>
           <div className="cadre" key={vue.id}>
             {taches === undefined ? null
-              : vue.id === "aujourdhui" ? <Aujourdhui taches={liste} noms={noms} now={now} onOuvrir={(t) => ouvrir(t)} onAller={aller} />
-              : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} />
-              : <Bientot page={vue} onAller={aller} />}
+              : module ? (module.Page && module.etat === "construit" ? <module.Page noms={noms} now={now} aller={aller} /> : <Bientot module={module} onAller={aller} />)
+              : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} />
+              : <Aujourdhui taches={liste} noms={noms} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} />}
           </div>
         </div>
       </MenuGlissant>

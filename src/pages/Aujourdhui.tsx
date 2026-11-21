@@ -5,13 +5,13 @@ import { niveau } from "../lib/importance";
 import type { Noms, Tache } from "../lib/types";
 import { changerNiveau, cocher, effacerExemples } from "../data/actions";
 import { nomDe } from "../data/hooks";
-import { PAGES, TUILES } from "./pages";
+import type { Module } from "../modules/contrat";
 import { tachesDuJour } from "../lib/journee";
 
-interface Props { taches: Tache[]; noms: Noms; now: Date; onOuvrir: (t: Tache) => void; onAller: (id: string) => void }
+interface Props { taches: Tache[]; noms: Noms; now: Date; modules: Module[]; onOuvrir: (t: Tache) => void; onAller: (id: string) => void }
 
 // Accueil équilibré : une phrase, la tâche à faire en premier, la suite de la journée, puis ce qui arrive.
-export function Aujourdhui({ taches, noms, now, onOuvrir, onAller }: Props) {
+export function Aujourdhui({ taches, noms, now, modules, onOuvrir, onAller }: Props) {
   const today = auJour(0, now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const { ouvertes, faites } = tachesDuJour(taches, now);
@@ -66,14 +66,19 @@ export function Aujourdhui({ taches, noms, now, onOuvrir, onAller }: Props) {
         </section>
       )}
 
-      <div className="bientot-tete"><span className="lab">Bientôt dans l'app</span></div>
-      <div className="trois">
-        {PAGES.filter((p) => p.bientot).map((p) => (
-          <a key={p.id} className="tuile-bientot" href={"#" + p.id} onClick={(e) => { e.preventDefault(); onAller(p.id); }}>
-            <b>{p.libelle}</b><span>{TUILES[p.id]}</span>
-          </a>
-        ))}
-      </div>
+      {/* Les modules : chacun pose sa tuile ici (ou une tuile simple tant qu'il n'est pas construit). */}
+      {modules.length > 0 && (
+        <>
+          <div className="bientot-tete"><span className="lab">{modules.every((m) => m.etat === "bientot") ? "Bientôt dans l'app" : "Tes modules"}</span></div>
+          <div className="trois">
+            {modules.map((m) => m.Tuile ? <m.Tuile key={m.id} noms={noms} now={now} aller={onAller} /> : (
+              <a key={m.id} className="tuile-bientot" href={"#" + m.id} onClick={(e) => { e.preventDefault(); onAller(m.id); }}>
+                <b>{m.libelle}</b><span>{m.resume}</span>
+              </a>
+            ))}
+          </div>
+        </>
+      )}
     </>
   );
 }

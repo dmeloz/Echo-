@@ -15,7 +15,7 @@ App web installable (PWA) pour iPhone et iPad d'abord.
 
 ## Pas encore construit
 
-- Cuisine, Maison et Budget (pages marquées « Pas encore construit »).
+- Les modules Cuisine, Maison et Budget (marqués « Pas encore construit »). L'app est faite d'une base et de modules : voir [docs/MODULES.md](docs/MODULES.md).
 - Le partage entre Melo et Sarah (synchro Supabase), les notifications, l'assistant IA.
 
 ## Technique
