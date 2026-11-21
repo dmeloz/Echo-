@@ -6,8 +6,16 @@ import { VitePWA } from "vite-plugin-pwa";
 // En ligne sur GitHub Pages, l'app vit dans /Echo-/ ; en local, à la racine.
 const base = process.env.BASE || "/";
 
+const maintenant = new Date();
+const dateVersion = maintenant.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Zurich" })
+  + " à " + maintenant.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Zurich" });
+
 export default defineConfig({
   base,
+  define: {
+    __DATE_VERSION__: JSON.stringify(dateVersion),
+    __CODE_VERSION__: JSON.stringify((process.env.GITHUB_SHA || "").slice(0, 7)),
+  },
   plugins: [
     react(),
     tailwindcss(),

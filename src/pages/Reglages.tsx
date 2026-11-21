@@ -5,9 +5,12 @@ import { effacerExemples, remettreExemples, toutEffacer } from "../data/actions"
 import { choisirProprio, enregistrerNoms, marquerGuide } from "../data/hooks";
 import { MODULES, basculerModule } from "../modules/registre";
 import { exporter, importer } from "../data/sauvegarde";
+import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
 
 export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onGuide: () => void }) {
   const [sur, setSur] = useState(false);
+  const [recherche, setRecherche] = useState(false);
+  const maj = useMiseAJour();
   const nb = taches.length;
   const changer = (cle: keyof Noms, valeur: string, defaut: string) => {
     enregistrerNoms({ ...noms, [cle]: valeur.trim() || defaut });
@@ -61,6 +64,21 @@ export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: 
             if (!sur) { setSur(true); setTimeout(() => setSur(false), 4000); return; }
             toutEffacer(); setSur(false); toast("Tout est effacé");
           }}>{sur ? "Touche encore pour confirmer" : "Tout effacer"}</button>
+        </div>
+      </section>
+      <section className="g reglages">
+        <span className="lab">Mises à jour</span>
+        <p>Echo se met à jour toute seule : quand une nouvelle version est prête, un bandeau apparaît en haut avec un bouton « Mettre à jour ».</p>
+        <p className="version">Version installée : {VERSION}</p>
+        <div className="rangee">
+          {maj.disponible
+            ? <button className="bouton" onClick={() => installer()}>Mettre à jour maintenant</button>
+            : <button className="bouton second" disabled={recherche} onClick={async () => {
+                setRecherche(true);
+                const nouvelle = await chercher();
+                setRecherche(false);
+                if (!nouvelle) toast(maj.reg ? "Echo est à jour" : "Ouvre Echo depuis l'écran d'accueil pour les mises à jour");
+              }}>{recherche ? "Recherche…" : "Chercher une mise à jour"}</button>}
         </div>
       </section>
       <p className="note-donnees">Icônes : PulsoIcon (licence ISC). Cuisine, Maison et Budget ne sont pas encore construits.</p>
