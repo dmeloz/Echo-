@@ -307,6 +307,8 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .message { display: flex; align-items: center; gap: 14px; background: var(--encre); color: #fff; border-radius: 999px; padding: 10px 10px 10px 18px; font: 600 14px var(--police); box-shadow: 0 10px 30px rgb(18 40 58 / .3); width: auto; }
 .message [data-button] { border: 0; background: rgb(255 255 255 / .16); color: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 700; font-size: 13px; margin-left: auto; }
 @media (max-width: 600px) { [data-sonner-toaster] { width: auto !important; } [data-sonner-toaster] [data-sonner-toast] { width: 100% !important; } }
+.clavier-ouvert .barre-bas { bottom: calc(var(--clavier) + 8px); }
+.clavier-ouvert .capsule { bottom: calc(var(--clavier) + 5px); }
 .barre-ouverte [data-sonner-toaster] { bottom: calc(env(safe-area-inset-bottom, 0px) + 17px + 68px) !important; }
 .menu-ouvert [data-sonner-toaster], .feuille-ouverte [data-sonner-toaster] { opacity: 0; pointer-events: none; }
 #root { height: 100%; }
