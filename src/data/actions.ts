@@ -110,10 +110,6 @@ export async function supprimer(id: string) {
   toast("Tâche supprimée", { action: { label: "Annuler", onClick: () => db.transaction("rw", db.taches, db.photos, async () => { await db.taches.add(t); await db.photos.bulkAdd(photos); }) } });
 }
 
-// Cocher une étape directement, sans ouvrir la feuille.
-export const cocherEtape = async (t: Tache, etapeId: string) =>
-  db.taches.update(t.id, { etapes: (t.etapes || []).map((e) => (e.id === etapeId ? { ...e, fait: !e.fait } : e)) });
-
 export const effacerExemples = () => db.transaction("rw", db.taches, db.photos, async () => {
   const ids = (await db.taches.filter((t) => !!t.ex).toArray()).map((t) => t.id);
   await db.taches.bulkDelete(ids);
