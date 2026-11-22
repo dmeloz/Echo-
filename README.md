@@ -24,7 +24,7 @@ App web installable (PWA) pour iPhone et iPad d'abord.
 
 ## Technique
 
-React + TypeScript + Vite, Tailwind, Motion, Dexie, vite-plugin-pwa,
+React + TypeScript + Vite, Motion, Dexie, vite-plugin-pwa,
 Vaul (feuilles du bas), Sonner (messages), use-gesture (gestes), PulsoIcon (icônes, licence ISC).
 
 ```bash
