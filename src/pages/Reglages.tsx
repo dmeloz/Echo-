@@ -2,7 +2,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import type { Noms, Personne, Tache } from "../lib/types";
 import { effacerExemples, remettreExemples, toutEffacer } from "../data/actions";
-import { choisirProprio, enregistrerNoms, marquerGuide } from "../data/hooks";
+import { choisirProprio, enregistrerNoms, marquerGuide, poserReglage, useReglage } from "../data/hooks";
 import { MODULES, basculerModule } from "../modules/registre";
 import { exporter, importer } from "../data/sauvegarde";
 import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
@@ -11,6 +11,7 @@ export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: 
   const [sur, setSur] = useState(false);
   const [recherche, setRecherche] = useState(false);
   const maj = useMiseAJour();
+  const resume = useReglage("resumeMatin", true);
   const nb = taches.length;
   const changer = (cle: keyof Noms, valeur: string, defaut: string) => {
     enregistrerNoms({ ...noms, [cle]: valeur.trim() || defaut });
@@ -31,6 +32,14 @@ export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: 
             ))}
           </div></div>
         <div className="rangee"><button className="bouton second" onClick={() => { marquerGuide(false); onGuide(); }}>Revoir le guide</button></div>
+      </section>
+      <section className="g reglages">
+        <span className="lab">Le matin</span>
+        <label className="module-ligne">
+          <span><b>Résumé du matin</b><small>En haut de l'accueil jusqu'à midi : ta journée, celle de {noms[proprio === "moi" ? "elle" : "moi"]}, et ce qui arrive dans la semaine.</small></span>
+          <input type="checkbox" role="switch" className="interrupteur" checked={resume} onChange={() => poserReglage("resumeMatin", !resume)} />
+        </label>
+        <p className="aide-champ">La notification de 7 h viendra avec les notifications du téléphone.</p>
       </section>
       <section className="g reglages">
         <span className="lab">Modules</span>
@@ -81,7 +90,7 @@ export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: 
               }}>{recherche ? "Recherche…" : "Chercher une mise à jour"}</button>}
         </div>
       </section>
-      <p className="note-donnees">Icônes : PulsoIcon (licence ISC). Cuisine, Maison et Budget ne sont pas encore construits.</p>
+      <p className="note-donnees">Icônes : PulsoIcon (licence ISC). Planning est construit ; Cuisine, Maison et Budget pas encore.</p>
     </>
   );
 }

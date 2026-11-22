@@ -24,6 +24,13 @@ Règles :
 2. Un module garde ses propres données (tables Dexie préfixées par son id, par exemple `cuisine_courses`).
 3. Pas de faux boutons : tant qu'une fonction n'est pas construite, elle est marquée comme telle.
 
+## Les modules aujourd'hui
+
+| Module | État |
+| --- | --- |
+| Planning | construit : aujourd'hui et les six jours suivants, vue Jour et vue Semaine, idée pour alléger le jour le plus chargé. Il lit les tâches de la base (pas de table à lui). |
+| Cuisine, Maison, Budget | pas encore construits |
+
 ## Ajouter un module
 
 1. Créer `src/modules/<id>/index.ts` qui exporte un objet `Module`.

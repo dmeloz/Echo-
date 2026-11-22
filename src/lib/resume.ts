@@ -1,0 +1,61 @@
+import { auJour, heureFr, libelleJour, minutes } from "./dates";
+import { niveau } from "./importance";
+import { autre, type Noms, type Personne, type Tache } from "./types";
+
+// Le résumé du matin : ce que la journée réserve, dit en phrases courtes.
+// Fait à partir des vraies tâches du téléphone (rien d'inventé : pas de météo tant qu'on n'a pas de source).
+
+export interface LigneResume { heure?: string; texte: string }
+export interface SectionResume { id: "agenda" | "important" | "autre" | "semaine"; titre: string; phrase?: string; lignes: LigneResume[]; dit: string }
+export interface Resume { phrase: string; sections: SectionResume[]; texteLu: string }
+
+const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
+
+export function construireResume(taches: Tache[], noms: Noms, proprio: Personne, now = new Date()): Resume {
+  const today = auJour(0, now);
+  const lautre = autre(proprio);
+  const pourMoi = (t: Tache) => t.qui === proprio || t.qui === "nous";
+  const ouvertes = taches.filter((t) => !t.fait && t.jour <= today);
+  const parHeure = (a: Tache, b: Tache) => minutes(a.heure) - minutes(b.heure);
+
+  const agenda = ouvertes.filter((t) => pourMoi(t) && t.jour === today && t.heure).sort(parHeure);
+  const miennes = ouvertes.filter(pourMoi);
+  const importantes = miennes.filter((t) => niveau(t, now) === 2);
+  const enRetard = miennes.filter((t) => t.jour < today);
+  const siennes = ouvertes.filter((t) => t.qui === lautre && t.jour === today);
+  const semaine = taches
+    .filter((t) => !t.fait && pourMoi(t) && t.jour > today && t.jour <= auJour(6, now))
+    .sort((a, b) => a.jour.localeCompare(b.jour) || (a.heure ? minutes(a.heure) : 9999) - (b.heure ? minutes(b.heure) : 9999));
+
+  const sections: SectionResume[] = [];
+  if (agenda.length) sections.push({
+    id: "agenda", titre: "Ton agenda",
+    lignes: agenda.map((t) => ({ heure: heureFr(t.heure), texte: t.titre + (t.qui === "nous" ? " (à deux)" : "") })),
+    dit: "Ton agenda : " + agenda.map((t) => `${t.titre} à ${heureFr(t.heure)}`).join(", ") + ".",
+  });
+  if (miennes.length) {
+    const bouts = [
+      importantes.length ? `${importantes.length > 1 ? "Les plus importantes" : "La plus importante"} : ${importantes.slice(0, 3).map((t) => t.titre).join(", ")}.` : "",
+      enRetard.length ? `${pluriel(enRetard.length, "chose")} en retard.` : "",
+      `${pluriel(miennes.length, "chose")} pour toi aujourd'hui.`,
+    ].filter(Boolean);
+    sections.push({ id: "important", titre: "À ne pas oublier", phrase: bouts.join(" "), lignes: [], dit: bouts.join(" ") });
+  }
+  if (siennes.length) {
+    const premiere = [...siennes].sort((a, b) => (a.heure ? minutes(a.heure) : 9999) - (b.heure ? minutes(b.heure) : 9999))[0];
+    const p = `${premiere.titre}${premiere.heure ? " à " + heureFr(premiere.heure) : ""}${siennes.length > 1 ? `, et ${siennes.length - 1} autre${siennes.length > 2 ? "s choses" : " chose"}` : ""}.`;
+    sections.push({ id: "autre", titre: `${noms[lautre]} aujourd'hui`, phrase: p, lignes: [], dit: `${noms[lautre]} : ${p}` });
+  }
+  if (semaine.length) sections.push({
+    id: "semaine", titre: "Cette semaine",
+    lignes: semaine.slice(0, 4).map((t) => ({ heure: libelleJour(t.jour, now) + (t.heure ? " " + heureFr(t.heure) : ""), texte: t.titre })),
+    dit: "Cette semaine : " + semaine.slice(0, 4).map((t) => `${t.titre}, ${libelleJour(t.jour, now).toLowerCase()}`).join(" ; ") + ".",
+  });
+
+  let phrase: string;
+  if (!miennes.length && !siennes.length) phrase = "Rien de prévu aujourd'hui. Profite.";
+  else if (!miennes.length) phrase = "Rien pour toi aujourd'hui.";
+  else phrase = `Journée ${miennes.length <= 3 ? "plutôt calme" : "bien remplie"} : ${pluriel(miennes.length, "chose")} pour toi${agenda.length ? `, dont ${agenda.length} rendez-vous` : ""}${agenda[0] ? `, le premier à ${heureFr(agenda[0].heure)}` : ""}.`;
+  const salut = `Bonjour ${noms[proprio]}.`;
+  return { phrase, sections, texteLu: [salut, phrase, ...sections.map((s) => s.dit)].join(" ") };
+}

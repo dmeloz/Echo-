@@ -21,8 +21,9 @@ Pas de système de cartes à la Kora : les **tuiles des modules** en tiennent li
 
 - **Une seule chose mise en avant à la fois** : ce qui est à faire maintenant (« En premier », avec « C'est fait » et « À demain »).
 - **Une tuile ouvre la page de son module.** Elle ne fait rien d'autre.
+- **Seule la carte « En premier » se retourne** (idée de Kora, validée par Melo) : devant la tâche, au dos ses étapes, sa note et les gestes rapides « À demain », « Pour l'autre », « Modifier ».
 
-Ordre de l'accueil : phrase → En premier → Ensuite (3 lignes, « Voir les autres ») → Demain (carte calme) → modules.
+Ordre de l'accueil : résumé du matin (jusqu'à midi) → phrase → En premier → Ensuite (3 lignes, « Voir les autres ») → Demain (carte calme) → modules.
 
 ## 3. Mouvement
 

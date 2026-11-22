@@ -125,3 +125,27 @@ export async function aDemain(t: Tache) {
   await db.taches.update(t.id, { jour: auJour(1) });
   toast("Remis à demain", { action: { label: "Annuler", onClick: () => db.taches.update(t.id, { jour: avant }) } });
 }
+
+// « Pour l'autre » (dos de la carte En premier) : la tâche change de main, sans être perdue.
+export async function donnerA(t: Tache, qui: Qui, nom: string) {
+  const avant = t.qui;
+  await db.taches.update(t.id, { qui });
+  toast(`Pour ${nom} maintenant`, { action: { label: "Annuler", onClick: () => db.taches.update(t.id, { qui: avant }) } });
+}
+
+// Cocher une étape sans ouvrir la feuille.
+export async function basculerEtape(id: string, etapeId: string) {
+  await db.transaction("rw", db.taches, async () => {
+    const t = await db.taches.get(id);
+    if (!t?.etapes) return;
+    await db.taches.update(id, { etapes: t.etapes.map((e) => (e.id === etapeId ? { ...e, fait: !e.fait } : e)) });
+  });
+}
+
+// Changer le jour d'une tâche (planning), avec « Annuler ».
+export async function deplacer(t: Tache, jour: string) {
+  const avant = t.jour;
+  if (avant === jour) return;
+  await db.taches.update(t.id, { jour });
+  toast(`Déplacé à ${libelleJour(jour).toLowerCase()}`, { action: { label: "Annuler", onClick: () => db.taches.update(t.id, { jour: avant }) } });
+}

@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import type { Noms } from "../lib/types";
+import type { Noms, Personne, Tache } from "../lib/types";
 
 // Le contrat d'un module. La base (accueil Aujourd'hui, menu, réglages, assistant plus tard)
 // ne connaît les modules que par ce contrat. Les modules ne se parlent pas entre eux.
@@ -9,8 +9,10 @@ import type { Noms } from "../lib/types";
 
 export interface ContexteModule {
   noms: Noms;
+  proprio: Personne;     // le téléphone de qui
   now: Date;
   aller: (id: string) => void;
+  ouvrir: (t: Tache) => void; // ouvre la feuille d'une tâche (la feuille appartient à la base)
 }
 
 export interface Module {

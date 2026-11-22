@@ -4,9 +4,10 @@ import { budget } from "./budget";
 import type { Module } from "./contrat";
 import { cuisine } from "./cuisine";
 import { maison } from "./maison";
+import { planning } from "./planning";
 
 // Tous les modules de l'app, dans l'ordre du menu. Pour en ajouter un, l'ajouter ici.
-export const MODULES: Module[] = [cuisine, maison, budget];
+export const MODULES: Module[] = [planning, cuisine, maison, budget];
 
 // Chaque module peut être masqué dans les Réglages (il disparaît du menu et de l'accueil).
 export function useModulesActifs(): { actifs: Module[]; masques: string[] } {

@@ -1,0 +1,154 @@
+import { Sparkles } from "pulsoicon-react";
+import { useState } from "react";
+import { auJour, heureFr, libelleJour, minutes } from "../../lib/dates";
+import { autre, type Personne, type Tache } from "../../lib/types";
+import { deplacer } from "../../data/actions";
+import { initialeDe, nomDe, poserReglage, useReglage, useTaches } from "../../data/hooks";
+import type { ContexteModule } from "../contrat";
+import { charge, duJour, faitesDuJour, joursAVenir, proposerDeplacement } from "./semaine";
+
+type Vue = "jour" | "semaine";
+const court = (jour: string) => new Date(jour + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "");
+const numero = (jour: string) => new Date(jour + "T12:00:00").getDate();
+const classeQui = (t: Tache) => (t.qui === "nous" ? "nous" : t.qui);
+
+// Le planning : aujourd'hui et les six jours suivants, jour par jour ou toute la semaine d'un coup.
+// Il lit les mêmes tâches que l'accueil (celles qui ont un jour, et une heure si on veut).
+export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
+  const taches = useTaches() ?? [];
+  const vue = useReglage<Vue>("planningVue", "jour");
+  const [jour, setJour] = useState(() => auJour(0, now));
+  const [ideeRefusee, setIdeeRefusee] = useState<string | null>(null);
+  const jours = joursAVenir(now);
+  const today = jours[0];
+  const jourVu = jours.includes(jour) ? jour : today;
+  const lautre = autre(proprio);
+  const choisirJour = (j: string) => { setJour(j); poserReglage("planningVue", "jour"); };
+
+  return (
+    <>
+      <div className="vue-choix" role="group" aria-label="Vue">
+        {(["jour", "semaine"] as Vue[]).map((v) => (
+          <button key={v} type="button" aria-pressed={vue === v} onClick={() => poserReglage("planningVue", v)}>{v === "jour" ? "Jour" : "Semaine"}</button>
+        ))}
+      </div>
+
+      <div className="bande-jours" role="group" aria-label="Choisir le jour">
+        {jours.map((j) => {
+          const liste = duJour(taches, j, today);
+          const nm = charge(liste, "moi"), ne = charge(liste, "elle");
+          return (
+            <button key={j} type="button" aria-pressed={vue === "jour" && j === jourVu} onClick={() => choisirJour(j)}
+              aria-label={`${libelleJour(j, now)} : ${liste.length} chose${liste.length > 1 ? "s" : ""}`}>
+              <span>{j === today ? "Auj." : court(j)}</span><b>{numero(j)}</b>
+              <span className="points" aria-hidden="true">{Array.from({ length: Math.min(3, nm) }, (_, i) => <i key={"m" + i} />)}{Array.from({ length: Math.min(3, ne) }, (_, i) => <i key={"e" + i} className="elle" />)}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {vue === "jour"
+        ? <VueJour taches={taches} jour={jourVu} today={today} now={now} noms={noms} ouvrir={ouvrir} />
+        : <VueSemaine taches={taches} jours={jours} today={today} now={now} noms={noms} proprio={proprio} lautre={lautre}
+            ideeRefusee={ideeRefusee} onRefuser={setIdeeRefusee} onJour={choisirJour} />}
+    </>
+  );
+}
+
+function VueJour({ taches, jour, today, now, noms, ouvrir }: { taches: Tache[]; jour: string; today: string; now: Date; noms: ContexteModule["noms"]; ouvrir: (t: Tache) => void }) {
+  const liste = duJour(taches, jour, today);
+  const avecHeure = liste.filter((t) => t.heure && t.jour === jour);
+  const sansHeure = liste.filter((t) => !t.heure || t.jour !== jour);
+  const faites = faitesDuJour(taches, jour);
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const iMaintenant = jour === today ? avecHeure.findIndex((t) => minutes(t.heure) > nowMin) : -1;
+  const ligne = (t: Tache) => (
+    <li key={t.id}>
+      <button className={`bloc-p ${classeQui(t)}${t.fait ? " fait" : ""}`} onClick={() => ouvrir(t)}>
+        <b>{t.titre}</b>
+        <small>{[t.jour < today ? (t.jour === auJour(-1, now) ? "D'hier" : "En retard") : "", t.qui === "nous" ? "À deux" : `Pour ${nomDe(noms, t.qui)}`, t.etapes?.length ? `${t.etapes.filter((e) => e.fait).length}/${t.etapes.length} étapes` : ""].filter(Boolean).join(" · ")}</small>
+      </button>
+    </li>
+  );
+
+  return (
+    <section className="g planning-jour" aria-labelledby="lab-jour">
+      <h2 className="jour-titre" id="lab-jour">{libelleJour(jour, now)}</h2>
+      {!liste.length && !faites.length && (
+        <div className="vide-jour"><b>Rien de prévu ce jour-là</b><span>Écris une chose en bas, par exemple « dentiste {jour === today ? "à 15 h" : court(jour) + " 9 h"} ».</span></div>
+      )}
+      {avecHeure.length > 0 && (
+        <ol className="ligne-temps">
+          {avecHeure.map((t, i) => (
+            <li key={t.id} className="lt-rang">
+              {i === iMaintenant && <span className="maintenant-p" aria-label={`Il est ${heureFr(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`)}`} />}
+              <span className="lt-heure">{heureFr(t.heure)}</span>
+              <ul>{ligne(t)}</ul>
+            </li>
+          ))}
+          {jour === today && iMaintenant === -1 && <li className="lt-rang fin"><span className="maintenant-p" aria-hidden="true" /></li>}
+        </ol>
+      )}
+      {sansHeure.length > 0 && (
+        <>
+          <span className="lab">Sans heure</span>
+          <ul className="sans-heure">{sansHeure.map(ligne)}</ul>
+        </>
+      )}
+      {faites.length > 0 && <details className="faites"><summary>{faites.length} fait{faites.length > 1 ? "s" : ""}</summary><ul className="sans-heure">{faites.map(ligne)}</ul></details>}
+      <p className="aide-champ">Touche une chose pour changer son jour, son heure ou qui s'en occupe.</p>
+    </section>
+  );
+}
+
+interface PropsSemaine { taches: Tache[]; jours: string[]; today: string; now: Date; noms: ContexteModule["noms"]; proprio: Personne; lautre: Personne; ideeRefusee: string | null; onRefuser: (id: string) => void; onJour: (j: string) => void }
+
+function VueSemaine({ taches, jours, today, now, noms, proprio, lautre, ideeRefusee, onRefuser, onJour }: PropsSemaine) {
+  const idee = proposerDeplacement(taches, [proprio, lautre], now);
+  const montrerIdee = idee && idee.tache.id !== ideeRefusee;
+  const jourCourt = (j: string) => libelleJour(j, now).split(" ")[0].toLowerCase();
+
+  return (
+    <>
+      {montrerIdee && idee && (
+        <section className="g idee" aria-labelledby="lab-idee">
+          <span className="lab" id="lab-idee"><Sparkles size={15} strokeWidth={1.8} animated={false} /> Une idée</span>
+          <p><b>{libelleJour(idee.de, now).split(" ")[0]}</b> est chargé pour {idee.pour === proprio ? "toi" : noms[idee.pour]} ({idee.nbDe} choses), <b>{jourCourt(idee.vers)}</b> beaucoup moins ({idee.nbVers}). Je déplace « {idee.tache.titre} » ?</p>
+          <div className="rangee">
+            <button className="bouton petit" onClick={() => deplacer(idee.tache, idee.vers)}>Oui, déplace</button>
+            <button className="bouton-texte" onClick={() => onRefuser(idee.tache.id)}>Non</button>
+          </div>
+        </section>
+      )}
+      <ul className="semaine-liste">
+        {jours.map((j) => {
+          const liste = duJour(taches, j, today);
+          const montres = liste.slice(0, 5);
+          return (
+            <li key={j}>
+              <button className={`jour-rang${j === today ? " auj" : ""}`} onClick={() => onJour(j)}
+                aria-label={`${libelleJour(j, now)} : ${liste.length ? liste.map((t) => t.titre).join(", ") : "libre"}`}>
+                <span className="jr-date"><span>{j === today ? "Auj." : court(j)}</span><b>{numero(j)}</b></span>
+                <span className="jr-corps">
+                  {liste.length ? (
+                    <>
+                      <span className="jr-charge">
+                        <i className="moi"><em>{initialeDe(noms, "moi")}</em>{charge(liste, "moi")}</i>
+                        <i className="elle"><em>{initialeDe(noms, "elle")}</em>{charge(liste, "elle")}</i>
+                      </span>
+                      <span className="jr-puces">
+                        {montres.map((t) => <span key={t.id} className={`jr-puce ${classeQui(t)}`}>{t.heure && t.jour === j ? heureFr(t.heure) + " " : ""}{t.titre}</span>)}
+                        {liste.length > montres.length && <span className="jr-puce plus">+ {liste.length - montres.length}</span>}
+                      </span>
+                    </>
+                  ) : <span className="jr-libre">Journée libre</span>}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="aide-champ">Les points sous chaque jour : bleu pour {noms.moi}, turquoise pour {noms.elle}. Ce qui est à deux compte pour les deux.</p>
+    </>
+  );
+}

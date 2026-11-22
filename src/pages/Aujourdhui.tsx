@@ -1,21 +1,25 @@
-import { CalendarClock, Check, Sun } from "pulsoicon-react";
+import { CalendarClock, Sun } from "pulsoicon-react";
 import { useState } from "react";
+import { CartePremier } from "../components/CartePremier";
 import { LigneTache } from "../components/LigneTache";
+import { ResumeMatin } from "../components/ResumeMatin";
 import { auJour, heureFr, minutes } from "../lib/dates";
 import { DUREE_RESPIRE, vibrer } from "../lib/gestes";
 import { niveau } from "../lib/importance";
-import type { Noms, Tache } from "../lib/types";
-import { aDemain, changerNiveau, cocher, effacerExemples } from "../data/actions";
-import { nomDe, useAvecPhoto } from "../data/hooks";
+import { autre, type Noms, type Personne, type Tache } from "../lib/types";
+import { changerNiveau, cocher, effacerExemples } from "../data/actions";
+import { poserReglage, useAvecPhoto, useReglage } from "../data/hooks";
 import type { Module } from "../modules/contrat";
 import { tachesDuJour } from "../lib/journee";
 
-interface Props { taches: Tache[]; noms: Noms; now: Date; modules: Module[]; onOuvrir: (t: Tache) => void; onAller: (id: string) => void }
+interface Props { taches: Tache[]; noms: Noms; proprio: Personne; now: Date; modules: Module[]; onOuvrir: (t: Tache) => void; onAller: (id: string) => void }
 
 const VISIBLES = 3; // « Ensuite » : trois lignes au plus, le reste se déplie.
 
 // Accueil : une phrase, UNE chose mise en avant (en premier), la suite en calme, demain, puis les modules.
-export function Aujourdhui({ taches, noms, now, modules, onOuvrir, onAller }: Props) {
+type Filtre = "tout" | "moi" | "autre";
+
+export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAller }: Props) {
   const today = auJour(0, now);
   const demain = auJour(1, now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -34,7 +38,12 @@ export function Aujourdhui({ taches, noms, now, modules, onOuvrir, onAller }: Pr
   else phrase = `${ouvertes.length} chose${ouvertes.length > 1 ? "s" : ""} à faire${prochaine ? `, la prochaine à ${heureFr(prochaine.heure)}` : ""}.`;
 
   const premiere = liste[0];
-  const reste = liste.slice(1);
+  // « Ensuite » peut montrer tout, seulement ce qui est pour soi, ou ce qui est pour l'autre (gardé sur le téléphone).
+  const filtre = useReglage<Filtre>("filtreQui", "tout");
+  const lautre = autre(proprio);
+  const garde = (t: Tache) => filtre === "tout" || t.qui === "nous" || t.qui === (filtre === "moi" ? proprio : lautre);
+  const resteTout = liste.slice(1);
+  const reste = resteTout.filter(garde);
   const montres = toutVoir ? reste : reste.slice(0, VISIBLES);
   const avecPhoto = useAvecPhoto();
   const ligne = (t: Tache) => <LigneTache key={t.id} t={t} n={niveau(t, now)} noms={noms} onCocher={cocher} onOuvrir={onOuvrir} onNiveau={changerNiveau} aPhoto={avecPhoto.has(t.id)} />;
@@ -49,6 +58,7 @@ export function Aujourdhui({ taches, noms, now, modules, onOuvrir, onAller }: Pr
 
   return (
     <>
+      <ResumeMatin taches={taches} noms={noms} proprio={proprio} now={now} />
       <p className="phrase">{phrase}</p>
       {taches.some((t) => t.ex) && (
         <div className="exemples">
@@ -58,19 +68,7 @@ export function Aujourdhui({ taches, noms, now, modules, onOuvrir, onAller }: Pr
       )}
 
       {premiere ? (
-        <section className={`g focus${respire === premiere.id ? " respire" : ""}`} aria-labelledby="lab-focus">
-          <span className="lab" id="lab-focus">En premier</span>
-          <button className="focus-titre" onClick={() => onOuvrir(premiere)}>{premiere.titre}</button>
-          <span className="focus-quand">
-            {premiere.jour < today && <b className="retard">{premiere.jour === auJour(-1, now) ? "D'hier" : "En retard"}</b>}
-            {[premiere.heure && heureFr(premiere.heure), premiere.qui === "nous" ? "à faire à deux" : `pour ${nomDe(noms, premiere.qui)}`].filter(Boolean).join(" · ")}
-          </span>
-          <div className="focus-pied">
-            <button className="bouton-texte" onClick={() => aDemain(premiere)}>À demain</button>
-            <button className="bouton petit" onClick={() => faitPremiere(premiere)}><Check size={16} strokeWidth={2.6} play={respire === premiere.id} /> C'est fait</button>
-          </div>
-          <i className="trace-respire" aria-hidden="true" />
-        </section>
+        <CartePremier key={premiere.id} t={premiere} noms={noms} proprio={proprio} now={now} respire={respire === premiere.id} onFait={faitPremiere} onOuvrir={onOuvrir} />
       ) : faites.length ? (
         <section className="g vide fini" aria-live="polite">
           <svg className="sceau" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="20" pathLength={1} /><path d="M15 24.5l6 6 12-13" pathLength={1} /></svg>
@@ -85,10 +83,18 @@ export function Aujourdhui({ taches, noms, now, modules, onOuvrir, onAller }: Pr
         </section>
       )}
 
-      {(reste.length > 0 || faites.length > 0) && (
+      {(resteTout.length > 0 || faites.length > 0) && (
         <section className="g journee" aria-labelledby="lab-journee">
           <div className="taches-tete"><span className="lab" id="lab-journee">Ensuite</span><span className="compte">{faites.length} sur {total} faites</span></div>
           <div className="barre" aria-hidden="true"><i style={{ width: pct + "%" }} /></div>
+          {resteTout.length > 0 && (
+            <div className="puces filtre-qui" role="group" aria-label="Montrer les tâches de">
+              {([["tout", "Tout"], ["moi", "Moi"], ["autre", noms[lautre]]] as Array<[Filtre, string]>).map(([k, l]) => (
+                <button key={k} type="button" className={`puce${k === "autre" && lautre === "elle" ? " p-elle" : ""}`} aria-pressed={filtre === k} onClick={() => poserReglage("filtreQui", k)}>{l}</button>
+              ))}
+            </div>
+          )}
+          {resteTout.length > 0 && !reste.length && <p className="filtre-vide">{filtre === "moi" ? "Rien d'autre pour toi aujourd'hui." : `Rien d'autre pour ${noms[lautre]} aujourd'hui.`}</p>}
           {montres.length > 0 && <ul className="taches">{montres.map(ligne)}</ul>}
           {reste.length > VISIBLES && (
             <button className="bouton-texte voir-plus" onClick={() => setToutVoir((v) => !v)}>
@@ -121,7 +127,7 @@ export function Aujourdhui({ taches, noms, now, modules, onOuvrir, onAller }: Pr
         <>
           <div className="bientot-tete"><span className="lab">{modules.every((m) => m.etat === "bientot") ? "Bientôt dans l'app" : "Tes modules"}</span></div>
           <div className="trois">
-            {modules.map((m) => m.Tuile ? <m.Tuile key={m.id} noms={noms} now={now} aller={onAller} /> : (
+            {modules.map((m) => m.Tuile ? <m.Tuile key={m.id} noms={noms} proprio={proprio} now={now} aller={onAller} ouvrir={onOuvrir} /> : (
               <a key={m.id} className="tuile-bientot" href={"#" + m.id} onClick={(e) => { e.preventDefault(); onAller(m.id); }}>
                 <b>{m.libelle}</b><span>{m.resume}</span>
               </a>

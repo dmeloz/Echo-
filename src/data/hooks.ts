@@ -39,3 +39,10 @@ export function useMaintenant() {
   }, []);
   return now;
 }
+
+// Un réglage simple, gardé sur le téléphone. undefined tant qu'il charge.
+export function useReglage<T>(cle: string, defaut: T): T {
+  const r = useLiveQuery(() => db.reglages.get(cle), [cle]);
+  return (r?.valeur as T | undefined) ?? defaut;
+}
+export const poserReglage = (cle: string, valeur: unknown) => db.reglages.put({ cle, valeur });
