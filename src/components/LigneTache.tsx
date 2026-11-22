@@ -57,7 +57,7 @@ export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau, aPhoto }:
           className="coche"
           aria-label={`${t.fait ? "Marquer comme pas fait" : "Marquer comme fait"} : ${t.titre}`}
           onClick={() => {
-            if (vientDeGlisser.current) return;
+            if (vientDeGlisser.current || cocheeLocale) return;
             vibrer(10);
             if (!t.fait) { setCocheeLocale(true); setTimeout(() => { onCocher(t); setCocheeLocale(false); }, DUREE_RESPIRE); }
             else onCocher(t);

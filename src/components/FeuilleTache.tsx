@@ -1,7 +1,9 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { Camera, X } from "pulsoicon-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 import { Drawer } from "vaul";
+import { trembler } from "../lib/gestes";
 import type { Compris } from "../lib/comprendre";
 import { auJour, nouvelId } from "../lib/dates";
 import { reduirePhoto } from "../lib/photos";
@@ -21,6 +23,8 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
   const [sur, setSur] = useState(false);
   const [nouvelleEtape, setNouvelleEtape] = useState("");
   const [photosAjoutees, setPhotosAjoutees] = useState<Blob[]>([]);
+  const [photosRetirees, setPhotosRetirees] = useState<string[]>([]); // retirées pour de bon seulement à « Enregistrer »
+  const [envoi, setEnvoi] = useState(false);
   const photosEnregistrees = useLiveQuery(() => (tache ? db.photos.where("tacheId").equals(tache.id).sortBy("cree") : []), [tache?.id]) ?? AUCUNE;
   const urls = useMemo(() => ({
     anciennes: photosEnregistrees.map((p) => ({ id: p.id, url: URL.createObjectURL(p.blob) })),
@@ -32,7 +36,7 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
     if (!ouverte) return;
     const base = tache ?? { ...vide, ...(pre || {}) };
     setB({ titre: base.titre, jour: base.jour, heure: base.heure || "", qui: base.qui, niveau: base.niveau ?? null, repete: base.repete || "", note: base.note || "", etapes: tache?.etapes ? [...tache.etapes] : [] });
-    setSur(false); setNouvelleEtape(""); setPhotosAjoutees([]);
+    setSur(false); setNouvelleEtape(""); setPhotosAjoutees([]); setPhotosRetirees([]); setEnvoi(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ouverte, tache, pre]);
 
@@ -53,11 +57,20 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
             <div className="poignee" aria-hidden="true" />
             <form onSubmit={async (e) => {
               e.preventDefault();
+              const formulaire = e.currentTarget;
               const etapes = [...(b.etapes || []), ...(nouvelleEtape.trim() ? [{ id: nouvelId(), texte: nouvelleEtape.trim(), fait: false }] : [])];
               const d = { ...b, titre: b.titre.trim(), note: b.note.trim(), etapes };
-              if (!d.titre) return;
-              if (tache) await modifier(tache.id, d, photosAjoutees); else await ajouter(d, photosAjoutees);
-              onFermer();
+              if (!d.titre || envoi) return;
+              setEnvoi(true);
+              try {
+                if (tache) await modifier(tache.id, d, photosAjoutees, photosRetirees); else await ajouter(d, photosAjoutees);
+                onFermer();
+              } catch {
+                // Rien n'est perdu : la feuille reste ouverte avec ce qui a été écrit.
+                setEnvoi(false);
+                trembler(formulaire);
+                toast("Pas enregistré. Le téléphone manque peut-être de place : libère un peu de stockage (ou retire une photo), puis réessaie.", { duration: 7000 });
+              }
             }}>
               <Drawer.Title asChild><h2>{tache ? "Modifier la tâche" : "Nouvelle tâche"}</h2></Drawer.Title>
               <div className="champ"><label htmlFor="f-titre">Quoi</label>
@@ -118,9 +131,9 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
 
               <div className="champ"><span className="lab">Photos</span>
                 <div className="photos">
-                  {urls.anciennes.map((p) => (
+                  {urls.anciennes.filter((p) => !photosRetirees.includes(p.id)).map((p) => (
                     <span key={p.id} className="photo"><a href={p.url} target="_blank" rel="noreferrer"><img src={p.url} alt="Photo de la tâche" /></a>
-                      <button type="button" className="retirer" aria-label="Retirer la photo" onClick={() => db.photos.delete(p.id)}><X size={14} strokeWidth={2.4} /></button></span>
+                      <button type="button" className="retirer" aria-label="Retirer la photo" onClick={() => setPhotosRetirees((l) => [...l, p.id])}><X size={14} strokeWidth={2.4} /></button></span>
                   ))}
                   {urls.nouvelles.map((u, i) => (
                     <span key={u} className="photo"><img src={u} alt="Nouvelle photo" />
@@ -146,7 +159,7 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
                 }}>{sur ? "Touche encore" : "Supprimer"}</button>}
                 <div className="droite">
                   <button type="button" className="bouton second" onClick={onFermer}>Annuler</button>
-                  <button type="submit" className="bouton">{tache ? "Enregistrer" : "Ajouter"}</button>
+                  <button type="submit" className="bouton" disabled={envoi}>{tache ? "Enregistrer" : "Ajouter"}</button>
                 </div>
               </div>
             </form>

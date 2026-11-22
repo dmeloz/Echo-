@@ -1,6 +1,7 @@
 import { toast } from "sonner";
 import type { Tache } from "../lib/types";
-import { db, type Photo } from "./db";
+import { nettoyerNoms, nettoyerTache } from "../lib/valider";
+import { NOMS_DEFAUT, db, type Photo } from "./db";
 
 // Sauvegarde en un fichier : les tâches, les photos et les réglages.
 // En attendant la synchro, c'est le moyen de garder ses données ou de les copier sur un autre téléphone.
@@ -23,7 +24,7 @@ export async function exporter() {
   // Sur iPhone : la feuille de partage (Enregistrer dans Fichiers, AirDrop, Messages…).
   if (navigator.canShare?.({ files: [fichier] })) {
     try { await navigator.share({ files: [fichier], title: "Sauvegarde Echo" }); return; }
-    catch (e) { if ((e as Error).name === "AbortError") return; }
+    catch (e) { if ((e as Error).name === "AbortError") return; } // autre souci : on passe au téléchargement
   }
   const url = URL.createObjectURL(fichier);
   const a = Object.assign(document.createElement("a"), { href: url, download: nom });
@@ -32,16 +33,34 @@ export async function exporter() {
   toast("Sauvegarde téléchargée");
 }
 
+const REGLAGES_PARTAGES = ["noms", "modulesMasques"]; // le reste est propre à chaque téléphone
+
 export async function importer(fichier: File) {
-  let f: Fichier;
-  try { f = JSON.parse(await fichier.text()); }
-  catch { toast("Ce fichier n'est pas une sauvegarde Echo"); return; }
-  if (f?.app !== "echo" || !Array.isArray(f.taches)) { toast("Ce fichier n'est pas une sauvegarde Echo"); return; }
-  const photos = await Promise.all((f.photos || []).map(async ({ data, ...p }) => ({ ...p, blob: await versBlob(data) })));
-  await db.transaction("rw", db.taches, db.photos, db.reglages, async () => {
-    await db.taches.bulkPut(f.taches);     // même tâche = remplacée, nouvelle = ajoutée
-    await db.photos.bulkPut(photos);
-    await db.reglages.bulkPut((f.reglages || []).filter((r) => r.cle !== "proprio" && r.cle !== "guideVu"));
-  });
-  toast(`${f.taches.length} tâche${f.taches.length > 1 ? "s" : ""} récupérée${f.taches.length > 1 ? "s" : ""}`);
+  const refus = () => toast("Ce fichier n'est pas une sauvegarde Echo. Choisis un fichier « echo-sauvegarde ».", { duration: 6000 });
+  let f: Partial<Fichier>;
+  try { f = JSON.parse(await fichier.text()); } catch { return refus(); }
+  if (f?.app !== "echo" || !Array.isArray(f.taches)) return refus();
+  // Tout ce qui vient du fichier est nettoyé : une ligne abîmée est laissée de côté, pas le reste.
+  const taches = f.taches.map((t) => nettoyerTache(t)).filter((t): t is Tache => !!t);
+  const connues = new Set(taches.map((t) => t.id));
+  const photos: Photo[] = [];
+  for (const p of Array.isArray(f.photos) ? f.photos : []) {
+    if (!p || typeof p.id !== "string" || !connues.has(p.tacheId) || typeof p.data !== "string" || !p.data.startsWith("data:image/")) continue;
+    try { photos.push({ id: p.id, tacheId: p.tacheId, cree: Number(p.cree) || Date.now(), blob: await versBlob(p.data) }); } catch { /* photo illisible : on continue */ }
+  }
+  const reglages = (Array.isArray(f.reglages) ? f.reglages : [])
+    .filter((r) => r && REGLAGES_PARTAGES.includes(r.cle))
+    .map((r) => r.cle === "noms" ? { cle: r.cle, valeur: nettoyerNoms(r.valeur, NOMS_DEFAUT) } : { cle: r.cle, valeur: Array.isArray(r.valeur) ? r.valeur.filter((x) => typeof x === "string") : [] });
+  try {
+    await db.transaction("rw", db.taches, db.photos, db.reglages, async () => {
+      await db.taches.bulkPut(taches);     // même tâche = remplacée, nouvelle = ajoutée
+      await db.photos.bulkPut(photos);
+      await db.reglages.bulkPut(reglages);
+    });
+  } catch {
+    toast("La sauvegarde n'a pas pu être récupérée. Rien n'a changé. Libère un peu de stockage, puis réessaie.", { duration: 7000 });
+    return;
+  }
+  const ecartees = f.taches.length - taches.length;
+  toast(`${taches.length} tâche${taches.length > 1 ? "s" : ""} récupérée${taches.length > 1 ? "s" : ""}${ecartees ? ` (${ecartees} illisible${ecartees > 1 ? "s" : ""} laissée${ecartees > 1 ? "s" : ""} de côté)` : ""}`);
 }

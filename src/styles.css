@@ -37,7 +37,7 @@
   /* Mouvements nommés (durée ; voir le tableau dans docs/REGLES-UI.md) */
   --m-ligne: 350ms; --m-apparition: 300ms; --m-onglet: 320ms; --m-feuille: 420ms; --m-assistant: 450ms; --m-widget: 480ms; --m-barre: 500ms; --m-chiffre: 550ms;
   --m-respire: 420ms; --m-tremble: 320ms; --m-sceau: 450ms; --m-cascade: 70ms;
-  --police: "Figtree", -apple-system, system-ui, sans-serif;
+  --police: "Figtree Variable", "Figtree", -apple-system, system-ui, sans-serif;
   --clavier: 0px;
   color-scheme: light;
 }

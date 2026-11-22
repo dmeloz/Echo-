@@ -7,6 +7,7 @@ import { MiseAJour } from "./components/MiseAJour";
 import type { Compris } from "./lib/comprendre";
 import type { Tache } from "./lib/types";
 import { premierLancement } from "./data/actions";
+import { baseOuverte, garderLesDonnees } from "./data/db";
 import { initialeDe, useMaintenant, useNoms, useProfil, useTaches } from "./data/hooks";
 import { Bienvenue } from "./components/Bienvenue";
 import { autre } from "./lib/types";
@@ -33,7 +34,10 @@ export default function App() {
   const [apercu, setApercu] = useState<string | null>(null);
   const [feuille, setFeuille] = useState<{ ouverte: boolean; tache: Tache | null; pre: Compris | null }>({ ouverte: false, tache: null, pre: null });
 
-  useEffect(() => { premierLancement(); }, []);
+  const [baseOk, setBaseOk] = useState(true);
+  useEffect(() => {
+    baseOuverte().then((ok) => { setBaseOk(ok); if (ok) { premierLancement().catch(() => {}); garderLesDonnees(); } });
+  }, []);
   useEffect(() => {
     const suivre = () => setPage(depuisAdresse());
     addEventListener("hashchange", suivre);
@@ -76,7 +80,7 @@ export default function App() {
           <HorsLigne />
           <Secours key={vue.id}>
           <div className="cadre arrivee">
-            {taches === undefined ? <Squelette />
+            {!baseOk ? <BaseFermee /> : taches === undefined ? <Squelette />
               : module ? (module.Page && module.etat === "construit" ? <module.Page noms={noms} now={now} aller={aller} /> : <Bientot module={module} onAller={aller} />)
               : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} proprio={proprio} onGuide={() => setGuideFerme(false)} />
               : <Aujourdhui taches={liste} noms={noms} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} />}
@@ -102,5 +106,16 @@ function Squelette() {
     <div className="squelette" aria-busy="true" aria-label="Chargement">
       <i className="s-phrase" /><i className="s-carte grande" /><i className="s-carte" />
     </div>
+  );
+}
+
+// Le stockage du téléphone refuse de s'ouvrir : on le dit, avec le geste qui débloque.
+function BaseFermee() {
+  return (
+    <section className="g vide" role="alert">
+      <h2>Echo n'arrive pas à ouvrir tes données</h2>
+      <p>Ouvre Echo depuis l'écran d'accueil (pas en navigation privée) et vérifie qu'il reste de la place sur le téléphone.</p>
+      <div className="rangee centre"><button className="bouton" onClick={() => location.reload()}>Réessayer</button></div>
+    </section>
   );
 }

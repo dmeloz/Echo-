@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useState } from "react";
 import type { Noms, Personne, Qui, Tache } from "../lib/types";
+import { nettoyerNoms } from "../lib/valider";
 import { NOMS_DEFAUT, db } from "./db";
 
 // Les tâches qui ont au moins une photo (pour la petite icône sur la ligne).
@@ -10,7 +11,7 @@ export const useTaches = () => useLiveQuery(() => db.taches.toArray(), [], undef
 
 export function useNoms(): Noms {
   const r = useLiveQuery(() => db.reglages.get("noms"), []);
-  return { ...NOMS_DEFAUT, ...((r?.valeur as Partial<Noms>) || {}) };
+  return nettoyerNoms(r?.valeur, NOMS_DEFAUT);
 }
 export const enregistrerNoms = (n: Noms) => db.reglages.put({ cle: "noms", valeur: n });
 

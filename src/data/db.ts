@@ -14,3 +14,12 @@ db.version(1).stores({ taches: "id, jour, faitLe", reglages: "cle" });
 db.version(2).stores({ photos: "id, tacheId" });
 
 export const NOMS_DEFAUT: Noms = { moi: "Melo", elle: "Sarah" };
+
+// Si une autre fenêtre d'Echo installe une version plus récente de la base, celle-ci se recharge.
+db.on("versionchange", () => { db.close(); location.reload(); });
+
+// Demander à l'iPhone de ne pas effacer les données quand il manque de place.
+export const garderLesDonnees = () => navigator.storage?.persist?.().catch(() => false);
+
+// La base s'ouvre-t-elle ? (navigation privée, stockage bloqué ou plein)
+export const baseOuverte = () => db.open().then(() => true, () => false);

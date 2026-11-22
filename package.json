@@ -12,11 +12,12 @@
     "verifier": "node scripts/verifier-ui.mjs"
   },
   "dependencies": {
+    "@fontsource-variable/figtree": "5.3.0",
     "@use-gesture/react": "^10.3.1",
     "dexie": "^4.4.7",
     "dexie-react-hooks": "^4.4.0",
     "motion": "^14.14.0",
-    "pulsoicon-react": "^6.2.0",
+    "pulsoicon-react": "6.2.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "sonner": "^2.0.8",
@@ -28,6 +29,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
+    "fake-indexeddb": "^6.2.8",
     "oxlint": "^1.90.0",
     "tailwindcss": "^4.3.5",
     "typescript": "~7.0.2",
