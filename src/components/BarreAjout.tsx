@@ -1,5 +1,5 @@
-import { Check, Plus } from "pulsoicon-react";
-import { useRef, useState } from "react";
+import { Check, Mic, Plus } from "pulsoicon-react";
+import { useRef, type RefObject } from "react";
 import { toast } from "sonner";
 import { trembler } from "../lib/gestes";
 import { comprendre, type Compris } from "../lib/comprendre";
@@ -9,17 +9,22 @@ import type { Noms, Personne } from "../lib/types";
 import { ajouter } from "../data/actions";
 import { nomDe } from "../data/hooks";
 
-// La barre sous le pouce : on tape une phrase, l'app comprend le jour, l'heure et pour qui.
-export function BarreAjout({ noms, proprio, onPlusOptions }: { noms: Noms; proprio: Personne; onPlusOptions: (pre: Compris | null) => void }) {
-  const [texte, setTexte] = useState("");
-  const [focus, setFocus] = useState(false);
+interface Props {
+  noms: Noms; proprio: Personne; ouverte: boolean; ecoute: boolean; texte: string; saisie: RefObject<HTMLInputElement | null>;
+  onTexte: (t: string) => void; onRanger: () => void; onFinEcoute: () => void; onPlusOptions: (pre: Compris | null) => void;
+}
+
+// La barre d'écriture : rangée derrière l'étoile Echo, elle s'ouvre au toucher et se range après l'envoi.
+// On tape (ou on dit) une phrase, l'app comprend le jour, l'heure et pour qui.
+export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTexte, onRanger, onFinEcoute, onPlusOptions }: Props) {
   const boite = useRef<HTMLDivElement>(null);
   const v = texte.trim();
   const r = v ? comprendre(v, noms, undefined, proprio) : null;
   const n = r ? (r.niveau ?? niveauPropose(r)) : 1;
+  const setTexte = onTexte;
 
   return (
-    <form className="barre-bas" autoComplete="off" onSubmit={(e) => {
+    <form id="barre-ecriture" className={`barre-bas${ouverte ? "" : " ferme"}`} inert={!ouverte} autoComplete="off" onSubmit={(e) => {
       e.preventDefault();
       if (!r) return;
       const garde = texte;
@@ -28,11 +33,11 @@ export function BarreAjout({ noms, proprio, onPlusOptions }: { noms: Noms; propr
       ajouter({ ...r, note: "" }).catch(() => {
         setTexte(garde);
         trembler(boite.current);
-        toast("Pas enregistré. Le téléphone manque peut-être de place : libère un peu de stockage, puis réessaie. Ta phrase est gardée.", { duration: 7000 });
+        toast("Pas enregistré. Le téléphone manque peut-être de place : libère un peu de stockage, puis réessaie. Ta phrase est gardée : touche l'étoile pour la retrouver.", { duration: 7000 });
       });
-      (document.activeElement as HTMLElement | null)?.blur();
+      onRanger();
     }}>
-      {r && focus && (
+      {r && ouverte && !ecoute && (
         <div className="apercu g">
           <div className="ligne-ap">
             <b>{r.titre}</b>
@@ -49,10 +54,12 @@ export function BarreAjout({ noms, proprio, onPlusOptions }: { noms: Noms; propr
         </div>
       )}
       <div className="ajout g" ref={boite}>
-        <Plus size={20} strokeWidth={2.2} className="plus" autoAnimated={false} play={focus} />
+        {ecoute ? <Mic size={20} strokeWidth={2.2} className="plus ecoute-ic" play />
+          : <Plus size={20} strokeWidth={2.2} className="plus" autoAnimated={false} play={ouverte} />}
         <label className="vh" htmlFor="saisie-rapide">Ajouter une tâche</label>
-        <input id="saisie-rapide" enterKeyHint="done" placeholder="Ajouter une tâche…" value={texte}
-          onChange={(e) => setTexte(e.target.value)} onFocus={() => setFocus(true)} onBlur={() => setTimeout(() => setFocus(false), 150)} />
+        <input id="saisie-rapide" ref={saisie} enterKeyHint="done" placeholder={ecoute ? "Je t'écoute…" : "Ajouter une tâche…"} value={texte}
+          onChange={(e) => setTexte(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") onRanger(); }} />
+        {ecoute && <button type="button" className="bouton-texte arret" onClick={onFinEcoute}>Fini</button>}
         <button className="envoyer" type="submit" aria-label="Ajouter" disabled={!v}><Check size={20} strokeWidth={2.4} autoAnimated={false} play={!!v} /></button>
       </div>
     </form>

@@ -13,7 +13,7 @@ Ce fichier fait foi pour toute nouvelle page et pour chaque module. Les mesures 
 4. **Calme par défaut.** La couleur arrive avec l'urgence : rouge pour « en retard », bleu pour « maintenant ». Pas de confettis, pas de son.
 5. **L'essentiel tient sur le premier écran** sans défiler : la phrase, « En premier », trois lignes de « Ensuite ».
 6. **Chaque info n'apparaît qu'une fois** (aujourd'hui, puis demain, puis les modules).
-7. **Sous le pouce.** Les actions vivent en bas : barre d'ajout, bouton rond du menu en bas à droite.
+7. **Sous le pouce.** Les actions vivent en bas à droite, dans une seule capsule de verre : le menu en haut, l'étoile Echo en bas. Toucher l'étoile ouvre la barre d'écriture (elle se range après l'envoi, en touchant la page ou avec Échap) ; la maintenir 450 ms lance la dictée. Les messages avec Annuler prennent la place de la barre rangée.
 
 ## 2. Les cartes de l'accueil
 
@@ -58,7 +58,7 @@ Un doublon ne tremble pas : « déjà là » n'est pas une erreur.
 ## 4. Gestes du doigt (choix d'Echo)
 
 Echo **garde** ses gestes : glisser → = plus important, glisser ← = plus tard ; toucher le rond = fait. (Kora fait → = fait, ← = supprimer : pas repris.)
-Echo **garde** la barre d'ajout « + » en bas, le résumé du matin (voulu par Melo), et le bouton du menu en bas **à droite**.
+Echo **garde** la barre d'ajout « + » (rangée derrière l'étoile Echo), le résumé du matin (voulu par Melo), et la capsule menu + Echo en bas **à droite**. Les interrupteurs sont « liquides » (la couleur se verse) ; la loupe de l'en-tête cherche dans les tâches (titre, note, étapes).
 
 ## 5. États
 

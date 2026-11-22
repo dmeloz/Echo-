@@ -40,18 +40,20 @@ interface Props {
   initiale: string;
   onChoisir: (id: string) => void;
   onApercu: (id: string | null) => void;
+  onOuvert?: () => void;
+  echo?: ReactNode; // l'étoile Echo, sous le menu dans la même capsule
   children: ReactNode;
 }
 
-export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onApercu, children }: Props) {
+export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onApercu, onOuvert, echo, children }: Props) {
   const r = {
     coulisses: useRef<HTMLDivElement>(null), menu: useRef<HTMLElement>(null), liste: useRef<HTMLUListElement>(null),
     point: useRef<HTMLSpanElement>(null), scene: useRef<HTMLDivElement>(null), defile: useRef<HTMLDivElement>(null),
     bascule: useRef<HTMLButtonElement>(null), lumiere: useRef<HTMLDivElement>(null),
   };
   // Les fonctions appelées par les gestes lisent toujours les dernières valeurs.
-  const derniers = useRef({ active, onChoisir, onApercu });
-  derniers.current = { active, onChoisir, onApercu };
+  const derniers = useRef({ active, onChoisir, onApercu, onOuvert });
+  derniers.current = { active, onChoisir, onApercu, onOuvert };
   const api = useRef<{ marquer: (anime: boolean) => void } | null>(null);
 
   useEffect(() => {
@@ -110,6 +112,7 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
       if (!estOuvert()) {
         (document.activeElement as HTMLElement | null)?.blur?.();
         racine.classList.add("menu-ouvert");
+        derniers.current.onOuvert?.();
         menu.inert = false; defile.inert = true;
         bascule.setAttribute("aria-expanded", "true"); bascule.setAttribute("aria-label", "Fermer le menu");
         vibrer();
@@ -196,7 +199,7 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
     let g: { x0: number; y0: number; axe: "x" | "y" | null; base: number; traces: Array<[number, number]> } | null = null;
     on(window, "touchstart", (e: TouchEvent) => {
       const cibleT = e.target as HTMLElement;
-      if (e.touches.length > 1 || cibleT.closest?.(".bascule, .tache, .barre-bas, .feuille, input, textarea") || racine.classList.contains("feuille-ouverte")) { g = null; return; }
+      if (e.touches.length > 1 || cibleT.closest?.(".capsule, .tache, .barre-bas, .feuille, input, textarea") || racine.classList.contains("feuille-ouverte")) { g = null; return; }
       if ((estOuvert() || rafId) && menu.contains(cibleT)) { g = null; return; }
       const t = e.touches[0];
       g = { x0: t.clientX, y0: t.clientY, axe: null, base: 0, traces: [] };
@@ -278,9 +281,13 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
         <button className="ombrage" aria-hidden="true" tabIndex={-1} />
       </div>
 
-      <button className="bascule" ref={r.bascule} aria-label="Ouvrir le menu" aria-expanded="false">
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path className="b1" d="M5 9h14" /><path className="b2" d="M5 15h14" /></svg>
-      </button>
+      {/* La capsule du pouce : le menu en haut, Echo en bas, un seul objet en verre. */}
+      <div className="capsule">
+        <button className="bascule" ref={r.bascule} aria-label="Ouvrir le menu" aria-expanded="false">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path className="b1" d="M5 9h14" /><path className="b2" d="M5 15h14" /></svg>
+        </button>
+        {echo && <div className="zone-echo"><span className="sep" aria-hidden="true" />{echo}</div>}
+      </div>
     </>
   );
 }

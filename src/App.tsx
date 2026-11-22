@@ -1,6 +1,11 @@
-import { useEffect, useState } from "react";
-import { Toaster } from "sonner";
+import { useEffect, useRef, useState } from "react";
+import { toast, Toaster } from "sonner";
 import { BarreAjout } from "./components/BarreAjout";
+import { BoutonEcho } from "./components/BoutonEcho";
+import { ChampRecherche, ResultatsRecherche } from "./components/Recherche";
+import { Search } from "pulsoicon-react";
+import { ecouterVoix } from "./lib/voix";
+import { vibrer } from "./lib/gestes";
 import { FeuilleTache } from "./components/FeuilleTache";
 import { MenuGlissant } from "./components/MenuGlissant";
 import { MiseAJour } from "./components/MiseAJour";
@@ -8,7 +13,7 @@ import type { Compris } from "./lib/comprendre";
 import type { Tache } from "./lib/types";
 import { premierLancement } from "./data/actions";
 import { baseOuverte, garderLesDonnees } from "./data/db";
-import { initialeDe, useMaintenant, useNoms, useProfil, useTaches } from "./data/hooks";
+import { initialeDe, poserReglage, useMaintenant, useNoms, useProfil, useReglage, useTaches } from "./data/hooks";
 import { Bienvenue } from "./components/Bienvenue";
 import { autre } from "./lib/types";
 import { Aujourdhui } from "./pages/Aujourdhui";
@@ -20,6 +25,7 @@ import { Secours } from "./components/Secours";
 import { HorsLigne } from "./components/HorsLigne";
 
 const depuisAdresse = () => location.hash.slice(1) || "aujourdhui";
+const BORDS_MESSAGE = { bottom: "calc(env(safe-area-inset-bottom, 0px) + 17px)", left: "14px", right: "calc(env(safe-area-inset-right, 0px) + 84px)" };
 const BASE = [{ id: "aujourdhui", libelle: "Aujourd'hui" }, { id: "reglages", libelle: "Réglages" }];
 
 export default function App() {
@@ -32,7 +38,50 @@ export default function App() {
   const now = useMaintenant();
   const [page, setPage] = useState(depuisAdresse);
   const [apercu, setApercu] = useState<string | null>(null);
+  const [recherche, setRecherche] = useState<string | null>(null); // null : la loupe est fermée
   const [feuille, setFeuille] = useState<{ ouverte: boolean; tache: Tache | null; pre: Compris | null }>({ ouverte: false, tache: null, pre: null });
+
+  // La barre d'écriture, rangée derrière l'étoile Echo.
+  const [barre, setBarre] = useState<"ferme" | "texte" | "voix">("ferme");
+  const [texte, setTexte] = useState("");
+  const saisie = useRef<HTMLInputElement>(null);
+  const arretVoix = useRef<(() => void) | null>(null);
+  const astuceVue = useReglage("astuceEcho", false);
+  const vuAstuce = () => { if (!astuceVue) poserReglage("astuceEcho", true); };
+  const montrer = () => {
+    // Le focus doit partir dans le même geste que le toucher, sinon l'iPhone n'ouvre pas le clavier.
+    const champ = saisie.current;
+    if (champ?.form) champ.form.inert = false;
+    champ?.focus({ preventScroll: true });
+    setBarre("texte"); vuAstuce();
+  };
+  const ranger = () => {
+    arretVoix.current?.(); arretVoix.current = null;
+    saisie.current?.blur();
+    setBarre("ferme");
+  };
+  const finEcoute = () => { arretVoix.current?.(); };
+  const ecouter = () => {
+    vibrer(12); vuAstuce();
+    setBarre("voix");
+    arretVoix.current = ecouterVoix({
+      onTexte: setTexte,
+      onErreur: (m) => toast(m, { duration: 6000 }),
+      onFin: () => { arretVoix.current = null; setBarre((b) => (b === "voix" ? "texte" : b)); },
+    });
+  };
+  useEffect(() => { document.documentElement.classList.toggle("barre-ouverte", barre !== "ferme"); }, [barre]);
+  useEffect(() => {
+    if (barre === "ferme") return;
+    const echap = (e: KeyboardEvent) => { if (e.key === "Escape") ranger(); };
+    // Toucher la page range la barre quand elle est vide.
+    const ailleurs = (e: PointerEvent) => {
+      const c = e.target as Element;
+      if (!texte.trim() && barre !== "voix" && c.closest(".scene") && !c.closest(".capsule, .barre-bas")) ranger();
+    };
+    addEventListener("keydown", echap); addEventListener("pointerdown", ailleurs);
+    return () => { removeEventListener("keydown", echap); removeEventListener("pointerdown", ailleurs); };
+  });
 
   const [baseOk, setBaseOk] = useState(true);
   useEffect(() => {
@@ -47,6 +96,7 @@ export default function App() {
   useEffect(() => { document.documentElement.classList.toggle("feuille-ouverte", feuille.ouverte); }, [feuille.ouverte]);
 
   const aller = (id: string) => {
+    setRecherche(null);
     if (id !== page) { history.pushState(null, "", "#" + id); document.querySelector(".defile")?.scrollTo(0, 0); }
     setPage(id);
   };
@@ -65,37 +115,48 @@ export default function App() {
       <MenuGlissant
         entrees={[{ id: "aujourdhui", libelle: "Aujourd'hui", pastille: reste }, ...actifs.map((m) => ({ id: m.id, libelle: m.libelle, bientot: m.etat === "bientot" }))]}
         active={page} nom={noms[proprio]} initiale={initialeDe(noms, proprio)}
-        onChoisir={aller} onApercu={setApercu}
+        onChoisir={aller} onApercu={setApercu} onOuvert={ranger}
+        echo={<BoutonEcho ouverte={barre !== "ferme"} ecoute={barre === "voix"} onToucher={() => (barre === "ferme" ? montrer() : ranger())} onMaintenir={ecouter} />}
       >
         <div className="cadre">
           <header className="entete">
+            {recherche !== null ? <ChampRecherche valeur={recherche} onValeur={setRecherche} onFermer={() => setRecherche(null)} /> : <>
             <div>
               <div className="date">{vue.id === "aujourdhui" ? `${salut} ${noms[proprio]} · ${d}` : d.charAt(0).toUpperCase() + d.slice(1)}</div>
               <h1 className="page-titre">{vue.libelle}</h1>
             </div>
-            <a className="duo" href="#reglages" aria-label="Les deux profils du foyer" onClick={(e) => { e.preventDefault(); aller("reglages"); }}>
-              <i className={proprio}>{initialeDe(noms, proprio)}</i><i className={autre(proprio)}>{initialeDe(noms, autre(proprio))}</i>
-            </a>
+            <div className="entete-droite">
+              <button type="button" className="loupe-ouvrir" aria-label="Chercher dans Echo" onClick={() => setRecherche("")}><Search size={20} strokeWidth={2} /></button>
+              <a className="duo" href="#reglages" aria-label="Les deux profils du foyer" onClick={(e) => { e.preventDefault(); aller("reglages"); }}>
+                <i className={proprio}>{initialeDe(noms, proprio)}</i><i className={autre(proprio)}>{initialeDe(noms, autre(proprio))}</i>
+              </a>
+            </div>
+            </>}
           </header>
           <HorsLigne />
-          <Secours key={vue.id}>
+          {recherche !== null ? (
+            <ResultatsRecherche taches={liste} q={recherche} noms={noms} now={now} onOuvrir={(t) => ouvrir(t)} onExemple={setRecherche} />
+          ) : <Secours key={vue.id}>
           <div className="cadre arrivee">
             {!baseOk ? <BaseFermee /> : taches === undefined ? <Squelette />
               : module ? (module.Page && module.etat === "construit" ? <module.Page noms={noms} proprio={proprio} now={now} aller={aller} ouvrir={(t) => ouvrir(t)} /> : <Bientot module={module} onAller={aller} />)
               : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} proprio={proprio} onGuide={() => setGuideFerme(false)} />
               : <Aujourdhui taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} />}
           </div>
-          </Secours>
+          </Secours>}
         </div>
       </MenuGlissant>
 
-      <BarreAjout noms={noms} proprio={proprio} onPlusOptions={(pre) => ouvrir(null, pre)} />
+      {!astuceVue && <span className="astuce" aria-hidden="true">Touche pour écrire · maintiens pour parler</span>}
+      <BarreAjout noms={noms} proprio={proprio} ouverte={barre !== "ferme"} ecoute={barre === "voix"} texte={texte} saisie={saisie}
+        onTexte={setTexte} onRanger={ranger} onFinEcoute={finEcoute} onPlusOptions={(pre) => { ranger(); ouvrir(null, pre); }} />
       <FeuilleTache {...feuille} noms={noms} proprio={proprio} onFermer={() => setFeuille((f) => ({ ...f, ouverte: false }))} />
       <MiseAJour />
       {proprioBrut !== undefined && (proprioBrut === null || (!guideVu && !guideFerme)) && (
         <Bienvenue noms={noms} proprio={proprioBrut} onFini={() => setGuideFerme(true)} />
       )}
-      <Toaster position="bottom-center" toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: 4000 }} />
+      {/* Les messages (avec Annuler) prennent la place de la barre rangée, à gauche de la capsule. */}
+      <Toaster position="bottom-center" offset={BORDS_MESSAGE} mobileOffset={BORDS_MESSAGE} toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: 4000 }} />
     </>
   );
 }
