@@ -1,4 +1,3 @@
-import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
@@ -18,7 +17,6 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    tailwindcss(),
     // L'app s'installe sur l'écran d'accueil de l'iPhone et marche sans réseau.
     VitePWA({
       registerType: "prompt",
