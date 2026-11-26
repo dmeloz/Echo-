@@ -75,8 +75,8 @@ function IdeeEcho({ taches, travail, proprio, lautre, noms, now, refusees, onRef
   const minus = (j: string) => jourDe(j).toLowerCase();
   const repos = proposerRepos(taches.filter(libre), travail, proprio, now);
   const allege = repos ? null : proposerDeplacement(taches.filter(libre), [proprio, lautre], now);
-  const idee = repos ? { tache: repos.tache, vers: repos.vers, texte: <><b>{jourDe(repos.vers)}</b> tu es en repos. J'y mets « {repos.tache.titre} » ?</> }
-    : allege ? { tache: allege.tache, vers: allege.vers, texte: <><b>{jourDe(allege.de)}</b> est chargé{allege.pour === proprio ? "" : ` pour ${noms[allege.pour]}`}. Je mets « {allege.tache.titre} » à {minus(allege.vers)} ?</> }
+  const idee = repos ? { tache: repos.tache, vers: repos.vers, texte: <><b>{jourDe(repos.vers)}</b> tu es en repos. J'y mets « {repos.tache.titre} » ?</> }
+    : allege ? { tache: allege.tache, vers: allege.vers, texte: <><b>{jourDe(allege.de)}</b> est chargé{allege.pour === proprio ? "" : ` pour ${noms[allege.pour]}`}. Je mets « {allege.tache.titre} » à {minus(allege.vers)} ?</> }
     : null;
   if (!idee) return null;
   return (
