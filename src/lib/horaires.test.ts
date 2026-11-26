@@ -14,12 +14,12 @@ describe("horaires de travail", () => {
     expect(heuresDe("C1")).toBe("9 h – 14 h et 18 h 30 – 22 h 30");
     expect(phraseDe("C5")).toBe("Travail C5 · 8 h – 16 h 30");
     expect(phraseDe("VAC")).toBe("Vacances");
-    expect(phraseDe("FOR")).toBe("Travail · Formation");
+    expect(phraseDe("CHR")).toBe("Congé");
   });
 
   it("lit un mois écrit d'un coup, jour après jour", () => {
-    const r = lireSuite("C5 c6 C1/8H R repos - vac zz", "2026-12");
-    expect(r.jours).toEqual([["2026-12-01", "C5"], ["2026-12-02", "C6"], ["2026-12-03", "C1"], ["2026-12-04", "R"], ["2026-12-05", "R"], ["2026-12-07", "VAC"]]);
+    const r = lireSuite("C5 c6 C1/8H R repos - vac zz epm CHR", "2026-12");
+    expect(r.jours).toEqual([["2026-12-01", "C5"], ["2026-12-02", "C6"], ["2026-12-03", "C1"], ["2026-12-04", "R"], ["2026-12-05", "R"], ["2026-12-07", "VAC"], ["2026-12-10", "CHR"]]);
     expect(r.inconnus).toEqual(["zz"]);
   });
 

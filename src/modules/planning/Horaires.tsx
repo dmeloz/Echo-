@@ -61,7 +61,7 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
       <div className="pinceaux" role="group" aria-label="Code à poser">
         {CODES_COURANTS.map(choix)}
         {autres && CODES_RARES.map(choix)}
-        <button type="button" className="pinceau plus-codes" aria-expanded={autres} onClick={() => setAutres((a) => !a)}><b>{autres ? "Moins" : "Autres"}</b><small>{autres ? "codes rares" : "C2, C3, C4…"}</small></button>
+        <button type="button" className="pinceau plus-codes" aria-expanded={autres} onClick={() => setAutres((a) => !a)}><b>{autres ? "Moins" : "Autres"}</b><small>{autres ? "codes rares" : "C2, C3, C4"}</small></button>
       </div>
 
       <div className="grille-mois" role="grid" aria-label={`Horaires de ${nomMois(mois)}`}>
@@ -82,7 +82,7 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
 
       <details className="suite">
         <summary>Écrire tout le mois d'un coup</summary>
-        <p className="aide-champ">Les codes dans l'ordre, du 1er au {jours.length}, séparés par des espaces. R pour repos, V pour vacances, un tiret pour laisser un jour comme il est.</p>
+        <p className="aide-champ">Les codes dans l'ordre, du 1er au {jours.length}, séparés par des espaces. R pour repos, V pour vacances, C pour congé, un tiret pour laisser un jour comme il est.</p>
         <textarea value={suite} rows={3} placeholder="C5 C6 C1 R R R C5 …" aria-label="Codes du mois, dans l'ordre" onChange={(e) => setSuite(e.target.value)} />
         <div className="rangee"><button type="button" className="bouton petit" disabled={!suite.trim()} onClick={remplir}>Remplir {nomMois(mois).split(" ")[0].toLowerCase()}</button></div>
       </details>

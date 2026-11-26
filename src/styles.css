@@ -62,7 +62,7 @@
   --c-repos: #e6ebef; --c-repos-t: #4a5a68;
   --c-vac: #f08a2c; --c-vac-t: #fff;
   --c-rare: #7a5bd1; --c-rare-t: #fff;
-  --c-for: #6fae3f; --c-for-t: #fff;
+  --c-conge: #c2367f; --c-conge-t: #fff;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
@@ -616,8 +616,8 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .code-c6 { --code: var(--c6); --code-t: var(--c6-t); }
 .code-r { --code: var(--c-repos); --code-t: var(--c-repos-t); }
 .code-vac { --code: var(--c-vac); --code-t: var(--c-vac-t); }
-.code-c2, .code-c3, .code-c4, .code-chr { --code: var(--c-rare); --code-t: var(--c-rare-t); }
-.code-for, .code-epm { --code: var(--c-for); --code-t: var(--c-for-t); }
+.code-c2, .code-c3, .code-c4 { --code: var(--c-rare); --code-t: var(--c-rare-t); }
+.code-chr { --code: var(--c-conge); --code-t: var(--c-conge-t); }
 .vue-choix:has(> :nth-child(3)) { grid-template-columns: 1fr 1fr 1.3fr; }
 .horaires { display: flex; flex-direction: column; gap: 12px; }
 .mois-tete { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

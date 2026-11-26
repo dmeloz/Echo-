@@ -1,4 +1,4 @@
-import type { Horaire } from "../lib/horaires";
+import { CODES, type Horaire } from "../lib/horaires";
 import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useState } from "react";
 import type { Noms, Personne, Qui, Tache } from "../lib/types";
@@ -8,7 +8,8 @@ import { NOMS_DEFAUT, db } from "./db";
 // Les tâches qui ont au moins une photo (pour la petite icône sur la ligne).
 export const useAvecPhoto = () => useLiveQuery(async () => new Set((await db.photos.toArray()).map((p) => p.tacheId)), [], new Set<string>());
 
-export const useHoraires = () => useLiveQuery(() => db.horaires.toArray(), [], [] as Horaire[]);
+// Un ancien code que l'app ne connaît plus (FOR, EPM) est simplement ignoré.
+export const useHoraires = () => useLiveQuery(async () => (await db.horaires.toArray()).filter((h) => h.code in CODES), [], [] as Horaire[]);
 export const useTaches = () => useLiveQuery(() => db.taches.toArray(), [], undefined as Tache[] | undefined);
 
 export function useNoms(): Noms {

@@ -5,7 +5,7 @@ import type { Personne } from "./types";
 // On simplifie la fiche : pas de matin / après-midi séparés, un seul code pour la journée.
 
 export interface Horaire { qui: Personne; jour: string; code: Code }
-export type Code = "C1" | "C2" | "C3" | "C4" | "C5" | "C6" | "R" | "VAC" | "FOR" | "EPM" | "CHR";
+export type Code = "C1" | "C2" | "C3" | "C4" | "C5" | "C6" | "R" | "VAC" | "CHR";
 interface InfoCode { court: string; libelle: string; plages: Array<[string, string]>; travail: boolean; rare?: boolean }
 
 export const CODES: Record<Code, InfoCode> = {
@@ -17,9 +17,7 @@ export const CODES: Record<Code, InfoCode> = {
   C2: { court: "C2", libelle: "Matin long", plages: [["09:00", "15:00"]], travail: true, rare: true },
   C3: { court: "C3", libelle: "Après-midi", plages: [["14:00", "22:00"]], travail: true, rare: true },
   C4: { court: "C4", libelle: "Matin", plages: [["09:00", "14:00"]], travail: true, rare: true },
-  FOR: { court: "For.", libelle: "Formation", plages: [], travail: true, rare: true },
-  EPM: { court: "EPM", libelle: "EPM", plages: [], travail: true, rare: true },
-  CHR: { court: "CHR", libelle: "CHR", plages: [], travail: true, rare: true },
+  CHR: { court: "Congé", libelle: "Congé", plages: [], travail: false },
 };
 export const CODES_COURANTS = (Object.keys(CODES) as Code[]).filter((c) => !CODES[c].rare);
 export const CODES_RARES = (Object.keys(CODES) as Code[]).filter((c) => CODES[c].rare);
@@ -53,10 +51,12 @@ export function moisVoisin(mois: string, n: number) {
 export const decalageLundi = (mois: string) => (new Date(mois + "-01T12:00:00").getDay() + 6) % 7;
 
 // Écrire le mois d'un coup : les codes dans l'ordre des jours, séparés par des espaces (« C5 C6 C1 R R … »).
-// R ou Repos, V ou Vac pour les vacances ; un tiret laisse le jour comme il est.
+// R ou Repos, V ou Vac pour les vacances, C ou CHR pour un congé ; un tiret laisse le jour comme il est.
 const LU: Record<string, Code | null> = {
   c1: "C1", c2: "C2", c3: "C3", c4: "C4", c5: "C5", c6: "C6", r: "R", repos: "R", v: "VAC", vac: "VAC", vacances: "VAC",
-  for: "FOR", formation: "FOR", epm: "EPM", chr: "CHR", "-": null, ".": null,
+  chr: "CHR", conge: "CHR", c: "CHR", "-": null, ".": null,
+  // Codes de la fiche que l'app ne garde pas (choix de Melo) : le jour reste comme il est.
+  for: null, formation: null, epm: null, nyon: null,
 };
 export function lireSuite(texte: string, mois: string): { jours: Array<[string, Code]>; inconnus: string[]; trop: number } {
   const mots = sansAccents(texte).replace(/\/\s*8\s*h/g, "").split(/[\s,;]+/).filter(Boolean);
