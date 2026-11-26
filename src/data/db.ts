@@ -16,7 +16,7 @@ db.version(1).stores({ taches: "id, jour, faitLe", reglages: "cle" });
 db.version(2).stores({ photos: "id, tacheId" });
 db.version(3).stores({ horaires: "[qui+jour], jour" }); // un code de travail par personne et par jour
 
-export const NOMS_DEFAUT: Noms = { moi: "Melo", elle: "Sarah" };
+export const NOMS_DEFAUT: Noms = { moi: "Dany", elle: "Sarah" };
 
 // Si une autre fenêtre d'Echo installe une version plus récente de la base, celle-ci se recharge.
 db.on("versionchange", () => { db.close(); location.reload(); });
