@@ -1,7 +1,8 @@
 import { toast } from "sonner";
 import { auJour, libelleJour, nouvelId } from "../lib/dates";
 import { NIVEAUX, niveau } from "../lib/importance";
-import type { Etape, Niveau, Qui, Repete, Tache } from "../lib/types";
+import type { Etape, Niveau, Personne, Qui, Repete, Tache } from "../lib/types";
+import type { Code, Horaire } from "../lib/horaires";
 import { prochainJour } from "../lib/valider";
 import { db } from "./db";
 
@@ -148,4 +149,21 @@ export async function deplacer(t: Tache, jour: string) {
   if (avant === jour) return;
   await db.taches.update(t.id, { jour });
   toast(`Déplacé à ${libelleJour(jour).toLowerCase()}`, { action: { label: "Annuler", onClick: () => db.taches.update(t.id, { jour: avant }) } });
+}
+
+// Les horaires de travail : poser, changer ou retirer le code d'un jour (sans message : on voit la case changer).
+export async function poserHoraire(qui: Personne, jour: string, code: Code | null) {
+  if (code) await db.horaires.put({ qui, jour, code });
+  else await db.horaires.delete([qui, jour]);
+}
+// Remplir plusieurs jours d'un coup, avec Annuler qui remet les anciens codes.
+export async function remplirHoraires(qui: Personne, jours: Array<[string, Code]>) {
+  const avant = await db.horaires.bulkGet(jours.map(([j]) => [qui, j] as [string, string]));
+  await db.horaires.bulkPut(jours.map(([jour, code]) => ({ qui, jour, code })));
+  toast(`${jours.length} jour${jours.length > 1 ? "s" : ""} rempli${jours.length > 1 ? "s" : ""}`, {
+    action: { label: "Annuler", onClick: () => db.transaction("rw", db.horaires, async () => {
+      await db.horaires.bulkDelete(jours.map(([j]) => [qui, j] as [string, string]));
+      await db.horaires.bulkPut(avant.filter((h): h is Horaire => !!h));
+    }) },
+  });
 }

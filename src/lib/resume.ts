@@ -1,4 +1,5 @@
 import { auJour, heureFr, libelleJour, minutes } from "./dates";
+import { CODES, type Code } from "./horaires";
 import { niveau } from "./importance";
 import { autre, type Noms, type Personne, type Tache } from "./types";
 
@@ -11,7 +12,10 @@ export interface Resume { phrase: string; sections: SectionResume[]; texteLu: st
 
 const pluriel = (n: number, mot: string) => `${n} ${mot}${n > 1 ? "s" : ""}`;
 
-export function construireResume(taches: Tache[], noms: Noms, proprio: Personne, now = new Date()): Resume {
+const hh = (h: string) => heureFr(h).replace(/^0/, "");
+
+// travail : le code de travail du jour pour celui qui tient le téléphone (s'il l'a posé dans Mes horaires).
+export function construireResume(taches: Tache[], noms: Noms, proprio: Personne, now = new Date(), travail?: Code): Resume {
   const today = auJour(0, now);
   const lautre = autre(proprio);
   const pourMoi = (t: Tache) => t.qui === proprio || t.qui === "nous";
@@ -28,10 +32,15 @@ export function construireResume(taches: Tache[], noms: Noms, proprio: Personne,
     .sort((a, b) => a.jour.localeCompare(b.jour) || (a.heure ? minutes(a.heure) : 9999) - (b.heure ? minutes(b.heure) : 9999));
 
   const sections: SectionResume[] = [];
-  if (agenda.length) sections.push({
+  const plages = travail && CODES[travail].travail ? CODES[travail].plages : [];
+  const lignesAgenda = [
+    ...plages.map(([a, b]) => ({ m: minutes(a), heure: hh(a), texte: `Travail jusqu'à ${hh(b)}`, dit: `travail de ${hh(a)} à ${hh(b)}` })),
+    ...agenda.map((t) => ({ m: minutes(t.heure), heure: heureFr(t.heure), texte: t.titre + (t.qui === "nous" ? " (à deux)" : ""), dit: `${t.titre} à ${heureFr(t.heure)}` })),
+  ].sort((a, b) => a.m - b.m);
+  if (lignesAgenda.length) sections.push({
     id: "agenda", titre: "Ton agenda",
-    lignes: agenda.map((t) => ({ heure: heureFr(t.heure), texte: t.titre + (t.qui === "nous" ? " (à deux)" : "") })),
-    dit: "Ton agenda : " + agenda.map((t) => `${t.titre} à ${heureFr(t.heure)}`).join(", ") + ".",
+    lignes: lignesAgenda.map(({ heure, texte }) => ({ heure, texte })),
+    dit: "Ton agenda : " + lignesAgenda.map((l) => l.dit).join(", ") + ".",
   });
   if (miennes.length) {
     const bouts = [
@@ -56,6 +65,9 @@ export function construireResume(taches: Tache[], noms: Noms, proprio: Personne,
   if (!miennes.length && !siennes.length) phrase = "Rien de prévu aujourd'hui. Profite.";
   else if (!miennes.length) phrase = "Rien pour toi aujourd'hui.";
   else phrase = `Journée ${miennes.length <= 3 ? "plutôt calme" : "bien remplie"} : ${pluriel(miennes.length, "chose")} pour toi${agenda.length ? `, dont ${agenda.length} rendez-vous` : ""}${agenda[0] ? `, le premier à ${heureFr(agenda[0].heure)}` : ""}.`;
+  if (travail === "VAC") phrase = "Tu es en vacances. " + phrase;
+  else if (plages.length) phrase = `Tu travailles ${plages.map(([a, b]) => `de ${hh(a)} à ${hh(b)}`).join(" puis ")}. ` + phrase;
+  else if (travail && CODES[travail].travail) phrase = `Aujourd'hui : ${CODES[travail].libelle.toLowerCase()}. ` + phrase;
   const salut = `Bonjour ${noms[proprio]}.`;
   return { phrase, sections, texteLu: [salut, phrase, ...sections.map((s) => s.dit)].join(" ") };
 }

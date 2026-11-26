@@ -1,5 +1,6 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { Noms, Tache } from "../lib/types";
+import type { Horaire } from "../lib/horaires";
 
 // Les données restent sur l'appareil (IndexedDB). La synchro à deux viendra plus tard (Supabase).
 export interface Reglage { cle: string; valeur: unknown }
@@ -9,9 +10,11 @@ export const db = new Dexie("echo") as Dexie & {
   taches: EntityTable<Tache, "id">;
   reglages: EntityTable<Reglage, "cle">;
   photos: EntityTable<Photo, "id">;
+  horaires: Dexie.Table<Horaire, [string, string]>;
 };
 db.version(1).stores({ taches: "id, jour, faitLe", reglages: "cle" });
 db.version(2).stores({ photos: "id, tacheId" });
+db.version(3).stores({ horaires: "[qui+jour], jour" }); // un code de travail par personne et par jour
 
 export const NOMS_DEFAUT: Noms = { moi: "Melo", elle: "Sarah" };
 

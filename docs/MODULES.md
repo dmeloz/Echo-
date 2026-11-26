@@ -36,3 +36,11 @@ Règles :
 1. Créer `src/modules/<id>/index.ts` qui exporte un objet `Module`.
 2. L'ajouter à la liste `MODULES` de `src/modules/registre.ts`.
 3. Passer `etat` à `"construit"` et fournir `Page` (et `Tuile` si besoin) quand il est prêt.
+
+## Planning · Mes horaires (2026-11-26)
+
+Troisième vue du Planning. Un code de travail par jour et par personne (table Dexie `horaires`, clé `[qui+jour]`), repris de la fiche du chef de Melo :
+C1 coupé 9 h – 14 h et 18 h 30 – 22 h 30, C5 8 h – 16 h 30 (lundi et mardi), C6 12 h – 21 h, Repos, Vacances ; codes rares C2, C3, C4, FOR, EPM, CHR.
+La fiche sépare matin et après-midi : l'app garde un seul code pour la journée (choix de Melo).
+On remplit le mois en touchant les jours, ou en écrivant tous les codes d'un coup. Les horaires s'affichent dans les vues Jour et Semaine et dans le résumé du matin.
+Les codes et leurs heures sont dans `src/lib/horaires.ts`.

@@ -55,6 +55,14 @@
   --m-respire: 420ms; --m-tremble: 320ms; --m-sceau: 450ms; --m-cascade: 70ms;
   --police: "Figtree Variable", "Figtree", -apple-system, system-ui, sans-serif;
   --clavier: 0px;
+  /* Les codes de travail (couleurs reprises de la fiche du chef, adoucies) : fond / texte */
+  --c1: #2f6bff; --c1-t: #fff;
+  --c5: #1f6b4a; --c5-t: #fff;
+  --c6: #1d8fb3; --c6-t: #fff;
+  --c-repos: #e6ebef; --c-repos-t: #4a5a68;
+  --c-vac: #f08a2c; --c-vac-t: #fff;
+  --c-rare: #7a5bd1; --c-rare-t: #fff;
+  --c-for: #6fae3f; --c-for-t: #fff;
   color-scheme: light;
 }
 * { box-sizing: border-box; }
@@ -600,3 +608,44 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .res-quoi small { color: var(--discret); font-size: 13px; }
 .res mark { background: var(--reflet-turquoise); color: inherit; border-radius: 4px; padding: 0 2px; }
 @media (prefers-reduced-motion: reduce) { .loupe, .resultats { animation: none; } }
+
+
+/* ---------- Mes horaires : le mois en grille, un code par jour ---------- */
+.code-c1 { --code: var(--c1); --code-t: var(--c1-t); }
+.code-c5 { --code: var(--c5); --code-t: var(--c5-t); }
+.code-c6 { --code: var(--c6); --code-t: var(--c6-t); }
+.code-r { --code: var(--c-repos); --code-t: var(--c-repos-t); }
+.code-vac { --code: var(--c-vac); --code-t: var(--c-vac-t); }
+.code-c2, .code-c3, .code-c4, .code-chr { --code: var(--c-rare); --code-t: var(--c-rare-t); }
+.code-for, .code-epm { --code: var(--c-for); --code-t: var(--c-for-t); }
+.vue-choix:has(> :nth-child(3)) { grid-template-columns: 1fr 1fr 1.3fr; }
+.horaires { display: flex; flex-direction: column; gap: 12px; }
+.mois-tete { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.mois-tete h2 { font-size: 20px; font-weight: 800; }
+.rond-petit { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--bord); background: rgb(255 255 255 / .7); display: grid; place-items: center; color: var(--encre); }
+.rond-petit:active { scale: .9; }
+.bilan-mois { color: var(--discret); font-size: 14.5px; }
+.pinceaux { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.pinceau { border: 2px solid transparent; border-radius: 14px; padding: 7px 8px; background: rgb(255 255 255 / .7); display: flex; flex-direction: column; align-items: flex-start; gap: 1px; text-align: left; min-height: 52px; transition: border-color .2s, background .2s; }
+.pinceau b { font-size: 15px; font-weight: 800; display: flex; align-items: center; gap: 6px; }
+.pinceau b::before { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--code, transparent); flex: none; }
+.pinceau.plus-codes b::before { display: none; }
+.pinceau small { font-size: 13px; color: var(--discret); line-height: 1.25; }
+.pinceau[aria-pressed="true"] { border-color: var(--code, var(--bleu)); background: #fff; box-shadow: 0 4px 12px var(--ombre); }
+.grille-mois { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.gm-entete { text-align: center; font-size: 13px; font-weight: 700; color: var(--discret); }
+.gm-jour { border: 0; border-radius: 12px; min-height: 52px; padding: 4px 2px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  background: var(--code, rgb(255 255 255 / .6)); color: var(--code-t, var(--encre)); transition: background .2s, scale .15s; font-variant-numeric: tabular-nums; }
+.gm-jour:active { scale: .9; }
+.gm-jour span { font-size: 15px; font-weight: 700; line-height: 1.1; }
+.gm-jour b { font-size: 13px; font-weight: 800; line-height: 1.1; }
+.gm-jour.auj { outline: 2px solid var(--encre); outline-offset: 1px; }
+.suite summary { font-weight: 700; color: var(--bleu); cursor: pointer; padding: 4px 0; }
+.suite textarea { width: 100%; border-radius: 14px; border: 1px solid var(--trait); background: #fff; padding: 10px 12px; font-size: 16px; margin: 8px 0; resize: vertical; }
+.suite .aide-champ { text-align: left; }
+.code-mini { font-style: normal; font-size: 13px; font-weight: 800; line-height: 1; margin-top: 2px; padding: 2px 5px; border-radius: 6px; background: var(--code); color: var(--code-t); }
+.bande-jours button[aria-pressed="true"] .code-mini { box-shadow: 0 0 0 1.5px #fff; }
+.bandeau-travail { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; padding: 10px 14px; border-radius: 14px; background: var(--code); color: var(--code-t); }
+.bandeau-travail b { font-weight: 800; }
+.jr-travail { font-size: 13px; font-weight: 700; padding: 3px 8px; border-radius: 8px; background: var(--code); color: var(--code-t); align-self: flex-start; }
+@media (prefers-reduced-motion: reduce) { .gm-jour, .pinceau { transition: none; } }

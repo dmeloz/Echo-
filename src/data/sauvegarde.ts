@@ -2,19 +2,20 @@ import { toast } from "sonner";
 import type { Tache } from "../lib/types";
 import { nettoyerNoms, nettoyerTache } from "../lib/valider";
 import { NOMS_DEFAUT, db, type Photo } from "./db";
+import { CODES, type Horaire } from "../lib/horaires";
 
 // Sauvegarde en un fichier : les tâches, les photos et les réglages.
 // En attendant la synchro, c'est le moyen de garder ses données ou de les copier sur un autre téléphone.
 
-interface Fichier { app: "echo"; version: 1; exporteLe: string; taches: Tache[]; photos: Array<Omit<Photo, "blob"> & { data: string }>; reglages: Array<{ cle: string; valeur: unknown }> }
+interface Fichier { app: "echo"; version: 1; exporteLe: string; taches: Tache[]; photos: Array<Omit<Photo, "blob"> & { data: string }>; reglages: Array<{ cle: string; valeur: unknown }>; horaires?: Horaire[] }
 
 const versTexte = (b: Blob) => new Promise<string>((ok, ko) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = ko; r.readAsDataURL(b); });
 const versBlob = async (data: string) => (await fetch(data)).blob();
 
 export async function exporter() {
-  const [taches, photos, reglages] = await Promise.all([db.taches.toArray(), db.photos.toArray(), db.reglages.toArray()]);
+  const [taches, photos, reglages, horaires] = await Promise.all([db.taches.toArray(), db.photos.toArray(), db.reglages.toArray(), db.horaires.toArray()]);
   const f: Fichier = {
-    app: "echo", version: 1, exporteLe: new Date().toISOString(), taches,
+    app: "echo", version: 1, exporteLe: new Date().toISOString(), taches, horaires,
     photos: await Promise.all(photos.map(async ({ blob, ...p }) => ({ ...p, data: await versTexte(blob) }))),
     // Le choix « téléphone de qui » reste propre à chaque téléphone.
     reglages: reglages.filter((r) => r.cle !== "proprio" && r.cle !== "guideVu"),
@@ -51,8 +52,12 @@ export async function importer(fichier: File) {
   const reglages = (Array.isArray(f.reglages) ? f.reglages : [])
     .filter((r) => r && REGLAGES_PARTAGES.includes(r.cle))
     .map((r) => r.cle === "noms" ? { cle: r.cle, valeur: nettoyerNoms(r.valeur, NOMS_DEFAUT) } : { cle: r.cle, valeur: Array.isArray(r.valeur) ? r.valeur.filter((x) => typeof x === "string") : [] });
+  const horaires = (Array.isArray(f.horaires) ? f.horaires : []).filter((h): h is Horaire =>
+    !!h && (h.qui === "moi" || h.qui === "elle") && typeof h.jour === "string" && /^\d{4}-\d{2}-\d{2}$/.test(h.jour) && typeof h.code === "string" && h.code in CODES)
+    .map(({ qui, jour, code }) => ({ qui, jour, code }));
   try {
-    await db.transaction("rw", db.taches, db.photos, db.reglages, async () => {
+    await db.transaction("rw", [db.taches, db.photos, db.reglages, db.horaires], async () => {
+      await db.horaires.bulkPut(horaires);
       await db.taches.bulkPut(taches);     // même tâche = remplacée, nouvelle = ajoutée
       await db.photos.bulkPut(photos);
       await db.reglages.bulkPut(reglages);

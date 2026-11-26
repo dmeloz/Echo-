@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import { auJour } from "../lib/dates";
 import { construireResume, type SectionResume } from "../lib/resume";
 import type { Noms, Personne, Tache } from "../lib/types";
-import { poserReglage, useReglage } from "../data/hooks";
+import { poserReglage, useHoraires, useReglage } from "../data/hooks";
 
 interface Props { taches: Tache[]; noms: Noms; proprio: Personne; now: Date }
 
@@ -21,6 +21,7 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
   const fermer = useRef<HTMLButtonElement>(null);
   const today = auJour(0, now);
   const lu = luLe === today;
+  const travail = useHoraires().find((h) => h.qui === proprio && h.jour === today)?.code;
 
   useEffect(() => {
     if (!ouvert) return;
@@ -33,7 +34,7 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
   }, [ouvert]);
 
   if (!actif || (lu && now.getHours() >= 12)) return null;
-  const r = construireResume(taches, noms, proprio, now);
+  const r = construireResume(taches, noms, proprio, now, travail);
 
   function terminer() {
     if (parle()) speechSynthesis.cancel();
