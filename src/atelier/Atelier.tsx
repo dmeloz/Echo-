@@ -1,9 +1,9 @@
 // L'atelier de design : la VRAIE app tourne dans le cadre à gauche (même adresse, mêmes fichiers),
 // et le panneau pose par-dessus une feuille de style que l'on règle au doigt. Rien n'est redessiné ici.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ChevronDown, ChevronUp, Code, Copy, Eye, Layers, MousePointerClick, Palette, Pointer, RotateCcw, Undo2, X } from "pulsoicon-react";
+import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Eye, Layers, MousePointerClick, Palette, Pointer, RotateCcw, Undo2, X, Zap } from "pulsoicon-react";
 import { CLE_BROUILLON, CLE_GARDE, VIDE, cssDe, ecrireCouleur, lireCouleur, nombreDeChangements, type Etat } from "../lib/atelier";
-import { ECRANS, GROUPES, NOMS_CLASSES, NOMS_JETONS, OMBRES, PROPS, TAILLES, type Prop } from "./listes";
+import { AMBIANCES, ECRANS, ETATS, GROUPES, NOMS_CLASSES, NOMS_JETONS, NOMS_PROPS, OMBRES, PROPS, RAPIDES, TAILLES, TEINTES, type Prop } from "./listes";
 
 type Maillon = { el: Element; sel: string; nom: string };
 type Jeton = { nom: string; origine: string };
@@ -28,22 +28,6 @@ function chemin(depart: Element): Maillon[] {
   return liste;
 }
 
-function reglesDe(el: Element): string[] {
-  const trouve: string[] = [];
-  const fouiller = (regles: CSSRuleList) => {
-    for (const r of regles) {
-      const s = (r as CSSStyleRule).selectorText;
-      if (s) { try { if (el.matches(s)) trouve.push(r.cssText.replace(/\{ /, "{\n  ").replace(/; (?!\})/g, ";\n  ").replace(/ \}$/, "\n}")); } catch { /* sélecteur que ce navigateur ne lit pas */ } }
-      else if ((r as CSSGroupingRule).cssRules) fouiller((r as CSSGroupingRule).cssRules);
-    }
-  };
-  for (const f of el.ownerDocument.styleSheets) {
-    if ((f.ownerNode as Element | null)?.id?.startsWith("atelier-")) continue;
-    try { fouiller(f.cssRules); } catch { /* feuille d'un autre site */ }
-  }
-  return trouve;
-}
-
 function lireJetons(doc: Document): Jeton[] {
   const vus = new Map<string, string>();
   for (const f of doc.styleSheets) {
@@ -61,7 +45,7 @@ export function Atelier() {
   const [etat, setEtat] = useState<Etat>(charger);
   const [garde, setGarde] = useState(() => !!localStorage.getItem(CLE_GARDE));
   const [choisir, setChoisir] = useState(true);
-  const [onglet, setOnglet] = useState<"element" | "theme" | "css" | "liste">("element");
+  const [onglet, setOnglet] = useState<"rapide" | "element" | "theme" | "liste">("rapide");
   const [maillons, setMaillons] = useState<Maillon[]>([]);
   const [sel, setSel] = useState<string>("");
   const [jetons, setJetons] = useState<Jeton[]>([]);
@@ -75,6 +59,7 @@ export function Atelier() {
   vif.current = { etat, choisir, avant };
   const passe = useRef<{ liste: Etat[]; quand: number }>({ liste: [], quand: 0 });
   const [, redessiner] = useState(0);
+  const passeDroit = useRef(false); // un toucher fait par l'atelier lui-même (ouvrir le menu, une tâche…)
 
   const doc = () => cadre.current?.contentDocument ?? null;
   const maillon = maillons.find((m) => m.sel === sel);
@@ -145,11 +130,11 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
     const arreter = (e: Event) => { if (vif.current.choisir) e.stopPropagation(); };
     for (const type of ["pointerdown", "pointerup", "mousedown", "mouseup", "touchstart", "touchend", "keydown"]) d.addEventListener(type, arreter, true);
     d.addEventListener("click", (e) => {
-      if (!vif.current.choisir) return;
+      if (!vif.current.choisir || passeDroit.current) return;
       e.preventDefault(); e.stopPropagation();
       const liste = chemin(e.target as Element);
       if (!liste.length) return;
-      setMaillons(liste); setSel(liste[0].sel); setOnglet((o) => (o === "css" ? o : "element")); setOuvert(true);
+      setMaillons(liste); setSel(liste[0].sel); setOnglet("element"); setOuvert(true);
     }, true);
     d.addEventListener("mousemove", (e) => { if (vif.current.choisir) placer("atelier-survol", (e.target as Element).closest("svg") ?? (e.target as Element)); }, true);
     d.addEventListener("mouseleave", () => placer("atelier-survol", null));
@@ -165,6 +150,20 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
   }, [taille]);
 
   const aller = (id: string) => { const w = cadre.current?.contentWindow; if (w) w.location.hash = id; };
+  // Ouvre un écran caché en touchant le bon bouton de l'app à la place de Melo.
+  const ouvrirEtat = (selecteur: string) => {
+    aller("aujourdhui");
+    setTimeout(() => {
+      const b = doc()?.querySelector<HTMLElement>(selecteur); if (!b) return;
+      passeDroit.current = true; b.click(); passeDroit.current = false;
+    }, 250);
+  };
+  const recharger = () => cadre.current?.contentWindow?.location.reload();
+  const poserJetons = (lot: Record<string, string | null>) => changer((e) => {
+    const j = { ...e.jetons };
+    for (const [n, v] of Object.entries(lot)) { if (v == null) delete j[n]; else j[n] = v; }
+    return { ...e, jetons: j };
+  });
   const nb = nombreDeChangements(etat);
   const texte = cssDe(etat);
   const copier = async () => {
@@ -184,7 +183,10 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
         <div className="ecrans">
           <button className="puce mobile" aria-pressed={ouvert} onClick={() => setOuvert(!ouvert)}><Layers size={15} /> Régler</button>
           <button className="puce mobile" aria-pressed={choisir} onClick={() => setChoisir(!choisir)}><MousePointerClick size={15} /> Choisir</button>
+          <a className="puce" href="./"><ArrowLeft size={15} /> Echo</a>
           {ECRANS.map((e) => <button key={e.id} className="puce" onClick={() => aller(e.id)}>{e.nom}</button>)}
+          {ETATS.map((e) => <button key={e.nom} className="puce etat" onClick={() => ouvrirEtat(e.sel)}>{e.nom}</button>)}
+          <button className="puce etat" onClick={recharger}>Tout refermer</button>
           <select className="puce" aria-label="Taille de l'écran" value={taille} onChange={(e) => setTaille(Number(e.target.value))}>
             {TAILLES.map((x, i) => <option key={x.nom} value={i}>{x.nom}</option>)}
           </select>
@@ -209,20 +211,59 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
         {avant && <p className="bandeau">Tu vois l'app comme avant. Retouche l'œil pour revoir tes changements.</p>}
 
         <nav className="onglets">
+          <button aria-pressed={onglet === "rapide"} onClick={() => setOnglet("rapide")}><Zap size={16} /> Rapide</button>
           <button aria-pressed={onglet === "element"} onClick={() => setOnglet("element")}><Layers size={16} /> Élément</button>
-          <button aria-pressed={onglet === "theme"} onClick={() => setOnglet("theme")}><Palette size={16} /> Thème</button>
-          <button aria-pressed={onglet === "css"} onClick={() => setOnglet("css")}><Code size={16} /> CSS</button>
+          <button aria-pressed={onglet === "theme"} onClick={() => setOnglet("theme")}><Palette size={16} /> Couleurs</button>
           <button aria-pressed={onglet === "liste"} onClick={() => setOnglet("liste")}>Changements{nb ? ` (${nb})` : ""}</button>
         </nav>
 
         <div className="contenu">
+          {onglet === "rapide" && <>
+            <section className="groupe">
+              <h3>Couleur principale</h3>
+              <div className="pastilles">
+                {TEINTES.map((t) => {
+                  const active = (etat.jetons["--bleu"] ?? "") === t.hex;
+                  return <button key={t.nom} className="pastille" aria-pressed={active} aria-label={t.nom} title={t.nom} style={{ background: t.hex || "#2f6bff" }}
+                    onClick={() => poserJetons({ "--bleu": t.hex || null, "--bleu-pale": t.hex ? `color-mix(in srgb, ${t.hex} 13%, #fff)` : null })}>{active && <Check size={18} />}</button>;
+                })}
+              </div>
+            </section>
+            <section className="groupe">
+              <h3>Ambiance du fond</h3>
+              <div className="chemin">
+                {AMBIANCES.map((a) => {
+                  const active = ["--fond", "--reflet-bleu", "--reflet-turquoise", "--reflet-lavande"].every((n) => (etat.jetons[n] ?? "") === (a.jetons[n] ?? ""));
+                  return <button key={a.nom} className="puce" aria-pressed={active} onClick={() => poserJetons({ "--fond": null, "--reflet-bleu": null, "--reflet-turquoise": null, "--reflet-lavande": null, ...a.jetons })}>{a.nom}</button>;
+                })}
+              </div>
+            </section>
+            <section className="groupe">
+              <h3>Formes et tailles</h3>
+              {RAPIDES.map((p) => {
+                const pose = etat.regles[p.sel]?.[p.css];
+                return <Ligne key={p.nom} nom={p.nom} change={pose != null} onRemettre={() => poser(p.sel, p.css, null)}>
+                  <Curseur valeur={pose != null ? parseFloat(pose) : p.defaut} min={p.min!} max={p.max!} pas={p.pas!} unite={p.unite ?? ""} onChange={(n) => poser(p.sel, p.css, n + (p.unite ?? ""))} />
+                </Ligne>;
+              })}
+            </section>
+            <section className="groupe">
+              <h3>Le verre des cartes</h3>
+              <Ligne nom="Transparence" change={"--verre" in etat.jetons} onRemettre={() => poserJeton("--verre", null)}>
+                <Curseur valeur={Math.round((lireCouleur(etat.jetons["--verre"] ?? "rgb(255 255 255 / .6)")?.a ?? 0.6) * 100)} min={20} max={100} pas={1} unite="%" onChange={(n) => poserJeton("--verre", `rgb(255 255 255 / ${n / 100})`)} />
+              </Ligne>
+              {PROPS.filter((p) => p.type === "flou" || p.type === "ombre").map((p) => <Reglage key={p.css} p={p} style={null} pose={etat.regles[".g"]?.[p.css]} onChange={(v) => poser(".g", p.css, v)} />)}
+            </section>
+            <p className="aide">Pour régler un seul élément (un titre, un bouton, une icône), touche-le dans l'app.</p>
+          </>}
+
           {onglet === "element" && (!cible || !style
             ? <p className="vide">Touche un élément de l'app (une carte, un titre, un bouton, une icône) pour le régler. Pour ouvrir le menu ou une tâche, passe sur « Utiliser l'app », puis reviens sur « Choisir ».</p>
             : <>
               <div className="chemin">
                 {maillons.map((m, i) => <button key={m.sel + i} className="puce" aria-pressed={m.sel === sel} onClick={() => setSel(m.sel)}>{m.nom}</button>)}
               </div>
-              <p className="aide"><code>{sel}</code> · {doc()?.querySelectorAll(sel).length ?? 0} sur cet écran. Tous changent ensemble.</p>
+              <p className="aide">{(() => { const n = doc()?.querySelectorAll(sel).length ?? 0; return n > 1 ? `Il y en a ${n} sur cet écran : ils changent tous ensemble.` : "Tu règles cet élément, partout où il apparaît dans l'app."; })()}</p>
               {GROUPES.map((g) => (
                 <section key={g} className="groupe">
                   <h3>{g}</h3>
@@ -232,7 +273,7 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
             </>)}
 
           {onglet === "theme" && (jetons.length === 0 ? <p className="vide">L'app charge…</p> : <>
-            <p className="aide">Les réglages de base de l'app. Changer le bleu ici le change partout.</p>
+            <p className="aide">Toutes les couleurs et mesures de base de l'app. Changer le bleu ici le change partout.</p>
             {NOMS_JETONS.map((g) => (
               <section key={g.groupe} className="groupe">
                 <h3>{g.groupe}</h3>
@@ -253,42 +294,35 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
             ))}
           </>)}
 
-          {onglet === "css" && <>
-            <section className="groupe">
-              <h3>Ton CSS</h3>
-              <p className="aide">Écris du CSS ici : il s'applique tout de suite sur l'app.</p>
-              <textarea className="champ code" rows={7} spellCheck={false} placeholder={".page-titre {\n  letter-spacing: -1px;\n}"} value={etat.libre} onChange={(e) => { const v = e.target.value; changer((x) => ({ ...x, libre: v })); }} />
-            </section>
-            <section className="groupe">
-              <h3>{cible ? "Le CSS de l'app pour : " + cible.nom : "Le CSS de l'app"}</h3>
-              {cible
-                ? reglesDe(cible.el).map((r, i) => <pre key={i} className="code">{r}</pre>)
-                : <p className="aide">Choisis un élément de l'app pour voir les règles qui le dessinent.</p>}
-            </section>
-          </>}
-
           {onglet === "liste" && (nb === 0
             ? <p className="vide">Aucun changement pour l'instant. L'app est exactement comme en ligne.</p>
             : <>
               <ul className="changements">
                 {Object.entries(etat.jetons).map(([n, v]) => <li key={n}><span><b>{nomJeton(n)}</b> {v}</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => poserJeton(n, null)}><X size={15} /></button></li>)}
                 {Object.entries(etat.regles).flatMap(([s, props]) => Object.entries(props).filter(([p]) => !p.startsWith("-webkit-")).map(([p, v]) => (
-                  <li key={s + p}><span><b>{NOMS_CLASSES[s.slice(1)] ?? s}</b> {PROPS.find((x) => x.css === p)?.nom ?? p} : {v}</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => poser(s, p, null)}><X size={15} /></button></li>
+                  <li key={s + p}><span><b>{NOMS_CLASSES[s.slice(1)] ?? s}</b> {NOMS_PROPS[p] ?? PROPS.find((x) => x.css === p)?.nom ?? p} : {v}</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => poser(s, p, null)}><X size={15} /></button></li>
                 )))}
-                {etat.libre.trim() && <li><span><b>Ton CSS</b> écrit à la main</span><button className="rond petit" aria-label="Retirer ton CSS" onClick={() => changer((x) => ({ ...x, libre: "" }))}><X size={15} /></button></li>}
               </ul>
-              <label className="garder">
-                <span><b>Essayer dans la vraie app</b><small>Sur cet appareil seulement : ouvre Echo dans ce navigateur, tes changements y sont. Pour tout le monde, envoie-les à Claude.</small></span>
-                <input type="checkbox" role="switch" className="interrupteur" checked={garde} onChange={() => setGarde(!garde)} />
-              </label>
               <div className="actions">
-                <button className="bouton" onClick={copier}><Copy size={17} /> {copie ? "Copié" : "Copier pour Claude"}</button>
-                <button className="bouton second" onClick={() => changer(() => VIDE)}><RotateCcw size={17} /> Tout remettre</button>
+                <button className="bouton second" onClick={() => changer(() => VIDE)}><RotateCcw size={17} /> Tout remettre comme avant</button>
               </div>
-              <p className="aide">Colle le texte copié dans la conversation : Claude le met pour de bon dans l'app.</p>
-              <pre className="code">{texte}</pre>
+              <section className="groupe">
+                <h3>Pour Sarah aussi, et pour toujours</h3>
+                <p className="aide">« Appliquer à mon app » change l'app sur cet appareil. Pour que ce soit le design d'Echo pour tout le monde, touche ce bouton et colle dans la conversation avec Claude : il s'occupe du reste.</p>
+                <div className="actions"><button className="bouton second" onClick={copier}><Copy size={17} /> {copie ? "Copié, colle-le à Claude" : "Copier pour Claude"}</button></div>
+              </section>
             </>)}
         </div>
+
+        {(nb > 0 || garde) && (
+          <footer className="pied-atelier">
+            {garde
+              ? <><span className="applique"><Check size={18} /> Dans ton app, sur cet appareil. Chaque réglage s'y ajoute tout seul.</span>
+                  <a className="bouton" href="./">Voir l'app</a>
+                  <button className="bouton second" onClick={() => setGarde(false)}>Retirer</button></>
+              : <button className="bouton large" onClick={() => setGarde(true)}><Check size={18} /> Appliquer à mon app</button>}
+          </footer>
+        )}
       </aside>
     </div>
   );
@@ -326,8 +360,8 @@ function ChampCouleur({ valeur, onChange }: { valeur: string; onChange: (v: stri
   );
 }
 
-function Reglage({ p, style, pose, onChange }: { p: Prop; style: CSSStyleDeclaration; pose: string | undefined; onChange: (v: string | null) => void }) {
-  const lu = pose ?? style.getPropertyValue(p.lit ?? p.css);
+function Reglage({ p, style, pose, onChange }: { p: Prop; style: CSSStyleDeclaration | null; pose: string | undefined; onChange: (v: string | null) => void }) {
+  const lu = pose ?? style?.getPropertyValue(p.lit ?? p.css) ?? (p.type === "flou" ? "blur(20px)" : "");
   let champ: ReactNode;
   if (p.type === "couleur") champ = <ChampCouleur valeur={lu} onChange={onChange} />;
   else if (p.type === "ombre") champ = (

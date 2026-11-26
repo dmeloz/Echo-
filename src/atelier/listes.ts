@@ -64,3 +64,29 @@ export const NOMS_CLASSES: Record<string, string> = {
   resume: "Résumé du matin", demain: "Carte « Demain »", "vue-choix": "Choix Jour / Semaine", "grille-mois": "Grille du mois", "gm-jour": "Jour de la grille", "jour-rang": "Ligne d'un jour",
   "ligne-temps": "Ligne du temps", puce: "Pastille", exemples: "Bandeau des exemples", "note-donnees": "Note du bas", membres: "Membres du foyer", vide: "Écran vide",
 };
+
+// Les écrans cachés derrière un toucher : l'atelier fait le toucher à ta place.
+export const ETATS = [
+  { nom: "Menu ouvert", sel: ".capsule .bascule" }, { nom: "Une tâche", sel: ".tache .corps" }, { nom: "Dos de la carte", sel: ".focus .tourner" },
+  { nom: "Résumé du matin", sel: ".matin-bouton" }, { nom: "Barre d'écriture", sel: ".echo-btn" },
+];
+
+// Réglages rapides : des choix tout prêts, sans rien écrire.
+export const TEINTES = [
+  { nom: "Bleu lagon (celui de l'app)", hex: "" }, { nom: "Indigo", hex: "#4f5bd5" }, { nom: "Violet", hex: "#7a5bd1" }, { nom: "Turquoise", hex: "#0e9384" },
+  { nom: "Vert", hex: "#2f9e6a" }, { nom: "Orange", hex: "#e8731a" }, { nom: "Rose", hex: "#d6447f" }, { nom: "Encre", hex: "#12283a" },
+];
+export const AMBIANCES: { nom: string; jetons: Record<string, string> }[] = [
+  { nom: "Givre lagon (celle de l'app)", jetons: {} },
+  { nom: "Neige", jetons: { "--fond": "#f8fafb", "--reflet-bleu": "#e9effb", "--reflet-turquoise": "#e3f3f0", "--reflet-lavande": "#efeef8" } },
+  { nom: "Lagon profond", jetons: { "--fond": "#edf3f7", "--reflet-bleu": "#c5d6ff", "--reflet-turquoise": "#a6e6da", "--reflet-lavande": "#d6d1f5" } },
+  { nom: "Aurore", jetons: { "--fond": "#f7f5f8", "--reflet-bleu": "#e3ddff", "--reflet-turquoise": "#ffe0ea", "--reflet-lavande": "#ffe9d6" } },
+  { nom: "Menthe", jetons: { "--fond": "#f2f8f5", "--reflet-bleu": "#d3efe2", "--reflet-turquoise": "#bfeedd", "--reflet-lavande": "#e0f0ea" } },
+];
+export const RAPIDES: (Prop & { sel: string; defaut: number })[] = [
+  { sel: ".g", css: "border-radius", nom: "Arrondi des cartes", groupe: "", type: "nombre", min: 0, max: 40, pas: 1, unite: "px", defaut: 26 },
+  { sel: ".cadre", css: "gap", nom: "Espace entre les cartes", groupe: "", type: "nombre", min: 4, max: 32, pas: 1, unite: "px", defaut: 12 },
+  { sel: ".bouton", css: "border-radius", nom: "Arrondi des boutons", groupe: "", type: "nombre", min: 0, max: 30, pas: 1, unite: "px", defaut: 30 },
+  { sel: ".cadre", css: "zoom", nom: "Taille de toute la page", groupe: "", type: "nombre", min: 0.85, max: 1.25, pas: 0.01, unite: "", defaut: 1 },
+];
+export const NOMS_PROPS: Record<string, string> = { zoom: "Taille de toute la page" };
