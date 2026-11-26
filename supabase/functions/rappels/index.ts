@@ -1,6 +1,7 @@
 // Envoie les rappels d'Echo : à l'heure d'une tâche, et le résumé du matin.
-// Appelée chaque minute par la base (pg_cron). Elle refuse tout appel sans le secret ECHO_CRON.
-// Les clés d'envoi (VAPID_PUBLIQUE, VAPID_PRIVEE) restent ici : elles ne sont jamais dans l'app.
+// Appelée chaque minute par la base (pg_cron). Elle refuse tout appel sans le secret echo_cron.
+// Les secrets (echo_cron et les clés d'envoi) sont fabriqués et gardés par le serveur, dans le coffre de la base :
+// jamais dans l'app ni dans le dépôt.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
 import { aEnvoyer, type Abonne, type TacheLue } from "./quoi.ts";
@@ -8,11 +9,18 @@ import { aEnvoyer, type Abonne, type TacheLue } from "./quoi.ts";
 interface Ligne { id: string; user_id: string; endpoint: string; p256dh: string; auth: string; fuseau: string; a_l_heure: boolean; matin: string | null }
 
 Deno.serve(async (req) => {
-  const secret = Deno.env.get("ECHO_CRON");
-  if (!secret || req.headers.get("x-echo-cron") !== secret) return new Response("non", { status: 401 });
-
   const base = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-  webpush.setVapidDetails("https://dmeloz.github.io/Echo-/", Deno.env.get("VAPID_PUBLIQUE")!, Deno.env.get("VAPID_PRIVEE")!);
+  // Les secrets sont dans le coffre de la base (vault) : echo_cron, vapid_publique, vapid_privee.
+  const { data: coffre } = await base.rpc("secrets_rappels");
+  const secrets = Object.fromEntries(((coffre ?? []) as Array<{ nom: string; valeur: string }>).map((x) => [x.nom, x.valeur]));
+  if (!secrets.echo_cron || req.headers.get("x-echo-cron") !== secrets.echo_cron) return new Response("non", { status: 401 });
+  // Premier passage : le serveur fabrique lui-même ses clés d'envoi et les range dans le coffre.
+  if (!secrets.vapid_publique || !secrets.vapid_privee) {
+    const k = webpush.generateVAPIDKeys();
+    const { error: e } = await base.rpc("poser_cles_rappels", { p_publique: k.publicKey, p_privee: k.privateKey });
+    return Response.json(e ? { erreur: e.message } : { cles: "créées" }, { status: e ? 500 : 200 });
+  }
+  webpush.setVapidDetails("https://dmeloz.github.io/Echo-/", secrets.vapid_publique, secrets.vapid_privee);
   const now = new Date();
 
   const { data: abonnes, error } = await base.from("abonnements").select("id, user_id, endpoint, p256dh, auth, fuseau, a_l_heure, matin");

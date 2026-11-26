@@ -3,7 +3,6 @@ import { db } from "./db";
 
 // Les rappels : le téléphone donne son accord, puis le serveur d'Echo envoie la notification à l'heure.
 // (Sur iPhone, ça marche seulement quand Echo est installé sur l'écran d'accueil.)
-const CLE_PUBLIQUE = "BL6L572n2btpgTCvroL9qoM1D4wChU7ODayJWIdU52HUDhMNqF-WKPimyDMG8rUDIJ-xwFanGENgJuzsP_VJDQ4";
 
 export interface Rappels { actif: boolean; aLHeure: boolean; matin: string | null }
 export const RAPPELS_DEFAUT: Rappels = { actif: false, aLHeure: true, matin: "07:30" };
@@ -15,7 +14,12 @@ const ranger = (r: Rappels) => db.reglages.put({ cle: "rappels", valeur: r });
 
 async function abonnement(creer: boolean) {
   const reg = await navigator.serviceWorker.ready;
-  return (await reg.pushManager.getSubscription()) ?? (creer ? reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: enOctets(CLE_PUBLIQUE) }) : null);
+  const deja = await reg.pushManager.getSubscription();
+  if (deja || !creer) return deja;
+  // La clé publique vient du serveur d'Echo (il a fabriqué la paire lui-même).
+  const { data: cle } = await supa.rpc("cle_rappels");
+  if (typeof cle !== "string" || !cle) throw new Error("clé absente");
+  return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: enOctets(cle) });
 }
 
 // Allumer ou régler les rappels. Lance une erreur avec une phrase à montrer si ça ne peut pas marcher.

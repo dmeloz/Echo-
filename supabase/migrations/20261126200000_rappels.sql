@@ -23,6 +23,35 @@ create table public.rappels_envoyes (
 alter table public.rappels_envoyes enable row level security;
 revoke all on public.rappels_envoyes from anon, authenticated;
 
+-- Les secrets des rappels, gardés dans le coffre (vault) : echo_cron, vapid_publique, vapid_privee.
+-- Seule la fonction du serveur (rôle service_role) peut les lire.
+create function public.secrets_rappels() returns table(nom text, valeur text) language sql security definer set search_path = '' as $$
+  select name, decrypted_secret from vault.decrypted_secrets where name in ('echo_cron', 'vapid_publique', 'vapid_privee')
+$$;
+revoke all on function public.secrets_rappels() from public, anon, authenticated;
+grant execute on function public.secrets_rappels() to service_role;
+
+-- Les clés d'envoi sont fabriquées par le serveur lui-même (au premier passage) et rangées dans le coffre.
+create function public.poser_cles_rappels(p_publique text, p_privee text) returns void language plpgsql security definer set search_path = '' as $$
+begin
+  if exists (select 1 from vault.secrets where name = 'vapid_privee') then return; end if;
+  perform vault.create_secret(p_publique, 'vapid_publique');
+  perform vault.create_secret(p_privee, 'vapid_privee');
+end $$;
+revoke all on function public.poser_cles_rappels(text, text) from public, anon, authenticated;
+grant execute on function public.poser_cles_rappels(text, text) to service_role;
+
+-- La clé publique, que le téléphone demande pour s'inscrire aux notifications.
+create function public.cle_rappels() returns text language sql stable security definer set search_path = '' as $$
+  select decrypted_secret from vault.decrypted_secrets where name = 'vapid_publique'
+$$;
+revoke all on function public.cle_rappels() from public, anon;
+grant execute on function public.cle_rappels() to authenticated;
+
+-- Le secret de l'appel planifié, fabriqué ici : personne ne le voit.
+select vault.create_secret(encode(extensions.gen_random_bytes(24), 'hex'), 'echo_cron')
+where not exists (select 1 from vault.secrets where name = 'echo_cron');
+
 -- Chaque minute, la base appelle la fonction « rappels » avec le secret gardé dans le coffre (vault, nom : echo_cron).
 create extension if not exists pg_cron;
 create extension if not exists pg_net with schema extensions;
