@@ -33,3 +33,6 @@ export type Personne = "moi" | "elle";
 export const autre = (p: Personne): Personne => (p === "moi" ? "elle" : "moi");
 
 export interface Etape { id: string; texte: string; fait: boolean }
+
+// Le prénom de l'autre tant qu'il n'a pas rejoint le foyer (Echo est l'app de Dany et Sarah).
+export const autrePrenom = (prenom: string) => (prenom.trim().toLowerCase() === "sarah" ? "Dany" : "Sarah");

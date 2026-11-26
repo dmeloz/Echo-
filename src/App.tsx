@@ -41,7 +41,13 @@ export default function App() {
   const proprio = proprioBrut ?? "moi";
   const [guideFerme, setGuideFerme] = useState(false);
   // Relier le téléphone au foyer : proposé une fois à ceux qui avaient Echo avant la synchro, puis depuis les Réglages.
-  const etatFoyer = useLiveQuery(async () => ({ foyer: (await db.reglages.get("foyer"))?.valeur, proposee: !!(await db.reglages.get("connexionProposee"))?.valeur }), []);
+  const etatFoyer = useLiveQuery(async () => ({
+    foyer: (await db.reglages.get("foyer"))?.valeur,
+    proposee: !!(await db.reglages.get("connexionProposee"))?.valeur,
+    membres: ((await db.reglages.get("membres"))?.valeur as Array<{ place: string }> | undefined) ?? [],
+  }), []);
+  // Dans un foyer, le rond de l'autre n'apparaît qu'une fois qu'il a rejoint.
+  const autreLa = !etatFoyer?.foyer || etatFoyer.membres.some((m) => m.place === autre(proprio));
   const aProposer = !!etatFoyer && !etatFoyer.foyer && !etatFoyer.proposee;
   const [relier, setRelier] = useState(false);
   const now = useMaintenant();
@@ -137,8 +143,8 @@ export default function App() {
             <div className="entete-droite">
               {vue.id === "aujourdhui" && taches && <ResumeMatin taches={liste} noms={noms} proprio={proprio} now={now} />}
               <button type="button" className="loupe-ouvrir" aria-label="Chercher dans Echo" onClick={() => setRecherche("")}><Search size={20} strokeWidth={2} /></button>
-              <a className="duo" href="#reglages" aria-label="Les deux profils du foyer" onClick={(e) => { e.preventDefault(); aller("reglages"); }}>
-                <i className={proprio}>{initialeDe(noms, proprio)}</i><i className={autre(proprio)}>{initialeDe(noms, autre(proprio))}</i>
+              <a className="duo" href="#reglages" aria-label={autreLa ? "Les deux profils du foyer" : "Ton profil"} onClick={(e) => { e.preventDefault(); aller("reglages"); }}>
+                <i className={proprio}>{initialeDe(noms, proprio)}</i>{autreLa && <i className={autre(proprio)}>{initialeDe(noms, autre(proprio))}</i>}
               </a>
             </div>
             </>}
