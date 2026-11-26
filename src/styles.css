@@ -682,3 +682,30 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .reglages select { width: 100%; margin-top: 6px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--trait, rgb(18 40 58 / .12)); background: rgb(255 255 255 / .8); font-size: 15px; }
 .feuille-evt .seul-tache { display: none; }
 .puce label[for="f-fin"] { font-size: 13px; font-weight: 700; color: var(--discret); margin-right: 4px; }
+
+/* ---------- Horaires fixes et vacances de l'année ---------- */
+.code-fix { --code: var(--c5); --code-t: var(--c5-t); }
+.code-fer { --code: var(--c-repos); --code-t: var(--c-repos-t); }
+.horaires-fixes { display: flex; flex-direction: column; gap: 4px; }
+.horaires-fixes b { font-size: 20px; font-weight: 800; }
+.horaires-fixes span { color: var(--discret); font-size: 14.5px; }
+.vacances { display: flex; flex-direction: column; gap: 12px; }
+.vac-tete h2 { font-size: 20px; font-weight: 800; }
+.vac-compte { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--discret); font-size: 14.5px; margin-top: 2px; }
+.vac-compte b { color: var(--encre); font-size: 17px; }
+.vac-compte .elle b { color: var(--turquoise); }
+.vac-compte .moi b { color: var(--bleu); }
+.vac-liste { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.vac-liste li { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 8px 8px 14px; border-radius: 14px; background: var(--c-vac); color: var(--c-vac-t); }
+.vac-liste li span { display: flex; flex-direction: column; }
+.vac-liste small { font-size: 13px; opacity: .85; }
+.vac-liste.propose li { background: transparent; color: var(--encre); border: 2px dashed var(--c-vac); padding: 10px 14px; }
+.vac-idee { display: flex; flex-direction: column; gap: 8px; }
+.vac-idee p svg, .vac-echo svg { display: inline; vertical-align: -2px; color: var(--accent); }
+.vac-ajout { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.vac-ajout input { flex: 1 1 150px; min-width: 0; border-radius: 12px; border: 1px solid var(--trait); background: #fff; padding: 9px 12px; font-size: 16px; }
+.vac-qui { display: flex; gap: 6px; }
+.vac-qui button { border: 2px solid transparent; border-radius: 99px; padding: 7px 12px; font-weight: 700; background: rgb(255 255 255 / .7); color: var(--discret); }
+.vac-qui button[aria-pressed="true"].moi { border-color: var(--bleu); color: var(--bleu); background: #fff; }
+.vac-qui button[aria-pressed="true"].elle { border-color: var(--turquoise); color: var(--turquoise); background: #fff; }
+.vac-echo { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
