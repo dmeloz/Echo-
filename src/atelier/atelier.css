@@ -75,6 +75,14 @@ pre.code { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgb(1
 .changements { list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .changements li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 6px 8px 6px 12px; border-radius: 14px; background: rgb(255 255 255 / .6); border: 1px solid var(--bord); font-size: 14px; overflow-wrap: anywhere; }
 .changements b { display: block; }
+.ajout-suite { display: flex; gap: 8px; align-items: center; }
+.etape > span:first-child { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.etape.fait b { color: var(--discret); text-decoration: line-through; }
+.etape.en-cours { background: var(--bleu-pale); }
+.champ.etat { width: auto; min-height: 32px; padding: 2px 8px; font-size: 13px; align-self: flex-start; }
+.fleches { flex: none; display: flex; gap: 4px; }
+.bouton:disabled { opacity: .45; cursor: default; }
+.bouton[aria-pressed="true"] { background: var(--bleu); color: #fff; }
 .garder { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 14px; background: rgb(255 255 255 / .6); border: 1px solid var(--bord); }
 .garder small { display: block; color: var(--discret); font-size: 13px; }
 .interrupteur { appearance: none; flex: none; width: 50px; height: 30px; border-radius: 999px; background: rgb(18 40 58 / .18); position: relative; transition: background .25s; cursor: pointer; }

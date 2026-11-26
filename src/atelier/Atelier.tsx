@@ -1,14 +1,22 @@
 // L'atelier de design : la VRAIE app tourne dans le cadre à gauche (même adresse, mêmes fichiers),
 // et le panneau pose par-dessus une feuille de style que l'on règle au doigt. Rien n'est redessiné ici.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowLeft, Check, ChevronDown, ChevronUp, Copy, Eye, Layers, MousePointerClick, Palette, Pointer, RotateCcw, Undo2, X, Zap } from "pulsoicon-react";
-import { CLE_BROUILLON, CLE_GARDE, VIDE, cssDe, ecrireCouleur, lireCouleur, nombreDeChangements, type Etat } from "../lib/atelier";
+import { Check, EyeOff, ChevronDown, ChevronUp, Eye, Send, Layers, MousePointerClick, Palette, Pointer, ListTodo, MessageSquarePlus, Mic, RotateCcw, Undo2, X, Zap } from "pulsoicon-react";
+import { CLE_BROUILLON, VIDE, cssDe, ecrireCouleur, lireCouleur, nombreDeChangements, type Etat } from "../lib/atelier";
+import { Suite } from "./Suite";
 import { AMBIANCES, ECRANS, ETATS, GROUPES, NOMS_CLASSES, NOMS_JETONS, NOMS_PROPS, OMBRES, PROPS, RAPIDES, TAILLES, TEINTES, type Prop } from "./listes";
 
 type Maillon = { el: Element; sel: string; nom: string };
 type Jeton = { nom: string; origine: string };
 
 const charger = (): Etat => { try { return { ...VIDE, ...JSON.parse(localStorage.getItem(CLE_BROUILLON) || "{}") }; } catch { return VIDE; } };
+
+// L'atelier vit dans une page du projet Claude : « Envoyer à Claude » range le design dans la base de la page, où Claude le relit.
+type Fiche = { get(): Promise<{ exists: boolean; data(): Record<string, unknown> | undefined }>; set(d: Record<string, unknown>): Promise<void> };
+type Base = { doc(chemin: string): Fiche };
+declare global { interface Window { claude?: { use(nom: string): Promise<unknown> } } }
+const base = async () => ((await window.claude?.use("db")) as Base | null | undefined) ?? null;
+const APP = import.meta.env.VITE_APP ?? "./";
 const classes = (el: Element) => [...el.classList].filter((c) => !c.startsWith("atelier-") && !["arrivee", "respire", "tremble"].includes(c));
 
 /** Du plus précis au plus large : l'élément touché, puis ce qui l'entoure. */
@@ -43,17 +51,17 @@ function lireJetons(doc: Document): Jeton[] {
 
 export function Atelier() {
   const [etat, setEtat] = useState<Etat>(charger);
-  const [garde, setGarde] = useState(() => !!localStorage.getItem(CLE_GARDE));
+  const [brouillonDemande, setBrouillonDemande] = useState("");
+  const [envoi, setEnvoi] = useState<"" | "en-cours" | "fait" | "copie">("");
   const [choisir, setChoisir] = useState(true);
-  const [onglet, setOnglet] = useState<"rapide" | "element" | "theme" | "liste">("rapide");
+  const [onglet, setOnglet] = useState<"rapide" | "element" | "theme" | "demandes" | "suite" | "liste">("rapide");
   const [maillons, setMaillons] = useState<Maillon[]>([]);
   const [sel, setSel] = useState<string>("");
   const [jetons, setJetons] = useState<Jeton[]>([]);
   const [taille, setTaille] = useState(0);
   const [ouvert, setOuvert] = useState(true);
   const [avant, setAvant] = useState(false);
-  const [copie, setCopie] = useState(false);
-  const [echelle, setEchelle] = useState(1);
+    const [echelle, setEchelle] = useState(1);
   const cadre = useRef<HTMLIFrameElement>(null);
   const vif = useRef({ etat, choisir, avant });
   vif.current = { etat, choisir, avant };
@@ -91,14 +99,23 @@ export function Atelier() {
   // Les changements vont dans le cadre, dans le brouillon, et (si demandé) dans la vraie app de cet appareil.
   useEffect(() => {
     const css = cssDe(etat, true);
-    localStorage.setItem(CLE_BROUILLON, JSON.stringify(etat));
-    if (garde && css) localStorage.setItem(CLE_GARDE, css); else localStorage.removeItem(CLE_GARDE);
+    try { localStorage.setItem(CLE_BROUILLON, JSON.stringify(etat)); } catch { /* stockage fermé : le brouillon vit le temps de la page */ }
+    setEnvoi("");
     const st = doc()?.getElementById("atelier-direct");
     if (st) st.textContent = avant ? "" : css;
     redessiner((n) => n + 1);
-  }, [etat, garde, avant]);
+  }, [etat, avant]);
 
-  useEffect(() => { doc()?.documentElement.classList.toggle("atelier-choisir", choisir); if (!choisir) placer("atelier-survol", null); }, [choisir]);
+  // Sur un autre appareil (brouillon vide), on repart du dernier design envoyé.
+  useEffect(() => {
+    if (nombreDeChangements(charger())) return;
+    base().then((b) => b?.doc("atelier/design").get()).then((f) => {
+      const e = f?.exists ? f.data()?.etat : null;
+      if (typeof e === "string") setEtat({ ...VIDE, ...JSON.parse(e) });
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => { doc()?.documentElement?.classList.toggle("atelier-choisir", choisir); if (!choisir) placer("atelier-survol", null); }, [choisir]);
 
   const placer = (id: string, el: Element | null | undefined) => {
     const boite = doc()?.getElementById(id); if (!boite) return;
@@ -109,13 +126,17 @@ export function Atelier() {
 
   // Le cadre suit l'élément choisi (défilement, animation, changement de taille).
   useEffect(() => {
-    const t = setInterval(() => placer("atelier-choix", cible?.el), 150);
+    const t = setInterval(() => {
+      placer("atelier-choix", cible?.el);
+      // L'app réécrit ses textes quand elle se redessine : on repose les mots changés.
+      const d = doc(); if (!d || vif.current.avant) return;
+      for (const x of vif.current.etat.textes) for (const el of d.querySelectorAll(x.sel)) if (!el.childElementCount && el.textContent === x.avant) el.textContent = x.apres;
+    }, 150);
     return () => clearInterval(t);
   });
 
   const brancher = () => {
     const d = doc(); if (!d || d.getElementById("atelier-direct")) return;
-    d.getElementById("atelier-garde")?.remove(); // ici, seul le brouillon compte
     const direct = d.createElement("style"); direct.id = "atelier-direct"; direct.textContent = vif.current.avant ? "" : cssDe(vif.current.etat, true);
     const outil = d.createElement("style"); outil.id = "atelier-outil";
     outil.textContent = `.atelier-boite{position:fixed;z-index:2147483647;pointer-events:none;display:none;border-radius:6px}
@@ -164,6 +185,38 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
     for (const [n, v] of Object.entries(lot)) { if (v == null) delete j[n]; else j[n] = v; }
     return { ...e, jetons: j };
   });
+  const ecran = () => cadre.current?.contentWindow?.location.hash.slice(1) || "aujourdhui";
+  const nomEcran = (id: string) => ECRANS.find((e) => e.id === id)?.nom ?? id;
+  // Les mots d'un élément simple (un titre, un bouton sans icône) : on retient l'ancien texte pour que Claude le retrouve dans le code.
+  const texteCible = cible && !cible.el.childElementCount ? cible.el.textContent ?? "" : null;
+  const changerTexte = (apres: string) => {
+    if (!cible || texteCible == null) return;
+    const deja = etat.textes.find((x) => x.sel === sel && x.apres === texteCible);
+    const avant = deja?.avant ?? texteCible;
+    cible.el.textContent = apres;
+    changer((e) => {
+      const autres = e.textes.filter((x) => x !== deja && !(x.sel === sel && x.avant === avant));
+      return { ...e, textes: apres === avant ? autres : [...autres, { sel, ecran: ecran(), avant, apres }] };
+    });
+  };
+  // La dictée : prête d'avance, car elle doit démarrer dans le toucher même, sans attendre.
+  type Dictee = { start(o?: { language?: string }): Promise<void>; stop(): Promise<void>; onFinal(f: (x: { text: string }) => void): unknown; onState(f: (x: { state: string }) => void): unknown };
+  const dictee = useRef<Dictee | null>(null);
+  const [micro, setMicro] = useState<"absent" | "pret" | "ecoute">("absent");
+  useEffect(() => {
+    window.claude?.use("dictation").then((d) => {
+      if (!d) return;
+      const x = d as Dictee; dictee.current = x; setMicro("pret");
+      x.onFinal(({ text }) => setBrouillonDemande((b) => (b ? b + " " : "") + text));
+      x.onState(({ state }) => setMicro(state === "idle" ? "pret" : "ecoute"));
+    }).catch(() => {});
+  }, []);
+  const dicter = () => { const d = dictee.current; if (!d) return; (micro === "ecoute" ? d.stop() : d.start({ language: "fr" })).catch(() => setMicro("pret")); };
+  const ajouterDemande = () => {
+    const t = brouillonDemande.trim(); if (!t) return;
+    changer((e) => ({ ...e, demandes: [...e.demandes, { id: Date.now().toString(36), ecran: ecran(), element: cible?.nom ?? "", sel: cible ? sel : "", texte: t }] }));
+    setBrouillonDemande("");
+  };
   const nb = nombreDeChangements(etat);
   const texte = cssDe(etat);
   const copier = async () => {
@@ -171,7 +224,15 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
     try { await navigator.clipboard.writeText(tout); } catch {
       const z = document.createElement("textarea"); z.value = tout; document.body.append(z); z.select(); document.execCommand("copy"); z.remove();
     }
-    setCopie(true); setTimeout(() => setCopie(false), 2500);
+  };
+  const envoyer = async () => {
+    setEnvoi("en-cours");
+    try {
+      const b = await base();
+      if (!b) throw new Error("pas de base");
+      await b.doc("atelier/design").set({ css: texte, textes: etat.textes, demandes: etat.demandes, etat: JSON.stringify(etat), nombre: nb, quand: new Date().toISOString() });
+      setEnvoi("fait");
+    } catch { await copier(); setEnvoi("copie"); } // secours : le texte est copié, à coller dans la conversation
   };
 
   const t = TAILLES[taille];
@@ -183,7 +244,6 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
         <div className="ecrans">
           <button className="puce mobile" aria-pressed={ouvert} onClick={() => setOuvert(!ouvert)}><Layers size={15} /> Régler</button>
           <button className="puce mobile" aria-pressed={choisir} onClick={() => setChoisir(!choisir)}><MousePointerClick size={15} /> Choisir</button>
-          <a className="puce" href="./"><ArrowLeft size={15} /> Echo</a>
           {ECRANS.map((e) => <button key={e.id} className="puce" onClick={() => aller(e.id)}>{e.nom}</button>)}
           {ETATS.map((e) => <button key={e.nom} className="puce etat" onClick={() => ouvrirEtat(e.sel)}>{e.nom}</button>)}
           <button className="puce etat" onClick={recharger}>Tout refermer</button>
@@ -192,7 +252,7 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
           </select>
         </div>
         <div className="telephone" style={{ width: t.l * echelle, height: t.h * echelle }}>
-          <iframe ref={cadre} title="L'app Echo" src="./" onLoad={auChargement} style={{ width: t.l, height: t.h, transform: `scale(${echelle})` }} />
+          <iframe ref={cadre} title="L'app Echo" src={APP} onLoad={auChargement} style={{ width: t.l, height: t.h, transform: `scale(${echelle})` }} />
         </div>
       </main>
 
@@ -214,6 +274,8 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
           <button aria-pressed={onglet === "rapide"} onClick={() => setOnglet("rapide")}><Zap size={16} /> Rapide</button>
           <button aria-pressed={onglet === "element"} onClick={() => setOnglet("element")}><Layers size={16} /> Élément</button>
           <button aria-pressed={onglet === "theme"} onClick={() => setOnglet("theme")}><Palette size={16} /> Couleurs</button>
+          <button aria-pressed={onglet === "demandes"} onClick={() => setOnglet("demandes")}><MessageSquarePlus size={16} /> Demandes{etat.demandes.length ? ` (${etat.demandes.length})` : ""}</button>
+          <button aria-pressed={onglet === "suite"} onClick={() => setOnglet("suite")}><ListTodo size={16} /> La suite</button>
           <button aria-pressed={onglet === "liste"} onClick={() => setOnglet("liste")}>Changements{nb ? ` (${nb})` : ""}</button>
         </nav>
 
@@ -264,6 +326,16 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
                 {maillons.map((m, i) => <button key={m.sel + i} className="puce" aria-pressed={m.sel === sel} onClick={() => setSel(m.sel)}>{m.nom}</button>)}
               </div>
               <p className="aide">{(() => { const n = doc()?.querySelectorAll(sel).length ?? 0; return n > 1 ? `Il y en a ${n} sur cet écran : ils changent tous ensemble.` : "Tu règles cet élément, partout où il apparaît dans l'app."; })()}</p>
+              {texteCible != null && texteCible.trim() !== "" && (
+                <section className="groupe">
+                  <h3>Les mots</h3>
+                  <input className="champ" aria-label="Texte de l'élément" value={texteCible} onChange={(e) => changerTexte(e.target.value)} />
+                </section>
+              )}
+              <div className="actions">
+                <button className="bouton second" onClick={() => setOnglet("demandes")}><MessageSquarePlus size={17} /> Demander autre chose ici</button>
+                <button className="bouton second" onClick={() => { poser(sel, "display", "none"); setOnglet("liste"); }}><EyeOff size={17} /> Cacher</button>
+              </div>
               {GROUPES.map((g) => (
                 <section key={g} className="groupe">
                   <h3>{g}</h3>
@@ -294,33 +366,47 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
             ))}
           </>)}
 
+          {onglet === "demandes" && <>
+            <section className="groupe">
+              <h3>Une demande pour Claude</h3>
+              <p className="aide">{cible ? `Sur « ${cible.nom} », écran ${nomEcran(ecran())}. ` : "Pour toute l'app. Touche d'abord un élément pour parler d'un endroit précis. "}Écris avec tes mots : une idée, un bouton à ajouter, quelque chose qui marche mal, la suite que tu veux.</p>
+              <textarea id="demande" className="champ" rows={4} placeholder="Ici je voudrais…" value={brouillonDemande} onChange={(e) => setBrouillonDemande(e.target.value)} />
+              <div className="actions">
+                <button className="bouton" disabled={!brouillonDemande.trim()} onClick={ajouterDemande}>Ajouter la demande</button>
+                {micro !== "absent" && <button className="bouton second" aria-pressed={micro === "ecoute"} onClick={dicter}><Mic size={17} /> {micro === "ecoute" ? "J'écoute… touche pour finir" : "Dicter"}</button>}
+              </div>
+            </section>
+            {etat.demandes.length > 0 && (
+              <ul className="changements">
+                {etat.demandes.map((d) => <li key={d.id}><span><b>{d.element || "Toute l'app"} · {nomEcran(d.ecran)}</b> {d.texte}</span><button className="rond petit" aria-label="Retirer cette demande" onClick={() => changer((e) => ({ ...e, demandes: e.demandes.filter((x) => x.id !== d.id) }))}><X size={15} /></button></li>)}
+              </ul>
+            )}
+          </>}
+
+          {onglet === "suite" && <Suite />}
+
           {onglet === "liste" && (nb === 0
             ? <p className="vide">Aucun changement pour l'instant. L'app est exactement comme en ligne.</p>
             : <>
               <ul className="changements">
                 {Object.entries(etat.jetons).map(([n, v]) => <li key={n}><span><b>{nomJeton(n)}</b> {v}</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => poserJeton(n, null)}><X size={15} /></button></li>)}
+                {etat.textes.map((x) => <li key={x.sel + x.avant}><span><b>Mots changés · {nomEcran(x.ecran)}</b> « {x.avant} » devient « {x.apres} »</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => changer((e) => ({ ...e, textes: e.textes.filter((y) => y !== x) }))}><X size={15} /></button></li>)}
+                {etat.demandes.map((d) => <li key={d.id}><span><b>Demande · {d.element || "Toute l'app"}</b> {d.texte}</span><button className="rond petit" aria-label="Retirer cette demande" onClick={() => changer((e) => ({ ...e, demandes: e.demandes.filter((y) => y.id !== d.id) }))}><X size={15} /></button></li>)}
                 {Object.entries(etat.regles).flatMap(([s, props]) => Object.entries(props).filter(([p]) => !p.startsWith("-webkit-")).map(([p, v]) => (
-                  <li key={s + p}><span><b>{NOMS_CLASSES[s.slice(1)] ?? s}</b> {NOMS_PROPS[p] ?? PROPS.find((x) => x.css === p)?.nom ?? p} : {v}</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => poser(s, p, null)}><X size={15} /></button></li>
+                  <li key={s + p}><span><b>{NOMS_CLASSES[s.slice(1)] ?? s}</b> {p === "display" ? "caché" : `${NOMS_PROPS[p] ?? PROPS.find((x) => x.css === p)?.nom ?? p} : ${v}`}</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => poser(s, p, null)}><X size={15} /></button></li>
                 )))}
               </ul>
               <div className="actions">
                 <button className="bouton second" onClick={() => changer(() => VIDE)}><RotateCcw size={17} /> Tout remettre comme avant</button>
               </div>
-              <section className="groupe">
-                <h3>Pour Sarah aussi, et pour toujours</h3>
-                <p className="aide">« Appliquer à mon app » change l'app sur cet appareil. Pour que ce soit le design d'Echo pour tout le monde, touche ce bouton et colle dans la conversation avec Claude : il s'occupe du reste.</p>
-                <div className="actions"><button className="bouton second" onClick={copier}><Copy size={17} /> {copie ? "Copié, colle-le à Claude" : "Copier pour Claude"}</button></div>
-              </section>
             </>)}
         </div>
 
-        {(nb > 0 || garde) && (
+        {nb > 0 && (
           <footer className="pied-atelier">
-            {garde
-              ? <><span className="applique"><Check size={18} /> Dans ton app, sur cet appareil. Chaque réglage s'y ajoute tout seul.</span>
-                  <a className="bouton" href="./">Voir l'app</a>
-                  <button className="bouton second" onClick={() => setGarde(false)}>Retirer</button></>
-              : <button className="bouton large" onClick={() => setGarde(true)}><Check size={18} /> Appliquer à mon app</button>}
+            {envoi === "fait" && <span className="applique"><Check size={18} /> Envoyé. Dis à Claude « applique le design » dans la conversation.</span>}
+            {envoi === "copie" && <span className="applique"><Check size={18} /> Copié. Colle-le dans la conversation avec Claude.</span>}
+            <button className="bouton large" disabled={envoi === "en-cours" || envoi === "fait"} onClick={envoyer}><Send size={18} /> {envoi === "en-cours" ? "Envoi…" : envoi === "fait" ? "Envoyé à Claude" : "Envoyer à Claude"}</button>
           </footer>
         )}
       </aside>

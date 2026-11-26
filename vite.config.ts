@@ -3,7 +3,8 @@ import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 // En ligne sur GitHub Pages, l'app vit dans /Echo-/ ; en local, à la racine.
-const base = process.env.BASE || "/";
+const atelier = !!process.env.ATELIER;
+const base = atelier ? "./" : process.env.BASE || "/";
 
 const maintenant = new Date();
 const dateVersion = maintenant.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Zurich" })
@@ -11,8 +12,8 @@ const dateVersion = maintenant.toLocaleDateString("fr-FR", { day: "numeric", mon
 
 export default defineConfig({
   base,
-  // Deux pages : l'app, et l'atelier de design qui la montre dans un cadre.
-  build: { rollupOptions: { input: { index: "index.html", atelier: "atelier.html" } } },
+  // ATELIER=1 : construit aussi l'atelier de design (outil de travail, publié à part), dans dist-atelier, sans mise en cache.
+  build: atelier ? { outDir: "dist-atelier", rollupOptions: { input: { index: "index.html", atelier: "atelier.html" } } } : {},
   define: {
     __DATE_VERSION__: JSON.stringify(dateVersion),
     __CODE_VERSION__: JSON.stringify((process.env.GITHUB_SHA || "").slice(0, 7)),
@@ -21,6 +22,7 @@ export default defineConfig({
     react(),
     // L'app s'installe sur l'écran d'accueil de l'iPhone et marche sans réseau.
     VitePWA({
+      disable: atelier,
       registerType: "prompt",
       includeAssets: ["favicon.svg", "apple-touch-icon.png"],
       manifest: {

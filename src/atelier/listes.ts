@@ -10,8 +10,9 @@ export const TAILLES = [
 ];
 
 export type Prop = { css: string; nom: string; groupe: string; type: "couleur" | "nombre" | "ombre" | "flou"; lit?: string; min?: number; max?: number; pas?: number; unite?: string };
-export const GROUPES = ["Couleurs", "Texte", "Espaces", "Forme"];
+export const GROUPES = ["Mise en page", "Couleurs", "Texte", "Espaces", "Forme"];
 export const PROPS: Prop[] = [
+  { css: "order", nom: "Place dans la page (plus petit = plus haut)", groupe: "Mise en page", type: "nombre", min: -10, max: 10, pas: 1 },
   { css: "color", nom: "Couleur du texte", groupe: "Couleurs", type: "couleur" },
   { css: "background-color", nom: "Fond", groupe: "Couleurs", type: "couleur" },
   { css: "border-color", nom: "Couleur du bord", groupe: "Couleurs", type: "couleur", lit: "border-top-color" },
