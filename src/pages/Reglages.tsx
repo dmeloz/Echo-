@@ -32,6 +32,7 @@ export function Reglages({ taches, noms, masques, proprio, onGuide, onRelier }: 
           <input type="checkbox" role="switch" className="interrupteur" checked={resume} onChange={() => poserReglage("resumeMatin", !resume)} />
         </label>
       </section>
+      <SectionEcho />
       <SectionRappels relie={relie} />
       <SectionIcloud relie={relie} />
       <section className="g reglages">
@@ -164,6 +165,25 @@ function SectionRappels({ relie }: { relie: boolean }) {
         </>}
         <p className="aide-champ">Sur iPhone, les notifications marchent quand Echo est ouvert depuis l'écran d'accueil.</p>
       </>}
+    </section>
+  );
+}
+
+// L'assistant Echo : comprendre les phrases avec l'IA (Claude Haiku 5.5, sur le serveur du foyer). Il propose, tu confirmes.
+function SectionEcho() {
+  const actif = useReglage("assistantEcho", true);
+  const code = useReglage<string>("codeEcho", "");
+  return (
+    <section className="g reglages">
+      <span className="lab">Echo</span>
+      <label className="module-ligne">
+        <span><b>Echo comprend mes phrases</b><small>Écris ou dis une phrase libre, même avec plusieurs choses dedans : Echo propose les tâches et les rendez-vous, et rien n'est ajouté sans ton accord. Sans internet, l'app comprend seule, plus simplement.</small></span>
+        <input type="checkbox" role="switch" className="interrupteur" checked={actif} onChange={() => poserReglage("assistantEcho", !actif)} />
+      </label>
+      <label className="champ">Code Echo
+        <input key={code} defaultValue={code} type="password" placeholder="Le code secret du foyer" autoComplete="off" onBlur={(e) => poserReglage("codeEcho", e.target.value.trim())} />
+      </label>
+      <p className="aide-champ">Le même code que pour la lecture de la fiche d'horaires. Il reste sur ce téléphone.</p>
     </section>
   );
 }
