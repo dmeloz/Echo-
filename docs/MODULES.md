@@ -14,6 +14,8 @@ Chaque module se branche de la même façon, par le contrat de `src/modules/cont
 | `libelle` | une entrée dans le menu glissant |
 | `Page` | sa page (adresse `#<id>`) |
 | `Tuile` (ou `resume`) | sa tuile sur l'accueil |
+| `Reglages` | une ligne à son nom dans le sommaire des Réglages, et sa sous-page |
+| `comprendre` | une phrase de la barre d'Echo que le module prend pour lui (« plus de lait » va aux courses, pas dans les tâches) |
 | `etat: "bientot"` + `prevu` | une page « Pas encore construit » qui dit ce qui viendra |
 
 Chaque module peut être masqué dans **Réglages → Modules**.
@@ -29,7 +31,8 @@ Règles :
 | Module | État |
 | --- | --- |
 | Agenda (id planning) | construit : aujourd'hui et les six jours suivants, vue Jour et vue Semaine, idée pour alléger le jour le plus chargé. Il lit les tâches de la base (pas de table à lui). |
-| Cuisine, Maison, Budget | pas encore construits |
+| Cuisine | lot 1 construit (courses) : voir « Cuisine » plus bas. Les repas proposés par Echo, le batch cooking et le stock par ticket viennent ensuite. |
+| Maison, Budget | pas encore construits |
 
 ## Ajouter un module
 
@@ -55,3 +58,16 @@ Secrets de la fonction (dans Supabase, jamais dans l'app) : `ANTHROPIC_API_KEY` 
 - Un événement est une tâche avec `evt: true` (et `fin` en option) : pas de case à cocher, absent des listes de l'accueil (seul le prochain du jour est dit dans la phrase), visible dans l'Agenda et le résumé du matin.
 - iCloud dans les deux sens par la fonction serveur `icloud` (CalDAV). Secrets à poser dans Supabase : `ICLOUD_IDENTIFIANT` (identifiant Apple) et `ICLOUD_MOT_DE_PASSE` (mot de passe pour app, créé sur account.apple.com). Seuls les foyers de `prive.icloud_foyers` y ont droit.
 - Lire (`src/sync/icloud.ts`) : une semaine en arrière, trois mois devant, à l'ouverture de l'app (au plus toutes les 5 min). Écrire : file d'attente sur le téléphone, envoyée 1,5 s après un changement d'événement. Les occurrences d'une série (ou d'un événement sur plusieurs jours) sont en lecture seule.
+
+## Cuisine · lot 1, les courses (2026-11-26)
+
+Page à trois parties : Semaine, Courses, Stock (elle s'ouvre sur Courses le vendredi et le samedi).
+
+- **Courses** : on écrit plusieurs articles d'un coup (« 2 citrons, du lait »), ou on dicte. Chaque article est rangé dans son rayon par des mots connus (`donnees.ts`) ; un rayon corrigé à la main est retenu. Un carrousel montre une carte par rayon ; un rayon terminé sort du carrousel. Toucher la case coche, toucher le nom ouvre quantité, rayon et « Retirer » (pas de glisser sur une ligne : le glisser sert au carrousel). Le carrousel et les pilules des rayons sont exclus du geste qui ouvre le menu (`MenuGlissant.tsx`).
+- **Au magasin** (bouton dans l'en-tête, par `#entete-module`) : gros articles, un rayon à la fois, écran qui reste allumé. « Courses finies » range ce qui est coché.
+- **Achats habituels** : ce qui est coché quitte la liste au bout de 12 h (ou avec « Courses finies ») et l'achat est retenu (`cuisine_habitudes`). À partir de trois achats réguliers, Echo remet l'article tout seul (pastille E). Le retirer = il attend un tour de plus, et arrête au troisième refus. Réglage dans Réglages → Cuisine.
+- **Barre d'Echo** : « plus de lait », « des œufs aux courses », « courses : pain, riz » vont à la liste sans passer par l'assistant.
+- **Goûts** : questionnaire en popup à la première ouverture, par personne (`cuisine_gouts`), modifiable dans Réglages → Cuisine. Pas de porc pour le foyer.
+- **Semaine** et **Stock** : formes simples, à la main, en attendant les lots suivants.
+- **Synchro** : les tables `cuisine_*` partent au foyer par `src/sync/genres.ts` (genres `course`, `habitude`, `repas`, `stock`, `gout` de la table `elements`). La migration `20261127090000_cuisine.sql` doit être appliquée au projet « echo » avant la mise en ligne.
+- Pas encore construits (donc absents de l'écran) : code-barres, photo du ticket, plusieurs magasins, repas proposés par Echo, batch cooking.

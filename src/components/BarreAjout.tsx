@@ -10,6 +10,7 @@ import { REPETES, type Noms, type Personne } from "../lib/types";
 import { ajouter, ajouterTout } from "../data/actions";
 import { db } from "../data/db";
 import { nomDe, useReglage } from "../data/hooks";
+import { useModulesActifs } from "../modules/registre";
 
 interface Props {
   noms: Noms; proprio: Personne; ouverte: boolean; ecoute: boolean; texte: string; saisie: RefObject<HTMLInputElement | null>;
@@ -32,7 +33,10 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const v = texte.trim();
   const r = v ? comprendre(v, noms, undefined, proprio) : null;
   const n = r ? (r.niveau ?? niveauPropose(r)) : 1;
-  const parEcho = actif && (!!code || relie) && !simple;
+  // Une phrase pour un module (« plus de lait » → les courses) ne devient pas une tâche et ne part pas à l'assistant.
+  const { actifs } = useModulesActifs();
+  const pour = v ? actifs.map((m) => (m.etat === "construit" ? m.comprendre?.(v) ?? null : null)).find((x) => x) ?? null : null;
+  const parEcho = actif && (!!code || relie) && !simple && !pour;
 
   const setTexte = (t: string) => { onTexte(t); demande.current++; setEcho(null); setSimple(false); };
   const annulerEcho = () => { demande.current++; setEcho(null); };
@@ -70,6 +74,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
       if (!r) return;
       if (echo?.etat === "pense") return;
       if (echo?.etat === "propose") { if (echo.p.taches.length) confirmer(echo.p); else annulerEcho(); return; }
+      if (pour) { enregistrer(pour.faire, texte); return; }
       if (parEcho && navigator.onLine) { demanderA(); return; }
       enregistrer(() => ajouter({ ...r, note: "" }), texte);
     }}>
@@ -102,7 +107,12 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
       )}
       {r && ouverte && !ecoute && !echo && (
         <div className="apercu g">
-          {parEcho ? (
+          {pour ? (
+            <>
+              <div className="ligne-ap"><b>{pour.titre}</b><span className="tag">{pour.ou}</span></div>
+              <div className="pied-ap"><span>Touche ✓ : je l'ajoute, sans créer de tâche.</span></div>
+            </>
+          ) : parEcho ? (
             <div className="pied-ap"><span>Touche ✓ : Echo comprend ta phrase et te propose quoi ajouter.</span></div>
           ) : (
             <>

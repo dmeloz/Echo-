@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Bell, Calendar, ChevronLeft, ChevronRight, HardDrive, LayoutGrid, Sparkles, Users } from "pulsoicon-react";
+import { Bell, Calendar, ChevronLeft, ChevronRight, HardDrive, LayoutGrid, SlidersHorizontal, Sparkles, Users } from "pulsoicon-react";
 import { toast } from "sonner";
 import type { Noms, Personne, Tache } from "../lib/types";
 import { effacerExemples, remettre, remettreExemples, toutEffacer } from "../data/actions";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../data/db";
-import { marquerGuide, poserReglage, useReglage } from "../data/hooks";
+import { marquerGuide, poserReglage, useMaintenant, useReglage } from "../data/hooks";
 import { CodeInvitation } from "../components/Connexion";
 import { SectionIcloud } from "../components/Icloud";
 import { estConnecte, inviter, type Foyer, type Membre } from "../sync/moteur";
@@ -15,15 +15,18 @@ import { RAPPELS_DEFAUT, reglerRappels, type Rappels } from "../data/rappels";
 import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
 
 type Theme = "foyer" | "echo" | "notifications" | "agenda" | "modules" | "app";
+// Un module construit peut avoir sa propre sous-page : sa ligne arrive dans le sommaire, à son nom.
+const avecReglages = (masques: string[]) => MODULES.filter((m) => m.etat === "construit" && m.Reglages && !masques.includes(m.id));
 
 // Réglages : un sommaire de 6 lignes qui disent leur état, et un toucher ouvre la page du thème.
 // Le retour : le bouton « Réglages », ou glisser vers la droite (le menu envoie « echo-retour »).
 // Rien n'est écrit dans l'historique du navigateur : le geste retour de l'iPhone n'a ainsi rien à « rejouer ».
 export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onGuide: () => void; onRelier: () => void }) {
-  const [theme, setTheme] = useState<Theme | null>(null);
+  const [theme, setTheme] = useState<Theme | string | null>(null);
   const relie = !!useReglage<Foyer | null>("foyer", null);
+  const now = useMaintenant();
   const haut = () => document.querySelector(".defile")?.scrollTo(0, 0);
-  const ouvrir = (t: Theme) => { setTheme(t); haut(); };
+  const ouvrir = (t: Theme | string) => { setTheme(t); haut(); };
   const fermer = () => { setTheme(null); haut(); };
   useEffect(() => {
     if (!theme) return;
@@ -34,10 +37,12 @@ export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]
 
   if (!theme) return <Sommaire {...props} onOuvrir={ouvrir} />;
   const { taches, noms, masques, proprio, onGuide, onRelier } = props;
+  const module = avecReglages(masques).find((m) => m.id === theme);
   return (
     <div className="reglage-page" key={theme}>
       <button type="button" className="retour" onClick={fermer}><ChevronLeft size={20} strokeWidth={2.2} />Réglages</button>
-      <h2 className="reglage-titre">{TITRES[theme]}</h2>
+      <h2 className="reglage-titre">{module?.libelle ?? TITRES[theme as Theme]}</h2>
+      {module?.Reglages && <module.Reglages noms={noms} proprio={proprio} now={now} aller={() => {}} ouvrir={() => {}} />}
       {theme === "foyer" && <SectionFoyer noms={noms} proprio={proprio} onRelier={onRelier} />}
       {theme === "echo" && <SectionEcho />}
       {theme === "notifications" && <SectionNotifications noms={noms} proprio={proprio} />}
@@ -50,7 +55,7 @@ export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]
 
 const TITRES: Record<Theme, string> = { foyer: "Foyer", echo: "Echo", notifications: "Notifications", agenda: "Agenda", modules: "Modules", app: "Données et app" };
 
-function Sommaire({ taches, noms, masques, proprio, onOuvrir }: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onOuvrir: (t: Theme) => void }) {
+function Sommaire({ taches, noms, masques, proprio, onOuvrir }: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onOuvrir: (t: Theme | string) => void }) {
   const foyer = useReglage<Foyer | null>("foyer", null);
   const membres = useReglage<Membre[]>("membres", []);
   const r = useReglage<Rappels>("rappels", RAPPELS_DEFAUT);
@@ -80,8 +85,15 @@ function Sommaire({ taches, noms, masques, proprio, onOuvrir }: { taches: Tache[
             <ChevronRight size={18} strokeWidth={2} className="sommaire-chev" />
           </button>
         ))}
+        {avecReglages(masques).map((m) => (
+          <button key={m.id} type="button" className="sommaire-ligne" onClick={() => onOuvrir(m.id)}>
+            <span className="sommaire-ico"><SlidersHorizontal size={19} strokeWidth={2} /></span>
+            <span className="sommaire-txt"><b>{m.libelle}</b><small>{m.resume}</small></span>
+            <ChevronRight size={18} strokeWidth={2} className="sommaire-chev" />
+          </button>
+        ))}
       </nav>
-      <p className="note-donnees">Icônes : PulsoIcon (licence ISC). Agenda est construit ; Cuisine, Maison et Budget pas encore.</p>
+      <p className="note-donnees">Icônes : PulsoIcon (licence ISC). Agenda et Cuisine (courses) sont construits ; Maison et Budget pas encore.</p>
     </>
   );
 }

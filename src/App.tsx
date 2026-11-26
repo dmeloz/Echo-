@@ -147,6 +147,8 @@ export default function App() {
             </div>
             <div className="entete-droite">
               {vue.id === "aujourdhui" && taches && <ResumeMatin taches={liste} noms={noms} proprio={proprio} now={now} />}
+              {/* La place d'un module dans l'en-tête : il y pose un petit bouton (« Au magasin » pour Cuisine). */}
+              <span id="entete-module" />
               <button type="button" className="loupe-ouvrir" aria-label="Chercher dans Echo" onClick={() => setRecherche("")}><Search size={20} strokeWidth={2} /></button>
               <a className="duo" href="#reglages" aria-label={autreLa ? "Les deux profils du foyer" : "Ton profil"} onClick={(e) => { e.preventDefault(); aller("reglages"); }}>
                 <i className={proprio}>{initialeDe(noms, proprio)}</i>{autreLa && <i className={autre(proprio)}>{initialeDe(noms, autre(proprio))}</i>}
