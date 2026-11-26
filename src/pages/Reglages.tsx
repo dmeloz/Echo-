@@ -82,6 +82,11 @@ export function Reglages({ taches, noms, masques, proprio, onGuide, onRelier }: 
               }}>{recherche ? "Recherche…" : "Chercher une mise à jour"}</button>}
         </div>
       </section>
+      <section className="g reglages">
+        <span className="lab">Design</span>
+        <p>L'atelier montre l'app et permet de régler ses couleurs, ses tailles et ses espaces.</p>
+        <div className="rangee"><a className="bouton second" href="./atelier.html">Ouvrir l'atelier</a></div>
+      </section>
       <p className="note-donnees">Icônes : PulsoIcon (licence ISC). Agenda est construit ; Cuisine, Maison et Budget pas encore.</p>
     </>
   );

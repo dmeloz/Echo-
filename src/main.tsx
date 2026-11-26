@@ -5,6 +5,13 @@ import "@fontsource-variable/figtree"; // la police est dans l'app : rien n'est 
 import App from "./App";
 import { suivreClavier } from "./lib/clavier";
 import "./styles.css";
+import { CLE_GARDE } from "./lib/atelier";
+
+// Les essais de l'atelier de design (atelier.html), si on a choisi de les garder sur cet appareil.
+try {
+  const essais = localStorage.getItem(CLE_GARDE);
+  if (essais) { const s = document.createElement("style"); s.id = "atelier-garde"; s.textContent = essais; document.head.append(s); }
+} catch { /* stockage fermé : l'app reste comme en ligne */ }
 
 // Filet de sécurité : un enregistrement qui rate ne reste jamais muet.
 addEventListener("unhandledrejection", (e) => {

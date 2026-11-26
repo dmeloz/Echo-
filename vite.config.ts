@@ -11,6 +11,8 @@ const dateVersion = maintenant.toLocaleDateString("fr-FR", { day: "numeric", mon
 
 export default defineConfig({
   base,
+  // Deux pages : l'app, et l'atelier de design qui la montre dans un cadre.
+  build: { rollupOptions: { input: { index: "index.html", atelier: "atelier.html" } } },
   define: {
     __DATE_VERSION__: JSON.stringify(dateVersion),
     __CODE_VERSION__: JSON.stringify((process.env.GITHUB_SHA || "").slice(0, 7)),
