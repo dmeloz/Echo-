@@ -1,8 +1,9 @@
 // L'atelier de design : la VRAIE app tourne dans le cadre à gauche (même adresse, mêmes fichiers),
 // et le panneau pose par-dessus une feuille de style que l'on règle au doigt. Rien n'est redessiné ici.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, ChevronDown, ChevronUp, Eye, Send, Layers, MousePointerClick, Palette, Pointer, RotateCcw, Undo2, X, Zap } from "pulsoicon-react";
+import { Check, EyeOff, ChevronDown, ChevronUp, Eye, Send, Layers, MousePointerClick, Palette, Pointer, ListTodo, MessageSquarePlus, Mic, RotateCcw, Undo2, X, Zap } from "pulsoicon-react";
 import { CLE_BROUILLON, VIDE, cssDe, ecrireCouleur, lireCouleur, nombreDeChangements, type Etat } from "../lib/atelier";
+import { Suite } from "./Suite";
 import { AMBIANCES, ECRANS, ETATS, GROUPES, NOMS_CLASSES, NOMS_JETONS, NOMS_PROPS, OMBRES, PROPS, RAPIDES, TAILLES, TEINTES, type Prop } from "./listes";
 
 type Maillon = { el: Element; sel: string; nom: string };
@@ -50,9 +51,10 @@ function lireJetons(doc: Document): Jeton[] {
 
 export function Atelier() {
   const [etat, setEtat] = useState<Etat>(charger);
+  const [brouillonDemande, setBrouillonDemande] = useState("");
   const [envoi, setEnvoi] = useState<"" | "en-cours" | "fait" | "copie">("");
   const [choisir, setChoisir] = useState(true);
-  const [onglet, setOnglet] = useState<"rapide" | "element" | "theme" | "liste">("rapide");
+  const [onglet, setOnglet] = useState<"rapide" | "element" | "theme" | "demandes" | "suite" | "liste">("rapide");
   const [maillons, setMaillons] = useState<Maillon[]>([]);
   const [sel, setSel] = useState<string>("");
   const [jetons, setJetons] = useState<Jeton[]>([]);
@@ -124,7 +126,12 @@ export function Atelier() {
 
   // Le cadre suit l'élément choisi (défilement, animation, changement de taille).
   useEffect(() => {
-    const t = setInterval(() => placer("atelier-choix", cible?.el), 150);
+    const t = setInterval(() => {
+      placer("atelier-choix", cible?.el);
+      // L'app réécrit ses textes quand elle se redessine : on repose les mots changés.
+      const d = doc(); if (!d || vif.current.avant) return;
+      for (const x of vif.current.etat.textes) for (const el of d.querySelectorAll(x.sel)) if (!el.childElementCount && el.textContent === x.avant) el.textContent = x.apres;
+    }, 150);
     return () => clearInterval(t);
   });
 
@@ -178,6 +185,38 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
     for (const [n, v] of Object.entries(lot)) { if (v == null) delete j[n]; else j[n] = v; }
     return { ...e, jetons: j };
   });
+  const ecran = () => cadre.current?.contentWindow?.location.hash.slice(1) || "aujourdhui";
+  const nomEcran = (id: string) => ECRANS.find((e) => e.id === id)?.nom ?? id;
+  // Les mots d'un élément simple (un titre, un bouton sans icône) : on retient l'ancien texte pour que Claude le retrouve dans le code.
+  const texteCible = cible && !cible.el.childElementCount ? cible.el.textContent ?? "" : null;
+  const changerTexte = (apres: string) => {
+    if (!cible || texteCible == null) return;
+    const deja = etat.textes.find((x) => x.sel === sel && x.apres === texteCible);
+    const avant = deja?.avant ?? texteCible;
+    cible.el.textContent = apres;
+    changer((e) => {
+      const autres = e.textes.filter((x) => x !== deja && !(x.sel === sel && x.avant === avant));
+      return { ...e, textes: apres === avant ? autres : [...autres, { sel, ecran: ecran(), avant, apres }] };
+    });
+  };
+  // La dictée : prête d'avance, car elle doit démarrer dans le toucher même, sans attendre.
+  type Dictee = { start(o?: { language?: string }): Promise<void>; stop(): Promise<void>; onFinal(f: (x: { text: string }) => void): unknown; onState(f: (x: { state: string }) => void): unknown };
+  const dictee = useRef<Dictee | null>(null);
+  const [micro, setMicro] = useState<"absent" | "pret" | "ecoute">("absent");
+  useEffect(() => {
+    window.claude?.use("dictation").then((d) => {
+      if (!d) return;
+      const x = d as Dictee; dictee.current = x; setMicro("pret");
+      x.onFinal(({ text }) => setBrouillonDemande((b) => (b ? b + " " : "") + text));
+      x.onState(({ state }) => setMicro(state === "idle" ? "pret" : "ecoute"));
+    }).catch(() => {});
+  }, []);
+  const dicter = () => { const d = dictee.current; if (!d) return; (micro === "ecoute" ? d.stop() : d.start({ language: "fr" })).catch(() => setMicro("pret")); };
+  const ajouterDemande = () => {
+    const t = brouillonDemande.trim(); if (!t) return;
+    changer((e) => ({ ...e, demandes: [...e.demandes, { id: Date.now().toString(36), ecran: ecran(), element: cible?.nom ?? "", sel: cible ? sel : "", texte: t }] }));
+    setBrouillonDemande("");
+  };
   const nb = nombreDeChangements(etat);
   const texte = cssDe(etat);
   const copier = async () => {
@@ -191,7 +230,7 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
     try {
       const b = await base();
       if (!b) throw new Error("pas de base");
-      await b.doc("atelier/design").set({ css: texte, etat: JSON.stringify(etat), nombre: nb, quand: new Date().toISOString() });
+      await b.doc("atelier/design").set({ css: texte, textes: etat.textes, demandes: etat.demandes, etat: JSON.stringify(etat), nombre: nb, quand: new Date().toISOString() });
       setEnvoi("fait");
     } catch { await copier(); setEnvoi("copie"); } // secours : le texte est copié, à coller dans la conversation
   };
@@ -235,6 +274,8 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
           <button aria-pressed={onglet === "rapide"} onClick={() => setOnglet("rapide")}><Zap size={16} /> Rapide</button>
           <button aria-pressed={onglet === "element"} onClick={() => setOnglet("element")}><Layers size={16} /> Élément</button>
           <button aria-pressed={onglet === "theme"} onClick={() => setOnglet("theme")}><Palette size={16} /> Couleurs</button>
+          <button aria-pressed={onglet === "demandes"} onClick={() => setOnglet("demandes")}><MessageSquarePlus size={16} /> Demandes{etat.demandes.length ? ` (${etat.demandes.length})` : ""}</button>
+          <button aria-pressed={onglet === "suite"} onClick={() => setOnglet("suite")}><ListTodo size={16} /> La suite</button>
           <button aria-pressed={onglet === "liste"} onClick={() => setOnglet("liste")}>Changements{nb ? ` (${nb})` : ""}</button>
         </nav>
 
@@ -285,6 +326,16 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
                 {maillons.map((m, i) => <button key={m.sel + i} className="puce" aria-pressed={m.sel === sel} onClick={() => setSel(m.sel)}>{m.nom}</button>)}
               </div>
               <p className="aide">{(() => { const n = doc()?.querySelectorAll(sel).length ?? 0; return n > 1 ? `Il y en a ${n} sur cet écran : ils changent tous ensemble.` : "Tu règles cet élément, partout où il apparaît dans l'app."; })()}</p>
+              {texteCible != null && texteCible.trim() !== "" && (
+                <section className="groupe">
+                  <h3>Les mots</h3>
+                  <input className="champ" aria-label="Texte de l'élément" value={texteCible} onChange={(e) => changerTexte(e.target.value)} />
+                </section>
+              )}
+              <div className="actions">
+                <button className="bouton second" onClick={() => setOnglet("demandes")}><MessageSquarePlus size={17} /> Demander autre chose ici</button>
+                <button className="bouton second" onClick={() => { poser(sel, "display", "none"); setOnglet("liste"); }}><EyeOff size={17} /> Cacher</button>
+              </div>
               {GROUPES.map((g) => (
                 <section key={g} className="groupe">
                   <h3>{g}</h3>
@@ -315,13 +366,34 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
             ))}
           </>)}
 
+          {onglet === "demandes" && <>
+            <section className="groupe">
+              <h3>Une demande pour Claude</h3>
+              <p className="aide">{cible ? `Sur « ${cible.nom} », écran ${nomEcran(ecran())}. ` : "Pour toute l'app. Touche d'abord un élément pour parler d'un endroit précis. "}Écris avec tes mots : une idée, un bouton à ajouter, quelque chose qui marche mal, la suite que tu veux.</p>
+              <textarea id="demande" className="champ" rows={4} placeholder="Ici je voudrais…" value={brouillonDemande} onChange={(e) => setBrouillonDemande(e.target.value)} />
+              <div className="actions">
+                <button className="bouton" disabled={!brouillonDemande.trim()} onClick={ajouterDemande}>Ajouter la demande</button>
+                {micro !== "absent" && <button className="bouton second" aria-pressed={micro === "ecoute"} onClick={dicter}><Mic size={17} /> {micro === "ecoute" ? "J'écoute… touche pour finir" : "Dicter"}</button>}
+              </div>
+            </section>
+            {etat.demandes.length > 0 && (
+              <ul className="changements">
+                {etat.demandes.map((d) => <li key={d.id}><span><b>{d.element || "Toute l'app"} · {nomEcran(d.ecran)}</b> {d.texte}</span><button className="rond petit" aria-label="Retirer cette demande" onClick={() => changer((e) => ({ ...e, demandes: e.demandes.filter((x) => x.id !== d.id) }))}><X size={15} /></button></li>)}
+              </ul>
+            )}
+          </>}
+
+          {onglet === "suite" && <Suite />}
+
           {onglet === "liste" && (nb === 0
             ? <p className="vide">Aucun changement pour l'instant. L'app est exactement comme en ligne.</p>
             : <>
               <ul className="changements">
                 {Object.entries(etat.jetons).map(([n, v]) => <li key={n}><span><b>{nomJeton(n)}</b> {v}</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => poserJeton(n, null)}><X size={15} /></button></li>)}
+                {etat.textes.map((x) => <li key={x.sel + x.avant}><span><b>Mots changés · {nomEcran(x.ecran)}</b> « {x.avant} » devient « {x.apres} »</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => changer((e) => ({ ...e, textes: e.textes.filter((y) => y !== x) }))}><X size={15} /></button></li>)}
+                {etat.demandes.map((d) => <li key={d.id}><span><b>Demande · {d.element || "Toute l'app"}</b> {d.texte}</span><button className="rond petit" aria-label="Retirer cette demande" onClick={() => changer((e) => ({ ...e, demandes: e.demandes.filter((y) => y.id !== d.id) }))}><X size={15} /></button></li>)}
                 {Object.entries(etat.regles).flatMap(([s, props]) => Object.entries(props).filter(([p]) => !p.startsWith("-webkit-")).map(([p, v]) => (
-                  <li key={s + p}><span><b>{NOMS_CLASSES[s.slice(1)] ?? s}</b> {NOMS_PROPS[p] ?? PROPS.find((x) => x.css === p)?.nom ?? p} : {v}</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => poser(s, p, null)}><X size={15} /></button></li>
+                  <li key={s + p}><span><b>{NOMS_CLASSES[s.slice(1)] ?? s}</b> {p === "display" ? "caché" : `${NOMS_PROPS[p] ?? PROPS.find((x) => x.css === p)?.nom ?? p} : ${v}`}</span><button className="rond petit" aria-label="Retirer ce changement" onClick={() => poser(s, p, null)}><X size={15} /></button></li>
                 )))}
               </ul>
               <div className="actions">

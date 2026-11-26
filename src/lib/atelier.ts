@@ -5,8 +5,12 @@ export type Etat = {
   jetons: Record<string, string>;                 // --bleu → #2f6bff
   regles: Record<string, Record<string, string>>; // .g → { border-radius: 20px }
   libre: string;                                  // CSS écrit à la main
+  textes: Texte[];                                // des mots changés
+  demandes: Demande[];                            // ce que Melo veut, écrit avec ses mots, à un endroit de l'app
 };
-export const VIDE: Etat = { jetons: {}, regles: {}, libre: "" };
+export type Texte = { sel: string; ecran: string; avant: string; apres: string };
+export type Demande = { id: string; ecran: string; element: string; sel: string; texte: string };
+export const VIDE: Etat = { jetons: {}, regles: {}, libre: "", textes: [], demandes: [] };
 
 /** Le CSS des changements. `force` : pour l'aperçu, chaque réglage passe devant les règles de l'app. */
 export function cssDe(e: Etat, force = false): string {
@@ -22,7 +26,7 @@ export function cssDe(e: Etat, force = false): string {
 }
 
 export function nombreDeChangements(e: Etat): number {
-  return Object.keys(e.jetons).length + Object.values(e.regles).reduce((n, p) => n + Object.keys(p).length, 0) + (e.libre.trim() ? 1 : 0);
+  return Object.keys(e.jetons).length + Object.values(e.regles).reduce((n, p) => n + Object.keys(p).length, 0) + (e.libre.trim() ? 1 : 0) + e.textes.length + e.demandes.length;
 }
 
 export type Couleur = { hex: string; a: number };

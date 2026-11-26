@@ -12,7 +12,7 @@ test("lit et récrit les couleurs", () => {
 });
 
 test("écrit le CSS des changements", () => {
-  const e = { jetons: { "--bleu": "#0055ff" }, regles: { ".g": { "border-radius": "20px" }, ".vide": {} }, libre: " .x { color: red; } " };
+  const e = { jetons: { "--bleu": "#0055ff" }, regles: { ".g": { "border-radius": "20px" }, ".vide": {} }, libre: " .x { color: red; } ", textes: [], demandes: [] };
   expect(cssDe(e)).toBe(":root {\n  --bleu: #0055ff;\n}\n\n.g {\n  border-radius: 20px;\n}\n\n.x { color: red; }");
   expect(cssDe(e, true)).toContain("border-radius: 20px !important;");
   expect(nombreDeChangements(e)).toBe(3);
