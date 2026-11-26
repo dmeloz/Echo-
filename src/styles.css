@@ -743,3 +743,18 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .retour { align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin-left: -4px; padding: 6px 4px; border: 0; background: none; font: inherit; font-weight: 700; font-size: 15px; color: var(--accent); cursor: pointer; }
 .reglage-titre { margin: 0 4px; font-size: var(--t-carte); font-weight: 800; }
 @keyframes reglage-entre { from { opacity: 0; transform: translateX(24px); } }
+
+/* « Sarah a fait… » : une phrase calme sous la phrase du jour. */
+.autre-fait { margin: -6px 0 0; font-size: var(--t-petit); color: var(--turquoise-texte, var(--discret)); font-weight: 600; overflow-wrap: anywhere; }
+
+/* Changer l'ordre à la main : la ligne portée se soulève, un trait bleu montre où elle se posera. */
+.tache { -webkit-touch-callout: none; }
+.tache.porte { z-index: 3; background: #fff; box-shadow: 0 10px 28px rgb(18 40 58 / .18); overflow: visible; touch-action: none; }
+.tache.ici-avant { box-shadow: 0 -2px 0 var(--bleu); }
+.tache.ici-apres { box-shadow: 0 2px 0 var(--bleu); }
+
+/* La corbeille (Réglages → Données et app). */
+.corbeille { list-style: none; margin: var(--e4) 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.corbeille li { display: flex; align-items: center; gap: 10px; }
+.corbeille span { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
+.corbeille small { color: var(--discret); font-size: var(--t-petit); }

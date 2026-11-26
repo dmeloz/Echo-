@@ -90,7 +90,7 @@ async function entrer(foyerId: string, place: Personne, userId: string) {
     if (avant && avant !== place) {
       const inv = (q: Personne): Personne => (q === "moi" ? "elle" : "moi");
       const taches = await db.taches.toArray();
-      await db.taches.bulkPut(taches.map((t) => (t.qui === "nous" ? t : { ...t, qui: inv(t.qui) })));
+      await db.taches.bulkPut(taches.map((t) => ({ ...t, ...(t.qui === "nous" ? {} : { qui: inv(t.qui) }), ...(t.faitPar ? { faitPar: inv(t.faitPar) } : {}) })));
       const horaires = await db.horaires.toArray();
       await db.horaires.clear();
       await db.horaires.bulkPut(horaires.map((h) => ({ ...h, qui: inv(h.qui) })));
@@ -164,19 +164,26 @@ function nettoyerHoraire(x: unknown): Horaire | null {
 export async function appliquer(lignes: Ligne[], premier: boolean, moi = foyer?.userId) {
   const attente = lireFile();
   const nouvelles: Array<{ par: string; texte: string }> = [];
-  await db.transaction("rw", [db.taches, db.horaires, db.photos], async (tx) => {
+  const membres = ((await db.reglages.get("membres"))?.valeur as Membre[] | undefined) ?? [];
+  await db.transaction("rw", [db.taches, db.horaires, db.photos, db.corbeille], async (tx) => {
     marquerDistante(tx);
     for (const l of lignes) {
       if (`${l.genre}:${l.cle}` in attente) continue;
       if (l.genre === "tache") {
         const avant = await db.taches.get(l.cle);
         if (l.supprime) {
-          if (avant) { await db.taches.delete(l.cle); await db.photos.where("tacheId").equals(l.cle).delete(); }
+          if (!avant) continue;
+          await db.taches.delete(l.cle);
+          // Effacée par l'autre : elle va aussi dans la corbeille d'ici (sauf un ajout aussitôt annulé).
+          if (!premier && l.par !== moi && avant.cree < Date.now() - 60_000) {
+            await db.corbeille.put({ id: l.cle, tache: avant, par: membres.find((m) => m.userId === l.par)?.prenom ?? "", quand: Date.parse(l.maj) || Date.now() });
+          } else await db.photos.where("tacheId").equals(l.cle).delete();
           continue;
         }
         const t = nettoyerTache(l.data);
         if (!t || t.id !== l.cle) continue; // une tâche abîmée est ignorée, jamais appliquée
         await db.taches.put(t);
+        await db.corbeille.delete(l.cle); // remise par l'autre : elle quitte la corbeille d'ici
         if (premier || !l.par || l.par === moi) continue;
         if (!avant) nouvelles.push({ par: l.par, texte: `a ajouté « ${t.titre} »` });
         else if (!avant.fait && t.fait) nouvelles.push({ par: l.par, texte: `a terminé « ${t.titre} »` });

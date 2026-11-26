@@ -6,7 +6,7 @@ vi.stubGlobal("navigator", {});
 
 import { auJour } from "../lib/dates";
 import type { Tache } from "../lib/types";
-import { aDemain, ajouter, cocher, decocher, premierLancement, supprimer } from "./actions";
+import { DELAI_CORBEILLE, aDemain, ajouter, cocher, decocher, premierLancement, remettre, supprimer, viderVieilleCorbeille } from "./actions";
 import { db } from "./db";
 
 const nouvelle = async (x: Partial<Tache> = {}) => {
@@ -14,7 +14,7 @@ const nouvelle = async (x: Partial<Tache> = {}) => {
   return (await db.taches.toArray()).at(-1)!;
 };
 
-beforeEach(async () => { await db.taches.clear(); await db.photos.clear(); await db.reglages.clear(); });
+beforeEach(async () => { await db.taches.clear(); await db.photos.clear(); await db.reglages.clear(); await db.corbeille.clear(); });
 
 describe("les données (vraie base, en mémoire)", () => {
   it("premier lancement : les exemples ne sont posés qu'une fois, même lancé deux fois en même temps", async () => {
@@ -52,12 +52,36 @@ describe("les données (vraie base, en mémoire)", () => {
     expect((await db.taches.get(t.id))!.jour).toBe(auJour(1));
   });
 
-  it("supprimer enlève aussi les photos", async () => {
+  it("supprimer garde les photos tant que la tâche est à la corbeille, puis les enlève", async () => {
     await ajouter({ titre: "Avec photo", qui: "moi", jour: auJour(), heure: "", niveau: null, repete: "", note: "" }, [new Blob(["x"])]);
     const t = (await db.taches.toArray())[0];
     expect(await db.photos.count()).toBe(1);
     await supprimer(t.id);
     expect(await db.taches.count()).toBe(0);
+    expect(await db.photos.count()).toBe(1);
+    await viderVieilleCorbeille(Date.now() + DELAI_CORBEILLE + 60_000);
     expect(await db.photos.count()).toBe(0);
+  });
+
+  it("corbeille : une tâche effacée se remet, et part pour de bon après 30 jours", async () => {
+    const t = await nouvelle({ titre: "À garder" });
+    await supprimer(t.id);
+    expect(await db.taches.count()).toBe(0);
+    expect((await db.corbeille.get(t.id))?.par).toBe("Dany");
+    await remettre(t.id);
+    expect((await db.taches.get(t.id))?.titre).toBe("À garder");
+    expect(await db.corbeille.count()).toBe(0);
+    await supprimer(t.id);
+    await viderVieilleCorbeille(Date.now() + DELAI_CORBEILLE - 60_000);
+    expect(await db.corbeille.count()).toBe(1);
+    await viderVieilleCorbeille(Date.now() + DELAI_CORBEILLE + 60_000);
+    expect(await db.corbeille.count()).toBe(0);
+  });
+
+  it("cocher note qui l'a fait", async () => {
+    await db.reglages.put({ cle: "proprio", valeur: "elle" });
+    const t = await nouvelle();
+    await cocher(t);
+    expect((await db.taches.get(t.id))?.faitPar).toBe("elle");
   });
 });

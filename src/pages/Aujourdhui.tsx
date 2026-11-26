@@ -1,4 +1,4 @@
-import { CalendarClock, Sun } from "pulsoicon-react";
+import { CalendarClock, CalendarDays, Sun } from "pulsoicon-react";
 import { useState } from "react";
 import { CartePremier } from "../components/CartePremier";
 import { LigneTache } from "../components/LigneTache";
@@ -6,7 +6,9 @@ import { auJour, heureFr, minutes } from "../lib/dates";
 import { DUREE_RESPIRE, vibrer } from "../lib/gestes";
 import { niveau } from "../lib/importance";
 import { autre, type Noms, type Personne, type Tache } from "../lib/types";
-import { changerNiveau, cocher, effacerExemples } from "../data/actions";
+import { changerNiveau, cocher, effacerExemples, ranger } from "../data/actions";
+import { triJour } from "../lib/ordre";
+import { plusJours } from "../lib/dates";
 import { poserReglage, useAvecPhoto, useHoraires, useReglage } from "../data/hooks";
 import { ligneAccueil } from "../lib/horaires";
 import type { Module } from "../modules/contrat";
@@ -24,9 +26,14 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
   const demain = auJour(1, now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const { ouvertes, faites } = tachesDuJour(taches, now);
-  const tri = (a: Tache, b: Tache) => (niveau(b, now) - niveau(a, now)) || ((a.heure ? minutes(a.heure) : 9999) - (b.heure ? minutes(b.heure) : 9999)) || a.jour.localeCompare(b.jour) || a.cree - b.cree;
+  const tri = triJour(now);
   const liste = [...ouvertes].sort(tri);
   const pourDemain = taches.filter((t) => !t.fait && t.jour === demain).sort(tri);
+  // Cette semaine : après demain, jusqu'à dans six jours (tâches et rendez-vous), dans l'ordre des jours.
+  const finSemaine = plusJours(today, 6);
+  const cetteSemaine = taches.filter((t) => !t.fait && t.jour > demain && t.jour <= finSemaine)
+    .sort((a, b) => a.jour.localeCompare(b.jour) || (a.heure ? minutes(a.heure) : 9999) - (b.heure ? minutes(b.heure) : 9999) || a.cree - b.cree);
+  const nomJour = (j: string) => new Date(j + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long" });
   const prochaine = ouvertes.filter((t) => t.heure && t.jour === today && minutes(t.heure) >= nowMin - 15).sort((a, b) => minutes(a.heure) - minutes(b.heure))[0];
   const total = ouvertes.length + faites.length;
   const pct = total ? Math.round((faites.length / total) * 100) : 0;
@@ -52,7 +59,14 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
   // Une seule petite ligne pour le travail du jour ; elle disparaît une fois le travail fini.
   const codeDuJour = useHoraires().find((h) => h.qui === proprio && h.jour === today)?.code;
   const travail = ligneAccueil(codeDuJour, nowMin);
-  const ligne = (t: Tache) => <LigneTache key={t.id} t={t} n={niveau(t, now)} noms={noms} onCocher={cocher} onOuvrir={onOuvrir} onNiveau={changerNiveau} aPhoto={avecPhoto.has(t.id)} />;
+  // Poser une ligne ailleurs : devant une voisine, tout en haut (elle passe « En premier ») ou après la dernière ligne montrée.
+  const poserLigne = (t: Tache, avantId: string | null) => {
+    const apresDerniere = () => { const sans = liste.filter((x) => x.id !== t.id); const d = montres.filter((x) => x.id !== t.id).at(-1); return d ? sans[sans.indexOf(d) + 1]?.id ?? null : null; };
+    ranger(liste, t.id, avantId === "haut" ? premiere.id : avantId ?? apresDerniere(), now);
+  };
+  const ligne = (t: Tache) => <LigneTache key={t.id} t={t} n={niveau(t, now)} noms={noms} onCocher={cocher} onOuvrir={onOuvrir} onNiveau={changerNiveau} aPhoto={avecPhoto.has(t.id)} onRanger={t.fait ? undefined : poserLigne} />;
+  // Ce que l'autre a coché aujourd'hui, dit en une phrase.
+  const parLautre = faites.filter((t) => t.faitPar === lautre).sort((a, b) => (b.fait ?? 0) - (a.fait ?? 0));
 
   // « Elle respire » puis part : la carte grossit à peine, un trait se trace, puis la tâche est cochée.
   const faitPremiere = (t: Tache) => {
@@ -65,6 +79,9 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
   return (
     <>
       <p className="phrase">{phrase}</p>
+      {parLautre.length > 0 && (
+        <p className="autre-fait">{noms[lautre]} a fait « {parLautre[0].titre} »{parLautre.length > 1 ? ` et ${parLautre.length - 1} autre${parLautre.length > 2 ? "s" : ""} chose${parLautre.length > 2 ? "s" : ""}` : ""}.</p>
+      )}
       {travail && codeDuJour && <p className={`travail-accueil code-${codeDuJour.toLowerCase()}`}>{travail}</p>}
       {taches.some((t) => t.ex) && (
         <div className="exemples">
@@ -125,6 +142,18 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
             ))}
           </ul>
           {pourDemain.length > 3 && <p className="demain-plus">et {pourDemain.length - 3} autre{pourDemain.length - 3 > 1 ? "s" : ""}</p>}
+        </section>
+      )}
+
+      {cetteSemaine.length > 0 && (
+        <section className="g demain" aria-labelledby="lab-semaine">
+          <div className="taches-tete"><span className="lab" id="lab-semaine"><CalendarDays size={15} strokeWidth={1.5} animated={false} /> Cette semaine</span><span className="compte">{cetteSemaine.length}</span></div>
+          <ul className="demain-liste">
+            {cetteSemaine.slice(0, 3).map((t) => (
+              <li key={t.id}><button onClick={() => onOuvrir(t)}><span>{t.titre}</span><small>{nomJour(t.jour)}{t.heure ? ` · ${heureFr(t.heure)}` : ""}</small></button></li>
+            ))}
+          </ul>
+          {cetteSemaine.length > 3 && <p className="demain-plus">et {cetteSemaine.length - 3} autre{cetteSemaine.length - 3 > 1 ? "s" : ""}</p>}
         </section>
       )}
 

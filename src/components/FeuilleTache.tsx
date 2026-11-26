@@ -11,7 +11,7 @@ import { db, type Photo } from "../data/db";
 
 const AUCUNE: Photo[] = [];
 import { NIVEAUX, niveauPropose } from "../lib/importance";
-import type { Niveau, Noms, Personne, Qui, Repete, Tache } from "../lib/types";
+import { REPETES, type Niveau, type Noms, type Personne, type Qui, type Repete, type Tache } from "../lib/types";
 import { ajouter, modifier, supprimer, type Brouillon } from "../data/actions";
 
 interface Props { ouverte: boolean; tache: Tache | null; pre: Compris | null; noms: Noms; proprio: Personne; onFermer: () => void }
@@ -115,7 +115,8 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
 
               <div className="champ seul-tache"><span className="lab">Répéter</span>
                 <div className="puces">
-                  {([["", "Non"], ["jour", "Chaque jour"], ["semaine", "Chaque semaine"]] as Array<[Repete, string]>).map(([v, l]) => puce(b.repete === v, () => maj({ repete: v }), l))}
+                  {puce(b.repete === "", () => maj({ repete: "" }), "Non")}
+                  {(Object.keys(REPETES) as Array<Exclude<Repete, "">>).map((v) => puce(b.repete === v, () => maj({ repete: v }), REPETES[v][0].toUpperCase() + REPETES[v].slice(1)))}
                 </div></div>
 
               <div className="champ seul-tache"><span className="lab">Étapes</span>

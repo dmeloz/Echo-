@@ -6,7 +6,7 @@ import { comprendre, type Compris } from "../lib/comprendre";
 import { heureFr, libelleJour } from "../lib/dates";
 import { NIVEAUX, niveauPropose } from "../lib/importance";
 import { demanderEcho, versBrouillon, ErreurEcho, type PropositionEcho, type TacheEcho } from "../lib/assistant";
-import type { Noms, Personne } from "../lib/types";
+import { REPETES, type Noms, type Personne } from "../lib/types";
 import { ajouter, ajouterTout } from "../data/actions";
 import { db } from "../data/db";
 import { nomDe, useReglage } from "../data/hooks";
@@ -110,7 +110,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
                 <span className="tag">{libelleJour(r.jour)}</span>
                 {r.heure && <span className="tag">{heureFr(r.heure)}</span>}
                 <span className="tag">{nomDe(noms, r.qui)}</span>
-                {r.repete && <span className="tag">{r.repete === "jour" ? "chaque jour" : "chaque semaine"}</span>}
+                {r.repete && <span className="tag">{REPETES[r.repete]}</span>}
                 <span className={`tag${n === 2 ? " imp" : ""}`}>{NIVEAUX[n]}</span>
               </div>
               <div className="pied-ap">
@@ -144,7 +144,7 @@ function LigneProposee({ t, noms }: { t: TacheEcho; noms: Noms }) {
       {t.heure && <span className="tag">{heureFr(t.heure)}{t.fin ? ` – ${heureFr(t.fin)}` : ""}</span>}
       <span className="tag">{nomDe(noms, t.qui)}</span>
       {t.evenement && <span className="tag">rendez-vous</span>}
-      {t.repete && <span className="tag">{t.repete === "jour" ? "chaque jour" : "chaque semaine"}</span>}
+      {t.repete && <span className="tag">{REPETES[t.repete]}</span>}
       {t.important && <span className="tag imp">{NIVEAUX[2]}</span>}
       {t.etapes.length > 0 && <span className="tag">{t.etapes.length} étape{t.etapes.length > 1 ? "s" : ""}</span>}
     </div>

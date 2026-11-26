@@ -1,5 +1,5 @@
-import { auJour, nouvelId, plusJours } from "./dates";
-import type { Etape, Noms, Repete, Tache } from "./types";
+import { auJour, nouvelId, plusJours, plusMois } from "./dates";
+import { REPETES, type Etape, type Noms, type Repete, type Tache } from "./types";
 
 // Ce qui vient de l'extérieur (un fichier de sauvegarde) est nettoyé avant d'entrer dans l'app :
 // une tâche abîmée ne doit jamais pouvoir faire planter l'accueil.
@@ -30,12 +30,14 @@ export function nettoyerTache(x: unknown, today = auJour()): Tache | null {
     jour,
     heure: typeof o.heure === "string" && HEURE.test(o.heure) ? o.heure : "",
     niveau: o.niveau === 0 || o.niveau === 1 || o.niveau === 2 ? o.niveau : null,
-    repete: o.repete === "jour" || o.repete === "semaine" ? o.repete : "",
+    repete: typeof o.repete === "string" && o.repete in REPETES ? (o.repete as Repete) : "",
     note: texte(o.note, 1000),
     fait,
     faitLe: fait && typeof o.faitLe === "string" && JOUR.test(o.faitLe) ? o.faitLe : fait ? today : null,
     suite: typeof o.suite === "string" ? o.suite.slice(0, 40) : null,
     cree: typeof o.cree === "number" && Number.isFinite(o.cree) ? o.cree : Date.now(),
+    ...(fait && (o.faitPar === "moi" || o.faitPar === "elle") ? { faitPar: o.faitPar } : {}),
+    ...(typeof o.ordre === "number" && Number.isFinite(o.ordre) ? { ordre: o.ordre } : {}),
     ...(o.ex === true ? { ex: true } : {}),
     ...(etapes.length ? { etapes } : {}),
     ...(o.evt === true ? { evt: true } : {}),
@@ -50,9 +52,12 @@ export function nettoyerNoms(x: unknown, defaut: Noms): Noms {
 }
 
 // Une tâche qui revient : le prochain jour, toujours après aujourd'hui.
+// Chaque mois ou chaque année : le même numéro de jour (le 31 devient le dernier jour d'un mois plus court).
 export function prochainJour(jour: string, repete: Exclude<Repete, "">, today = auJour()): string {
-  const pas = repete === "jour" ? 1 : 7;
-  let suiv = plusJours(jour, pas);
-  while (suiv <= today) suiv = plusJours(suiv, pas);
-  return suiv;
+  const mois = repete === "mois" ? 1 : repete === "an" ? 12 : 0;
+  const pas = repete === "jour" ? 1 : repete === "semaine" ? 7 : 14;
+  for (let k = 1; ; k++) {
+    const suiv = mois ? plusMois(jour, k * mois) : plusJours(jour, k * pas);
+    if (suiv > today) return suiv;
+  }
 }

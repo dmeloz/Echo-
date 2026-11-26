@@ -18,7 +18,10 @@ export function comprendre(texte: string, noms: { moi: string; elle: string }, n
   let m: RegExpExecArray | null;
 
   if ((m = trouve(/\s(tous les jours|chaque jour)\b/))) { r.repete = "jour"; couper(m); }
+  else if ((m = trouve(/\s(toutes les (2|deux) semaines|une semaine sur deux)\b/))) { r.repete = "2semaines"; couper(m); }
   else if ((m = trouve(/\s(toutes les semaines|chaque semaine)\b/))) { r.repete = "semaine"; couper(m); }
+  else if ((m = trouve(/\s(tous les mois|chaque mois)\b/))) { r.repete = "mois"; couper(m); }
+  else if ((m = trouve(/\s(tous les ans|chaque annee)\b/))) { r.repete = "an"; couper(m); }
 
   if ((m = trouve(/\s(apres[- ]demain)\b/))) { r.jour = auJour(2, now); couper(m); }
   else if ((m = trouve(/\sdemain\b/))) { r.jour = auJour(1, now); couper(m); }
