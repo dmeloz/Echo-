@@ -13,7 +13,7 @@ export class Secours extends Component<{ children: ReactNode }, { plante: boolea
         <p>Tes tâches sont toujours là, sur ce téléphone. Réessaie, ou reviens à l'accueil.</p>
         <div className="rangee centre">
           <button className="bouton" onClick={() => this.setState({ plante: false })}>Réessayer</button>
-          <button className="bouton second" onClick={() => { location.hash = "aujourdhui"; this.setState({ plante: false }); }}>Retour à l'accueil</button>
+          <button className="bouton second" onClick={() => { location.replace("#aujourdhui"); this.setState({ plante: false }); }}>Retour à l'accueil</button>
         </div>
       </section>
     );

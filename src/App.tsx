@@ -112,7 +112,12 @@ export default function App() {
 
   const aller = (id: string) => {
     setRecherche(null);
-    if (id !== page) { history.pushState(null, "", "#" + id); document.querySelector(".defile")?.scrollTo(0, 0); }
+    if (id !== page) {
+      // Changer de module ne laisse pas de trace dans l'historique : le geste retour de l'iPhone
+      // (glisser depuis le bord gauche) ne saute plus d'un module à l'autre au hasard.
+      history.replaceState(null, "", "#" + id);
+      document.querySelector(".defile")?.scrollTo(0, 0);
+    } else dispatchEvent(new Event("echo-retour")); // rechoisir la page ouverte ramène à son début (sommaire des Réglages)
     setPage(id);
   };
   const ouvrir = (t: Tache | null, pre: Compris | null = null) => setFeuille({ ouverte: true, tache: t, pre });
