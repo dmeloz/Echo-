@@ -5,8 +5,9 @@ import type { Personne } from "./types";
 // On simplifie la fiche : pas de matin / après-midi séparés, un seul code pour la journée.
 
 export interface Horaire { qui: Personne; jour: string; code: Code }
-export type Code = "C1" | "C2" | "C3" | "C4" | "C5" | "C6" | "R" | "VAC" | "CHR";
-interface InfoCode { court: string; libelle: string; plages: Array<[string, string]>; travail: boolean; rare?: boolean }
+export type Code = "C1" | "C2" | "C3" | "C4" | "C5" | "C6" | "R" | "VAC" | "CHR" | "FIX" | "FER";
+// auto : un code qu'Echo calcule tout seul (les horaires fixes de Sarah), jamais posé à la main.
+interface InfoCode { court: string; libelle: string; plages: Array<[string, string]>; travail: boolean; rare?: boolean; auto?: boolean }
 
 export const CODES: Record<Code, InfoCode> = {
   C1: { court: "C1", libelle: "Coupé", plages: [["09:00", "14:00"], ["18:30", "22:30"]], travail: true },
@@ -18,9 +19,12 @@ export const CODES: Record<Code, InfoCode> = {
   C3: { court: "C3", libelle: "Après-midi", plages: [["14:00", "22:00"]], travail: true, rare: true },
   C4: { court: "C4", libelle: "Matin", plages: [["09:00", "14:00"]], travail: true, rare: true },
   CHR: { court: "Congé", libelle: "Congé", plages: [], travail: false },
+  FIX: { court: "", libelle: "Travail", plages: [["07:30", "17:00"]], travail: true, auto: true },
+  FER: { court: "Férié", libelle: "Férié", plages: [], travail: false, auto: true },
 };
-export const CODES_COURANTS = (Object.keys(CODES) as Code[]).filter((c) => !CODES[c].rare);
-export const CODES_RARES = (Object.keys(CODES) as Code[]).filter((c) => CODES[c].rare);
+const aLaMain = (Object.keys(CODES) as Code[]).filter((c) => !CODES[c].auto);
+export const CODES_COURANTS = aLaMain.filter((c) => !CODES[c].rare);
+export const CODES_RARES = aLaMain.filter((c) => CODES[c].rare);
 
 const h = (x: string) => heureFr(x).replace(/^0/, "");
 const plageFr = ([a, b]: [string, string]) => `${h(a)} – ${h(b)}`;
@@ -33,7 +37,8 @@ export function phraseDe(code: Code) {
   const c = CODES[code];
   if (!c.travail) return c.libelle;
   const heures = heuresDe(code);
-  return heures ? `Travail ${c.court} · ${heures}` : `Travail · ${c.libelle}`;
+  if (!heures) return `Travail · ${c.libelle}`;
+  return c.court ? `Travail ${c.court} · ${heures}` : `Travail · ${heures}`;
 }
 
 // La petite ligne de l'accueil : ce qui reste du travail aujourd'hui, ou le jour off. Rien une fois le travail fini.

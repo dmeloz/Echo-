@@ -167,3 +167,20 @@ export async function remplirHoraires(qui: Personne, jours: Array<[string, Code]
     }) },
   });
 }
+
+// Les vacances : poser (ou retirer) des jours « VAC » pour une ou deux personnes d'un coup, avec Annuler.
+// Retirer remet le jour comme avant les vacances : vide (les horaires fixes reviennent tout seuls).
+export async function changerVacances(jours: Array<[Personne, string]>, poser: boolean, message: string) {
+  const cles = jours.map(([q, j]) => [q, j] as [string, string]);
+  const avant = await db.horaires.bulkGet(cles);
+  await db.transaction("rw", db.horaires, async () => {
+    if (poser) await db.horaires.bulkPut(jours.map(([qui, jour]) => ({ qui, jour, code: "VAC" as Code })));
+    else await db.horaires.bulkDelete(cles.filter((_, i) => avant[i]?.code === "VAC"));
+  });
+  toast(message, {
+    action: { label: "Annuler", onClick: () => db.transaction("rw", db.horaires, async () => {
+      await db.horaires.bulkDelete(cles);
+      await db.horaires.bulkPut(avant.filter((h): h is Horaire => !!h));
+    }) },
+  });
+}
