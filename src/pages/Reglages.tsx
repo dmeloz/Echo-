@@ -8,6 +8,7 @@ import { SectionIcloud } from "../components/Icloud";
 import { estConnecte, inviter, type Foyer, type Membre } from "../sync/moteur";
 import { MODULES, basculerModule } from "../modules/registre";
 import { exporter, importer } from "../data/sauvegarde";
+import { RAPPELS_DEFAUT, reglerRappels, type Rappels } from "../data/rappels";
 import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
 
 export function Reglages({ taches, noms, masques, proprio, onGuide, onRelier }: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onGuide: () => void; onRelier: () => void }) {
@@ -30,8 +31,8 @@ export function Reglages({ taches, noms, masques, proprio, onGuide, onRelier }: 
           <span><b>Résumé du matin</b><small>Le petit soleil en haut de l'accueil : ta journée, celle de {noms[proprio === "moi" ? "elle" : "moi"]}, et ce qui arrive dans la semaine.</small></span>
           <input type="checkbox" role="switch" className="interrupteur" checked={resume} onChange={() => poserReglage("resumeMatin", !resume)} />
         </label>
-        <p className="aide-champ">La notification de 7 h viendra avec les notifications du téléphone.</p>
       </section>
+      <SectionRappels relie={relie} />
       <SectionIcloud relie={relie} />
       <section className="g reglages">
         <span className="lab">Modules</span>
@@ -122,6 +123,47 @@ function SectionFoyer({ noms, proprio, onRelier }: { noms: Noms; proprio: Person
           }}>{occupe ? "Un instant…" : "Créer un code d'invitation"}</button></div>
         )}
       </> : <p>Tout ce que l'un ajoute ou termine arrive chez l'autre, avec un petit message.</p>}
+    </section>
+  );
+}
+
+// Les rappels : une notification à l'heure d'une tâche, et le résumé du matin. Le serveur d'Echo les envoie.
+function SectionRappels({ relie }: { relie: boolean }) {
+  const r = useReglage<Rappels>("rappels", RAPPELS_DEFAUT);
+  const [occupe, setOccupe] = useState(false);
+  const regler = async (x: Partial<Rappels>) => {
+    if (occupe) return;
+    setOccupe(true);
+    try { await reglerRappels({ ...r, ...x }); if (x.actif) toast("Rappels allumés sur ce téléphone"); }
+    catch (e) { toast(e instanceof Error ? e.message : "Ça n'a pas marché. Réessaie.", { duration: 7000 }); }
+    setOccupe(false);
+  };
+  return (
+    <section className="g reglages">
+      <span className="lab">Rappels</span>
+      {!relie ? <p>Les rappels passent par le serveur d'Echo : relie d'abord ce téléphone au foyer, tout en haut.</p> : <>
+        <label className="module-ligne">
+          <span><b>Notifications sur ce téléphone</b><small>Echo te prévient même quand l'app est fermée. Pour tes tâches et celles à faire à deux.</small></span>
+          <input type="checkbox" role="switch" className="interrupteur" checked={r.actif} disabled={occupe} onChange={() => regler({ actif: !r.actif })} />
+        </label>
+        {r.actif && <>
+          <label className="module-ligne">
+            <span><b>À l'heure d'une tâche</b><small>Pour les tâches qui ont une heure.</small></span>
+            <input type="checkbox" role="switch" className="interrupteur" checked={r.aLHeure} disabled={occupe} onChange={() => regler({ aLHeure: !r.aLHeure })} />
+          </label>
+          <label className="module-ligne">
+            <span><b>Résumé du matin</b><small>Une notification avec ta journée. Rien si tu n'as rien à faire.</small></span>
+            <input type="checkbox" role="switch" className="interrupteur" checked={!!r.matin} disabled={occupe} onChange={() => regler({ matin: r.matin ? null : "07:30" })} />
+          </label>
+          {r.matin && (
+            <label className="module-ligne">
+              <span><b>Heure du résumé</b></span>
+              <input type="time" className="saisie heure-rappel" value={r.matin} disabled={occupe} onChange={(e) => e.target.value && regler({ matin: e.target.value })} />
+            </label>
+          )}
+        </>}
+        <p className="aide-champ">Sur iPhone, les notifications marchent quand Echo est ouvert depuis l'écran d'accueil.</p>
+      </>}
     </section>
   );
 }
