@@ -17,18 +17,20 @@ import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
 type Theme = "foyer" | "echo" | "notifications" | "agenda" | "modules" | "app";
 
 // Réglages : un sommaire de 6 lignes qui disent leur état, et un toucher ouvre la page du thème.
-// Le retour (bouton ou geste de l'iPhone) passe par l'historique du navigateur.
+// Le retour : le bouton « Réglages », ou glisser vers la droite (le menu envoie « echo-retour »).
+// Rien n'est écrit dans l'historique du navigateur : le geste retour de l'iPhone n'a ainsi rien à « rejouer ».
 export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onGuide: () => void; onRelier: () => void }) {
-  const [theme, setTheme] = useState<Theme | null>(() => (history.state?.reglage as Theme | undefined) ?? null);
-  useEffect(() => {
-    const suivre = () => setTheme((history.state?.reglage as Theme | undefined) ?? null);
-    addEventListener("popstate", suivre);
-    return () => removeEventListener("popstate", suivre);
-  }, []);
+  const [theme, setTheme] = useState<Theme | null>(null);
   const relie = !!useReglage<Foyer | null>("foyer", null);
   const haut = () => document.querySelector(".defile")?.scrollTo(0, 0);
-  const ouvrir = (t: Theme) => { history.pushState({ reglage: t }, "", "#reglages"); setTheme(t); haut(); };
-  const fermer = () => { if (history.state?.reglage) history.back(); else setTheme(null); haut(); };
+  const ouvrir = (t: Theme) => { setTheme(t); haut(); };
+  const fermer = () => { setTheme(null); haut(); };
+  useEffect(() => {
+    if (!theme) return;
+    const retour = () => { setTheme(null); haut(); };
+    addEventListener("echo-retour", retour);
+    return () => removeEventListener("echo-retour", retour);
+  }, [theme]);
 
   if (!theme) return <Sommaire {...props} onOuvrir={ouvrir} />;
   const { taches, noms, masques, proprio, onGuide, onRelier } = props;

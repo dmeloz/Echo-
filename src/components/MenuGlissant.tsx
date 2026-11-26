@@ -196,7 +196,7 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
     on(liste, "touchcancel", finParcours);
 
     // Le geste sur la page : tirer vers la gauche ouvre le menu (sauf là où le doigt a déjà un autre geste :
-    // une tâche, la grille des horaires, le résumé du matin). Tirer vers la droite ne fait rien tant que le menu est fermé.
+    // une tâche, la grille des horaires, le résumé du matin). Tirer vers la droite, menu fermé : retour d'une sous-page, sinon rien.
     let g: { x0: number; y0: number; axe: "x" | "y" | null; base: number; traces: Array<[number, number]> } | null = null;
     on(window, "touchstart", (e: TouchEvent) => {
       const cibleT = e.target as HTMLElement;
@@ -212,7 +212,13 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
         const dx = t.clientX - g.x0, dy = t.clientY - g.y0;
         if (Math.hypot(dx, dy) < 10) return;
         g.axe = Math.abs(dx) > Math.abs(dy) * 1.3 ? "x" : "y";
-        if (g.axe === "y" || (!estOuvert() && p < 0.01 && dx * S < 0)) { g = null; return; }
+        if (g.axe === "y") { g = null; return; }
+        if (!estOuvert() && p < 0.01 && dx * S < 0) {
+          // Vers la droite, menu fermé : sur une sous-page (Réglages), c'est le retour ; ailleurs, rien.
+          g = null;
+          if (document.querySelector(".reglage-page")) dispatchEvent(new Event("echo-retour"));
+          return;
+        }
         cancelAnimationFrame(rafId); rafId = 0;
         g.base = p; g.x0 = t.clientX;
       }
