@@ -197,7 +197,7 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
 
     // Le geste sur la page : tirer vers la gauche ouvre le menu (sauf là où le doigt a déjà un autre geste :
     // une tâche, la grille des horaires, le résumé du matin). Tirer vers la droite, menu fermé : retour d'une sous-page, sinon rien.
-    let g: { x0: number; y0: number; axe: "x" | "y" | null; base: number; traces: Array<[number, number]> } | null = null;
+    let g: { x0: number; y0: number; axe: "x" | "y" | null; base: number; traces: Array<[number, number]>; retour?: [number, number] } | null = null;
     on(window, "touchstart", (e: TouchEvent) => {
       const cibleT = e.target as HTMLElement;
       if (e.touches.length > 1 || cibleT.closest?.(".capsule, .tache, .barre-bas, .feuille, .grille-mois, .resume, .resume-fond, input, textarea") || racine.classList.contains("feuille-ouverte")) { g = null; return; }
@@ -208,6 +208,7 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
     on(window, "touchmove", (e: TouchEvent) => {
       if (!g) return;
       const t = e.touches[0];
+      if (g.retour) { g.retour = [t.clientX - g.x0, t.clientY - g.y0]; return; }
       if (!g.axe) {
         const dx = t.clientX - g.x0, dy = t.clientY - g.y0;
         if (Math.hypot(dx, dy) < 10) return;
@@ -215,8 +216,8 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
         if (g.axe === "y") { g = null; return; }
         if (!estOuvert() && p < 0.01 && dx * S < 0) {
           // Vers la droite, menu fermé : sur une sous-page (Réglages), c'est le retour ; ailleurs, rien.
-          g = null;
-          if (document.querySelector(".reglage-page")) dispatchEvent(new Event("echo-retour"));
+          // On attend la fin du geste : seul un vrai glisser (assez long, bien horizontal) compte comme retour.
+          if (document.querySelector(".reglage-page")) g.retour = [dx, dy]; else g = null;
           return;
         }
         cancelAnimationFrame(rafId); rafId = 0;
@@ -233,7 +234,8 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
     }, { passive: false });
     const finGeste = () => {
       if (!g) return;
-      const { axe, traces } = g; g = null;
+      const { axe, traces, retour } = g; g = null;
+      if (retour) { if (retour[0] > 70 && Math.abs(retour[1]) < retour[0] * 0.5) dispatchEvent(new Event("echo-retour")); return; }
       const span = MOUVEMENT.carte.decalage * largeur();
       const [t0, x0] = traces[0] || [0, 0], [t1, x1] = traces.at(-1) || [0, 0];
       const vitesse = t1 - t0 > 0 ? S * (x1 - x0) / span / (t1 - t0) * 1000 : 0;
