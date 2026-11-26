@@ -30,7 +30,7 @@ export function SectionIcloud({ relie }: { relie: boolean }) {
         <span><b>Relier à iCloud</b><small>Tes événements iCloud arrivent dans l'Agenda, et ceux que tu crées dans Echo partent dans iCloud.</small></span>
         <input type="checkbox" role="switch" className="interrupteur" checked={actif} disabled={occupe || !relie} onChange={basculer} />
       </label>
-      {!relie && <p className="aide-champ">Relie d'abord ce téléphone au foyer (plus haut).</p>}
+      {!relie && <p className="aide-champ">Relie d'abord ce téléphone au foyer, dans Réglages → Foyer.</p>}
       {occupe && <p className="aide-champ" aria-live="polite">Je parle à iCloud…</p>}
       {erreur && <p className="bv-erreur" role="alert">{erreur}</p>}
       {actif && cals.length > 0 && (
