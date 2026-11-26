@@ -1,9 +1,10 @@
 // L'atelier de design : la VRAIE app tourne dans le cadre à gauche (même adresse, mêmes fichiers),
 // et le panneau pose par-dessus une feuille de style que l'on règle au doigt. Rien n'est redessiné ici.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, EyeOff, ChevronDown, ChevronUp, Eye, Send, Layers, MousePointerClick, Palette, Pointer, ListTodo, MessageSquarePlus, Mic, RotateCcw, Undo2, X, Zap } from "pulsoicon-react";
+import { Check, EyeOff, ChevronDown, ChevronUp, Eye, Send, Layers, MousePointerClick, Palette, Pointer, ListTodo, MessageSquarePlus, MonitorDown, Sparkles, Mic, RotateCcw, Undo2, X, Zap } from "pulsoicon-react";
 import { CLE_BROUILLON, VIDE, cssDe, ecrireCouleur, lireCouleur, nombreDeChangements, type Etat } from "../lib/atelier";
 import { Suite } from "./Suite";
+import { Assistant, type Outil } from "./Assistant";
 import { AMBIANCES, ECRANS, ETATS, GROUPES, NOMS_CLASSES, NOMS_JETONS, NOMS_PROPS, OMBRES, PROPS, RAPIDES, TAILLES, TEINTES, type Prop } from "./listes";
 
 type Maillon = { el: Element; sel: string; nom: string };
@@ -17,6 +18,7 @@ type Base = { doc(chemin: string): Fiche };
 declare global { interface Window { claude?: { use(nom: string): Promise<unknown> } } }
 const base = async () => ((await window.claude?.use("db")) as Base | null | undefined) ?? null;
 const APP = import.meta.env.VITE_APP ?? "./";
+const SESSION = import.meta.env.VITE_SESSION ?? ""; // la session Claude qui travaille sur l'app, prévenue à chaque envoi
 const classes = (el: Element) => [...el.classList].filter((c) => !c.startsWith("atelier-") && !["arrivee", "respire", "tremble"].includes(c));
 
 /** Du plus précis au plus large : l'élément touché, puis ce qui l'entoure. */
@@ -54,7 +56,7 @@ export function Atelier() {
   const [brouillonDemande, setBrouillonDemande] = useState("");
   const [envoi, setEnvoi] = useState<"" | "en-cours" | "fait" | "copie">("");
   const [choisir, setChoisir] = useState(true);
-  const [onglet, setOnglet] = useState<"rapide" | "element" | "theme" | "demandes" | "suite" | "liste">("rapide");
+  const [onglet, setOnglet] = useState<"claude" | "rapide" | "element" | "theme" | "demandes" | "suite" | "liste">("claude");
   const [maillons, setMaillons] = useState<Maillon[]>([]);
   const [sel, setSel] = useState<string>("");
   const [jetons, setJetons] = useState<Jeton[]>([]);
@@ -217,6 +219,44 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
     changer((e) => ({ ...e, demandes: [...e.demandes, { id: Date.now().toString(36), ecran: ecran(), element: cible?.nom ?? "", sel: cible ? sel : "", texte: t }] }));
     setBrouillonDemande("");
   };
+  // Ce que Claude, dans l'atelier, sait et peut faire : l'état de l'app, et des outils qui règlent l'atelier comme le ferait Melo.
+  const reglesClaude = () => [
+    "Tu es Claude, dans l'atelier de travail de l'app Echo (app du foyer de Dany et Sarah : tâches, agenda, cuisine, maison, budget). Dany n'est pas développeur.",
+    "Parle en français simple, phrases courtes, tutoie. Ne montre jamais de CSS ni de code. Guide-le : dis ce que tu as fait et propose l'étape suivante.",
+    "Tu changes l'apparence toi-même avec les outils regler_theme et regler_element : l'aperçu se met à jour tout de suite. Fais des changements mesurés, l'app est en verre clair (style Givre lagon) et il l'aime déjà.",
+    "Tout ce qui n'est pas de l'apparence (nouvelle fonction, bouton, bug, contenu, logique) : appelle noter_demande, puis dis-lui de toucher « Envoyer à Claude » pour que ce soit construit dans l'app.",
+    "Écran affiché : " + nomEcran(ecran()) + ". Élément choisi : " + (cible ? `${cible.nom} (${sel})` : "aucun") + ".",
+    "Réglages de base (nom : valeur) : " + jetons.map((j) => `${j.nom}: ${etat.jetons[j.nom] ?? j.origine}`).join("; "),
+    "Éléments connus (sélecteur = nom) : " + Object.entries(NOMS_CLASSES).map(([k, v]) => `.${k} = ${v}`).join("; "),
+    "Propriétés réglables d'un élément : " + PROPS.map((p) => p.css).join(", ") + ", display.",
+    "Changements déjà faits : " + (cssDe(etat) || "aucun") + ". Demandes notées : " + (etat.demandes.map((d) => d.texte).join(" | ") || "aucune") + ".",
+  ].join("\n");
+  const outilsClaude: Outil[] = [
+    { name: "regler_theme", description: "Change un réglage de base de l'app (couleur, taille de texte, espace). valeur vide = remettre comme avant.",
+      inputSchema: { type: "object", properties: { nom: { type: "string", description: "ex. --bleu" }, valeur: { type: "string", description: "valeur CSS, ex. #3b6fe0 ou 17px" } }, required: ["nom", "valeur"] },
+      execute: ({ nom, valeur }) => { const n = String(nom); if (!jetons.some((j) => j.nom === n)) throw new Error("réglage inconnu"); poserJeton(n, String(valeur ?? "") || null); return "fait"; } },
+    { name: "regler_element", description: "Change une propriété d'un élément de l'app, par son sélecteur. valeur vide = remettre comme avant.",
+      inputSchema: { type: "object", properties: { selecteur: { type: "string", description: "ex. .g" }, propriete: { type: "string", description: "ex. border-radius" }, valeur: { type: "string", description: "ex. 20px" } }, required: ["selecteur", "propriete", "valeur"] },
+      execute: ({ selecteur, propriete, valeur }) => {
+        const s2 = String(selecteur), p = String(propriete);
+        if (/[{};<>]/.test(s2 + p + String(valeur ?? "")) || !doc()?.querySelector(s2)) throw new Error("élément introuvable sur cet écran");
+        poser(s2, p, String(valeur ?? "") || null); return "fait";
+      } },
+    { name: "noter_demande", description: "Note une demande de travail sur l'app (fonction, bouton, bug, contenu) pour Claude qui écrit le code.",
+      inputSchema: { type: "object", properties: { texte: { type: "string" } }, required: ["texte"] },
+      execute: ({ texte: t }) => { const x = String(t ?? "").trim(); if (!x) throw new Error("demande vide"); changer((e) => ({ ...e, demandes: [...e.demandes, { id: Date.now().toString(36), ecran: ecran(), element: cible?.nom ?? "", sel: cible ? sel : "", texte: x }] })); return "notée"; } },
+  ];
+  // L'atelier peut s'installer comme une app sur l'ordinateur (depuis l'app Claude de bureau).
+  type Bureau = { install?: { state(): Promise<string>; request(): Promise<unknown> } };
+  const bureau = useRef<Bureau | null>(null);
+  const [installable, setInstallable] = useState(false);
+  useEffect(() => {
+    (window.claude?.use("desktop") ?? Promise.resolve(null)).then(async (d) => {
+      bureau.current = d as Bureau | null;
+      setInstallable((await bureau.current?.install?.state()) === "available");
+    }).catch(() => {});
+  }, []);
+  const installer = () => { bureau.current?.install?.request().catch(() => {}); };
   const nb = nombreDeChangements(etat);
   const texte = cssDe(etat);
   const copier = async () => {
@@ -232,6 +272,11 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
       if (!b) throw new Error("pas de base");
       await b.doc("atelier/design").set({ css: texte, textes: etat.textes, demandes: etat.demandes, etat: JSON.stringify(etat), nombre: nb, quand: new Date().toISOString() });
       setEnvoi("fait");
+      // On prévient aussi Claude, qui travaille sur l'app, qu'un envoi l'attend (si la vue le permet).
+      type Lien = { callTool(serveur: string, outil: string, entree: Record<string, unknown>): Promise<unknown> };
+      (window.claude?.use("mcp") ?? Promise.resolve(null)).then((m) => (m as Lien | null)?.callTool("Claude Code Remote", "send_message", {
+        session_id: SESSION, message: `Atelier Echo : nouvel envoi de Melo (${nb} changement${nb > 1 ? "s" : ""}, dont ${etat.demandes.length} demande${etat.demandes.length > 1 ? "s" : ""}). À lire dans la base de la page, document atelier/design.`,
+      })).catch(() => {});
     } catch { await copier(); setEnvoi("copie"); } // secours : le texte est copié, à coller dans la conversation
   };
 
@@ -271,6 +316,7 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
         {avant && <p className="bandeau">Tu vois l'app comme avant. Retouche l'œil pour revoir tes changements.</p>}
 
         <nav className="onglets">
+          <button aria-pressed={onglet === "claude"} onClick={() => setOnglet("claude")}><Sparkles size={16} /> Claude</button>
           <button aria-pressed={onglet === "rapide"} onClick={() => setOnglet("rapide")}><Zap size={16} /> Rapide</button>
           <button aria-pressed={onglet === "element"} onClick={() => setOnglet("element")}><Layers size={16} /> Élément</button>
           <button aria-pressed={onglet === "theme"} onClick={() => setOnglet("theme")}><Palette size={16} /> Couleurs</button>
@@ -280,6 +326,11 @@ html.atelier-choisir, html.atelier-choisir *{cursor:crosshair !important}`;
         </nav>
 
         <div className="contenu">
+          {onglet === "claude" && <>
+            <Assistant regles={reglesClaude} outils={outilsClaude} />
+            {installable && <div className="actions"><button className="bouton second" onClick={installer}><MonitorDown size={17} /> Installer l'atelier sur cet ordinateur</button></div>}
+          </>}
+
           {onglet === "rapide" && <>
             <section className="groupe">
               <h3>Couleur principale</h3>

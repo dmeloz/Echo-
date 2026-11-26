@@ -75,6 +75,13 @@ pre.code { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgb(1
 .changements { list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .changements li { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 6px 8px 6px 12px; border-radius: 14px; background: rgb(255 255 255 / .6); border: 1px solid var(--bord); font-size: 14px; overflow-wrap: anywhere; }
 .changements b { display: block; }
+.claude-fil { display: flex; flex-direction: column; gap: 10px; min-height: 100%; }
+.accueil-claude { display: flex; flex-direction: column; gap: 10px; }
+.bulle { max-width: 92%; padding: 10px 14px; border-radius: 18px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; -webkit-user-select: text; }
+.bulle.user { align-self: flex-end; background: var(--bleu); color: #fff; border-bottom-right-radius: 6px; }
+.bulle.assistant { align-self: flex-start; background: #fff; box-shadow: 0 2px 8px var(--ombre); border-bottom-left-radius: 6px; }
+.saisie-claude { position: sticky; bottom: 0; margin-top: auto; padding: 8px 0 4px; background: linear-gradient(transparent, #fafcfd 30%); }
+.icone-claude { color: var(--bleu); display: grid; place-items: center; }
 .ajout-suite { display: flex; gap: 8px; align-items: center; }
 .etape > span:first-child { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .etape.fait b { color: var(--discret); text-decoration: line-through; }
