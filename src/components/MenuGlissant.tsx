@@ -195,11 +195,12 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
     on(liste, "touchend", finParcours);
     on(liste, "touchcancel", finParcours);
 
-    // Le geste sur la page : tirer vers la gauche ouvre le menu (sauf sur une tâche, qui a son propre geste).
+    // Le geste sur la page : tirer vers la gauche ouvre le menu (sauf là où le doigt a déjà un autre geste :
+    // une tâche, la grille des horaires, le résumé du matin). Tirer vers la droite ne fait rien tant que le menu est fermé.
     let g: { x0: number; y0: number; axe: "x" | "y" | null; base: number; traces: Array<[number, number]> } | null = null;
     on(window, "touchstart", (e: TouchEvent) => {
       const cibleT = e.target as HTMLElement;
-      if (e.touches.length > 1 || cibleT.closest?.(".capsule, .tache, .barre-bas, .feuille, input, textarea") || racine.classList.contains("feuille-ouverte")) { g = null; return; }
+      if (e.touches.length > 1 || cibleT.closest?.(".capsule, .tache, .barre-bas, .feuille, .grille-mois, .resume, .resume-fond, input, textarea") || racine.classList.contains("feuille-ouverte")) { g = null; return; }
       if ((estOuvert() || rafId) && menu.contains(cibleT)) { g = null; return; }
       const t = e.touches[0];
       g = { x0: t.clientX, y0: t.clientY, axe: null, base: 0, traces: [] };
