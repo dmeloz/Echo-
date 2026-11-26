@@ -11,7 +11,10 @@ type Etape = "foyer" | "rejoindre" | "inviter";
 
 // rejoindreSeulement : ce téléphone était déjà dans un foyer (il a perdu sa connexion). Il ne doit pas en créer
 // un deuxième par erreur : il rejoint le sien avec un code créé sur l'autre téléphone.
-export function Connexion({ prenom, proprio, onFini, onPlusTard, rejoindreSeulement = false }: { prenom: string; proprio: Personne; onFini: () => void; onPlusTard?: () => void; rejoindreSeulement?: boolean }) {
+// demanderPrenom : ceux qui avaient Echo avant la synchro confirment leur prénom ici (il devient définitif).
+export function Connexion({ prenom: prenomConnu, proprio, onFini, onPlusTard, rejoindreSeulement = false, demanderPrenom = false }: { prenom: string; proprio: Personne; onFini: () => void; onPlusTard?: () => void; rejoindreSeulement?: boolean; demanderPrenom?: boolean }) {
+  const [prenomSaisi, setPrenomSaisi] = useState(demanderPrenom ? "" : prenomConnu);
+  const prenom = prenomSaisi.trim();
   const [etape, setEtape] = useState<Etape>(rejoindreSeulement ? "rejoindre" : "foyer");
   const [code, setCode] = useState("");
   const [invitation, setInvitation] = useState("");
@@ -25,6 +28,10 @@ export function Connexion({ prenom, proprio, onFini, onPlusTard, rejoindreSeulem
     setOccupe(false);
   };
   const chiffres = (v: string) => v.replace(/\D/g, "").slice(0, 6);
+  const champPrenom = demanderPrenom && (
+    <input className="saisie" autoComplete="given-name" autoCapitalize="words" maxLength={24} placeholder="Ton prénom" aria-label="Ton prénom"
+      value={prenomSaisi} onChange={(e) => setPrenomSaisi(e.target.value)} />
+  );
   const creer = () => essayer(async () => { await creerFoyer(prenom, proprio); setInvitation(await inviter()); setEtape("inviter"); });
   const rejoindre = (c: string) => essayer(async () => { await rejoindreFoyer(c, prenom); toast("Bienvenue dans le foyer !"); onFini(); });
 
@@ -35,9 +42,11 @@ export function Connexion({ prenom, proprio, onFini, onPlusTard, rejoindreSeulem
       <span className="bv-icone" aria-hidden="true"><Home size={30} strokeWidth={2} /></span>
       <h1 id="cx-titre">Votre foyer</h1>
       <p>Pour partager vos tâches entre vos deux téléphones. Le premier crée le foyer et reçoit un code à 6 chiffres ; l'autre entre ce code sur son téléphone.</p>
+      {champPrenom && <p><b>D'abord, ton prénom</b> (celui de la personne qui tient ce téléphone) :</p>}
+      {champPrenom}
       {erreurs}
-      <button className="bouton" disabled={occupe} onClick={creer}>{occupe ? "Création…" : "Créer notre foyer"}</button>
-      <button className="bouton second" disabled={occupe} onClick={() => { setErreur(""); setCode(""); setEtape("rejoindre"); }}>J'ai un code</button>
+      <button className="bouton" disabled={occupe || !prenom} onClick={creer}>{occupe ? "Création…" : "Créer notre foyer"}</button>
+      <button className="bouton second" disabled={occupe || !prenom} onClick={() => { setErreur(""); setCode(""); setEtape("rejoindre"); }}>J'ai un code</button>
       {onPlusTard && <button type="button" className="bouton-texte" onClick={onPlusTard}>Plus tard</button>}
     </div>
   );
@@ -46,10 +55,11 @@ export function Connexion({ prenom, proprio, onFini, onPlusTard, rejoindreSeulem
       <span className="bv-icone" aria-hidden="true"><Users size={30} strokeWidth={2} /></span>
       <h1 id="cx-titre">Rejoindre le foyer</h1>
       <p>Écris le code affiché sur l'autre téléphone (Réglages, partie Foyer).</p>
+      {rejoindreSeulement && champPrenom}
       <input className="saisie bv-code" inputMode="numeric" placeholder="000000" aria-label="Code d'invitation" autoFocus
-        value={code} onChange={(e) => { const c = chiffres(e.target.value); setCode(c); if (c.length === 6) rejoindre(c); }} />
+        value={code} onChange={(e) => { const c = chiffres(e.target.value); setCode(c); if (c.length === 6 && prenom) rejoindre(c); }} />
       {erreurs}
-      <button className="bouton" disabled={occupe || code.length < 6}>{occupe ? "Un instant…" : "Rejoindre"}</button>
+      <button className="bouton" disabled={occupe || code.length < 6 || !prenom}>{occupe ? "Un instant…" : "Rejoindre"}</button>
       {rejoindreSeulement
         ? onPlusTard && <button type="button" className="bouton-texte" onClick={onPlusTard}>Plus tard</button>
         : <button type="button" className="bouton-texte" onClick={() => { setErreur(""); setEtape("foyer"); }}>Retour</button>}
