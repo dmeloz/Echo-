@@ -5,6 +5,7 @@ import { CODES, type Horaire } from "../lib/horaires";
 import type { Noms, Personne } from "../lib/types";
 import { nettoyerNoms, nettoyerTache } from "../lib/valider";
 import { supa } from "./client";
+import { autrePrenom } from "../lib/types";
 import { cleHoraire, lireFile, marquerDistante, noter, retirer, surChangement } from "./file";
 
 // La synchro du foyer. Chaque téléphone garde toutes les données chez lui (Echo marche hors ligne)
@@ -204,9 +205,11 @@ async function chargerMembres() {
   const { data, error } = await supa.from("membres").select("user_id, prenom, place").eq("foyer_id", foyer.id);
   if (error) throw error;
   const membres: Membre[] = data.map((m) => ({ userId: m.user_id, prenom: m.prenom, place: m.place }));
-  const actuels = nettoyerNoms((await db.reglages.get("noms"))?.valeur, NOMS_DEFAUT);
-  const noms: Noms = { ...actuels };
+  const noms: Noms = nettoyerNoms((await db.reglages.get("noms"))?.valeur, NOMS_DEFAUT);
   for (const m of membres) noms[m.place] = m.prenom;
+  // Place encore libre : on y met le prénom de l'autre attendu, jamais un ancien prénom resté sur ce téléphone.
+  const moi = membres.find((m) => m.userId === foyer!.userId);
+  for (const place of ["moi", "elle"] as Personne[]) if (moi && !membres.some((m) => m.place === place)) noms[place] = autrePrenom(moi.prenom);
   await db.reglages.bulkPut([{ cle: "membres", valeur: membres }, { cle: "noms", valeur: noms }]);
 }
 

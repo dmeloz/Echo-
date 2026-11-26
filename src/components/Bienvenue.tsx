@@ -1,6 +1,6 @@
 import { Hand, Lock, Menu, Plus, Sun } from "pulsoicon-react";
 import { useState, type ComponentType } from "react";
-import type { Noms, Personne } from "../lib/types";
+import { autrePrenom, type Noms, type Personne } from "../lib/types";
 import { choisirProprio, enregistrerNoms, marquerGuide, poserReglage } from "../data/hooks";
 import { Connexion } from "./Connexion";
 
@@ -31,7 +31,7 @@ export function Bienvenue({ noms, proprio, onFini }: { noms: Noms; proprio: Pers
     const valider = async () => {
       if (!p) return;
       // Ce téléphone prend la première place ; en rejoignant un foyer, il prendra la place libre.
-      await enregistrerNoms({ moi: p, elle: p.toLowerCase() === "sarah" ? "Dany" : "Sarah" });
+      await enregistrerNoms({ moi: p, elle: autrePrenom(p) });
       await choisirProprio("moi");
       await poserReglage("connexionProposee", true);
       setMoi("moi"); setRelier(true);
