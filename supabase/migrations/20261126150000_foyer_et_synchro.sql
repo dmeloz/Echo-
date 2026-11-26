@@ -61,6 +61,7 @@ alter table public.foyers enable row level security;
 alter table public.membres enable row level security;
 alter table public.invitations enable row level security;
 alter table public.elements enable row level security;
+alter table prive.tentatives enable row level security; -- lue seulement par les fonctions du serveur
 
 grant usage on schema prive to authenticated;
 grant execute on function prive.mon_foyer() to authenticated;
@@ -88,7 +89,7 @@ begin
   return f;
 end $$;
 
--- Un code à 6 chiffres pour inviter l'autre, valable 2 jours.
+-- Un code à 6 chiffres pour inviter l'autre, valable 1 heure (court : un code deviné ne sert à rien longtemps).
 create function public.creer_invitation() returns text
 language plpgsql security definer set search_path = '' as $$
 declare f uuid; c text;
@@ -100,7 +101,7 @@ begin
     c := lpad((floor(random() * 1000000))::int::text, 6, '0');
     exit when not exists (select 1 from public.invitations where code = c);
   end loop;
-  insert into public.invitations (code, foyer_id, expire, cree_par) values (c, f, now() + interval '2 days', auth.uid());
+  insert into public.invitations (code, foyer_id, expire, cree_par) values (c, f, now() + interval '1 hour', auth.uid());
   return c;
 end $$;
 

@@ -1,6 +1,7 @@
 import { auJour, minutes } from "../../lib/dates";
 import { niveau } from "../../lib/importance";
 import type { Personne, Tache } from "../../lib/types";
+import { CODES, minutesDe, type Code } from "../../lib/horaires";
 
 // Les calculs du planning, sans écran (testés à part).
 
@@ -35,6 +36,28 @@ export function proposerDeplacement(taches: Tache[], ordrePersonnes: Personne[],
       .filter((t) => t.qui === p && !t.heure && !t.repete)
       .sort((a, b) => niveau(a, now) - niveau(b, now) || a.cree - b.cree);
     if (candidates[0]) return { pour: p, tache: candidates[0], de, vers, nbDe: max, nbVers: min };
+  }
+  return null;
+}
+
+export interface IdeeRepos { tache: Tache; de: string; vers: string }
+
+// Une idée pour les jours de repos : une petite chose posée un jour de travail (sans heure, pas répétée)
+// irait mieux un jour de repos. On part du jour où l'on travaille le plus, la chose la moins importante,
+// vers le jour de repos le plus calme de la semaine. Aujourd'hui n'est jamais touché.
+export function proposerRepos(taches: Tache[], travail: Map<string, Code>, p: Personne, now = new Date()): IdeeRepos | null {
+  const jours = joursAVenir(now).slice(1);
+  const today = auJour(0, now);
+  const repos = jours.filter((j) => travail.get(j) === "R");
+  if (!repos.length) return null;
+  const pourP = (j: string) => duJour(taches, j, today).filter((t) => t.qui === p && t.jour === j);
+  const vers = repos.reduce((a, b) => (pourP(b).length < pourP(a).length ? b : a));
+  const charges = jours
+    .filter((j) => { const c = travail.get(j); return c && CODES[c].travail; })
+    .sort((a, b) => minutesDe(travail.get(b)!) - minutesDe(travail.get(a)!) || a.localeCompare(b));
+  for (const de of charges) {
+    const t = pourP(de).filter((x) => !x.heure && !x.repete).sort((a, b) => niveau(a, now) - niveau(b, now) || a.cree - b.cree)[0];
+    if (t) return { tache: t, de, vers };
   }
   return null;
 }

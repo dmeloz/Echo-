@@ -165,7 +165,7 @@ export default function App() {
         <Bienvenue noms={noms} proprio={proprioBrut} onFini={() => setGuideFerme(true)} />
       )}
       {proprioBrut && (relier || (guideVu && aProposer)) && (
-        <Connexion prenom={noms[proprioBrut]} proprio={proprioBrut} onFini={() => { setRelier(false); poserReglage("connexionProposee", true); }}
+        <Connexion prenom={noms[proprioBrut]} proprio={proprioBrut} rejoindreSeulement={!!etatFoyer?.foyer} onFini={() => { setRelier(false); poserReglage("connexionProposee", true); }}
           onPlusTard={() => { setRelier(false); poserReglage("connexionProposee", true); }} />
       )}
       {/* Les messages (avec Annuler) prennent la place de la barre rangée, à gauche de la capsule. */}

@@ -5,7 +5,7 @@ import { autre, type Personne, type Tache } from "../../lib/types";
 import { deplacer } from "../../data/actions";
 import { initialeDe, nomDe, poserReglage, useHoraires, useReglage, useTaches } from "../../data/hooks";
 import type { ContexteModule } from "../contrat";
-import { charge, duJour, faitesDuJour, joursAVenir, proposerDeplacement } from "./semaine";
+import { charge, duJour, faitesDuJour, joursAVenir, proposerDeplacement, proposerRepos } from "./semaine";
 import { CODES, heuresDe, phraseDe, type Code } from "../../lib/horaires";
 import { VueHoraires } from "./Horaires";
 
@@ -21,7 +21,7 @@ export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
   const taches = useTaches() ?? [];
   const vue = useReglage<Vue>("planningVue", "jour");
   const [jour, setJour] = useState(() => auJour(0, now));
-  const [ideeRefusee, setIdeeRefusee] = useState<string | null>(null);
+  const [refusees, setRefusees] = useState<string[]>([]);
   const jours = joursAVenir(now);
   const today = jours[0];
   const jourVu = jours.includes(jour) ? jour : today;
@@ -56,12 +56,37 @@ export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
         })}
       </div>
 
+      <IdeeEcho taches={taches} travail={travail} proprio={proprio} lautre={lautre} noms={noms} now={now} refusees={refusees} onRefuser={(id) => setRefusees((r) => [...r, id])} />
+
       {vue === "jour"
         ? <VueJour taches={taches} jour={jourVu} today={today} now={now} noms={noms} ouvrir={ouvrir} travail={travail.get(jourVu)} />
-        : <VueSemaine taches={taches} jours={jours} today={today} now={now} noms={noms} proprio={proprio} lautre={lautre} travail={travail}
-            ideeRefusee={ideeRefusee} onRefuser={setIdeeRefusee} onJour={choisirJour} />}
+        : <VueSemaine taches={taches} jours={jours} today={today} now={now} noms={noms} proprio={proprio} lautre={lautre} travail={travail} onJour={choisirJour} />}
       </>}
     </>
+  );
+}
+
+// Une seule idée d'Echo à la fois, en une phrase : d'abord profiter d'un jour de repos, sinon alléger le jour le plus chargé.
+// Le calcul reste caché ; on ne voit que la proposition, Oui ou Non.
+interface PropsIdee { taches: Tache[]; travail: Map<string, Code>; proprio: Personne; lautre: Personne; noms: ContexteModule["noms"]; now: Date; refusees: string[]; onRefuser: (id: string) => void }
+function IdeeEcho({ taches, travail, proprio, lautre, noms, now, refusees, onRefuser }: PropsIdee) {
+  const libre = (t: Tache) => !refusees.includes(t.id);
+  const jourDe = (j: string) => libelleJour(j, now).split(" ")[0];
+  const minus = (j: string) => jourDe(j).toLowerCase();
+  const repos = proposerRepos(taches.filter(libre), travail, proprio, now);
+  const allege = repos ? null : proposerDeplacement(taches.filter(libre), [proprio, lautre], now);
+  const idee = repos ? { tache: repos.tache, vers: repos.vers, texte: <><b>{jourDe(repos.vers)}</b> tu es en repos. J'y mets « {repos.tache.titre} » ?</> }
+    : allege ? { tache: allege.tache, vers: allege.vers, texte: <><b>{jourDe(allege.de)}</b> est chargé{allege.pour === proprio ? "" : ` pour ${noms[allege.pour]}`}. Je mets « {allege.tache.titre} » à {minus(allege.vers)} ?</> }
+    : null;
+  if (!idee) return null;
+  return (
+    <section className="g idee" aria-label="Une idée d'Echo">
+      <p><Sparkles size={15} strokeWidth={1.8} animated={false} aria-hidden="true" /> {idee.texte}</p>
+      <div className="rangee">
+        <button className="bouton petit" onClick={() => deplacer(idee.tache, idee.vers)}>Oui</button>
+        <button className="bouton-texte" onClick={() => onRefuser(idee.tache.id)}>Non</button>
+      </div>
+    </section>
   );
 }
 
@@ -123,25 +148,12 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail }: { taches: 
   );
 }
 
-interface PropsSemaine { travail: Map<string, Code>; taches: Tache[]; jours: string[]; today: string; now: Date; noms: ContexteModule["noms"]; proprio: Personne; lautre: Personne; ideeRefusee: string | null; onRefuser: (id: string) => void; onJour: (j: string) => void }
+interface PropsSemaine { travail: Map<string, Code>; taches: Tache[]; jours: string[]; today: string; now: Date; noms: ContexteModule["noms"]; proprio: Personne; lautre: Personne; onJour: (j: string) => void }
 
-function VueSemaine({ travail, taches, jours, today, now, noms, proprio, lautre, ideeRefusee, onRefuser, onJour }: PropsSemaine) {
-  const idee = proposerDeplacement(taches, [proprio, lautre], now);
-  const montrerIdee = idee && idee.tache.id !== ideeRefusee;
-  const jourCourt = (j: string) => libelleJour(j, now).split(" ")[0].toLowerCase();
+function VueSemaine({ travail, taches, jours, today, now, noms, onJour }: PropsSemaine) {
 
   return (
     <>
-      {montrerIdee && idee && (
-        <section className="g idee" aria-labelledby="lab-idee">
-          <span className="lab" id="lab-idee"><Sparkles size={15} strokeWidth={1.8} animated={false} /> Une idée</span>
-          <p><b>{libelleJour(idee.de, now).split(" ")[0]}</b> est chargé pour {idee.pour === proprio ? "toi" : noms[idee.pour]} ({idee.nbDe} choses), <b>{jourCourt(idee.vers)}</b> beaucoup moins ({idee.nbVers}). Je déplace « {idee.tache.titre} » ?</p>
-          <div className="rangee">
-            <button className="bouton petit" onClick={() => deplacer(idee.tache, idee.vers)}>Oui, déplace</button>
-            <button className="bouton-texte" onClick={() => onRefuser(idee.tache.id)}>Non</button>
-          </div>
-        </section>
-      )}
       <ul className="semaine-liste">
         {jours.map((j) => {
           const liste = duJour(taches, j, today);

@@ -36,6 +36,15 @@ export function phraseDe(code: Code) {
   return heures ? `Travail ${c.court} · ${heures}` : `Travail · ${c.libelle}`;
 }
 
+// La petite ligne de l'accueil : ce qui reste du travail aujourd'hui, ou le jour off. Rien une fois le travail fini.
+export function ligneAccueil(code: Code | undefined, nowMin: number): string | null {
+  if (!code) return null;
+  const c = CODES[code];
+  if (!c.travail) return c.libelle;
+  const reste = c.plages.filter(([, b]) => minutes(b) > nowMin);
+  return reste.length ? `Travail ${reste.map(plageFr).join(" et ")}` : null;
+}
+
 // Tous les jours d'un mois « 2026-12 », du 1er au dernier.
 export function joursDuMois(mois: string): string[] {
   const [a, m] = mois.split("-").map(Number);

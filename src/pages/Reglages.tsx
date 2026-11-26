@@ -80,7 +80,7 @@ export function Reglages({ taches, noms, masques, proprio, onGuide, onRelier }: 
               }}>{recherche ? "Recherche…" : "Chercher une mise à jour"}</button>}
         </div>
       </section>
-      <p className="note-donnees">Icônes : PulsoIcon (licence ISC). Planning est construit ; Cuisine, Maison et Budget pas encore.</p>
+      <p className="note-donnees">Icônes : PulsoIcon (licence ISC). Agenda est construit ; Cuisine, Maison et Budget pas encore.</p>
     </>
   );
 }

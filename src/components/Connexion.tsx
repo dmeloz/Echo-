@@ -5,12 +5,14 @@ import type { Personne } from "../lib/types";
 import { creerFoyer, inviter, rejoindreFoyer } from "../sync/moteur";
 
 // Relier ce téléphone au foyer, sans e-mail ni mot de passe : le premier crée le foyer et reçoit un code
-// à 6 chiffres, l'autre entre ce code sur son téléphone. Le même chemin sert après un changement de téléphone.
+// à 6 chiffres (valable 1 heure), l'autre entre ce code sur son téléphone. Le même chemin sert après un changement de téléphone.
 
 type Etape = "foyer" | "rejoindre" | "inviter";
 
-export function Connexion({ prenom, proprio, onFini, onPlusTard }: { prenom: string; proprio: Personne; onFini: () => void; onPlusTard?: () => void }) {
-  const [etape, setEtape] = useState<Etape>("foyer");
+// rejoindreSeulement : ce téléphone était déjà dans un foyer (il a perdu sa connexion). Il ne doit pas en créer
+// un deuxième par erreur : il rejoint le sien avec un code créé sur l'autre téléphone.
+export function Connexion({ prenom, proprio, onFini, onPlusTard, rejoindreSeulement = false }: { prenom: string; proprio: Personne; onFini: () => void; onPlusTard?: () => void; rejoindreSeulement?: boolean }) {
+  const [etape, setEtape] = useState<Etape>(rejoindreSeulement ? "rejoindre" : "foyer");
   const [code, setCode] = useState("");
   const [invitation, setInvitation] = useState("");
   const [erreur, setErreur] = useState("");
@@ -48,7 +50,9 @@ export function Connexion({ prenom, proprio, onFini, onPlusTard }: { prenom: str
         value={code} onChange={(e) => { const c = chiffres(e.target.value); setCode(c); if (c.length === 6) rejoindre(c); }} />
       {erreurs}
       <button className="bouton" disabled={occupe || code.length < 6}>{occupe ? "Un instant…" : "Rejoindre"}</button>
-      <button type="button" className="bouton-texte" onClick={() => { setErreur(""); setEtape("foyer"); }}>Retour</button>
+      {rejoindreSeulement
+        ? onPlusTard && <button type="button" className="bouton-texte" onClick={onPlusTard}>Plus tard</button>
+        : <button type="button" className="bouton-texte" onClick={() => { setErreur(""); setEtape("foyer"); }}>Retour</button>}
     </form>
   );
   else corps = (
@@ -68,7 +72,7 @@ export function CodeInvitation({ code }: { code: string }) {
   return (
     <div className="invitation">
       <b aria-label={`Code d'invitation ${code.split("").join(" ")}`}>{code.slice(0, 3)} {code.slice(3)}</b>
-      <small>Valable 2 jours, une seule fois.</small>
+      <small>Valable 1 heure, une seule fois.</small>
       {"share" in navigator && (
         <button type="button" className="bouton second" onClick={() => navigator.share({ text: texte }).catch(() => {})}><Share2 size={18} strokeWidth={2} /> Envoyer le code</button>
       )}

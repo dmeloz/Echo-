@@ -676,3 +676,6 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .membres span { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 99px; background: rgb(18 40 58 / .05); font-weight: 600; }
 .membres i { font-style: normal; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--encre); font-size: 13px; }
 .membres i.elle { background: var(--turquoise); }
+/* Accueil : la petite ligne du travail du jour (une pastille de la couleur du code, sans plus). */
+.travail-accueil { align-self: flex-start; margin: -4px 2px 2px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 700; background: var(--code); color: var(--code-t); }
+.idee p svg { display: inline; vertical-align: -2px; color: var(--accent); }

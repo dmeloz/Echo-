@@ -22,8 +22,12 @@ let canal: RealtimeChannel | null = null;
 // Une seule opération de synchro à la fois, dans l'ordre.
 let chaine: Promise<unknown> = Promise.resolve();
 const enFile = (fn: () => Promise<unknown>) => (chaine = chaine.then(fn).catch((e) => console.warn("[Echo synchro]", e)));
-let minuterie: ReturnType<typeof setTimeout> | undefined;
-const bientot = (fn: () => Promise<unknown>, ms = 700) => { clearTimeout(minuterie); minuterie = setTimeout(() => enFile(fn), ms); };
+// Regrouper les changements rapprochés : un minuteur par opération (envoyer ne doit pas annuler recevoir).
+const minuteries = new Map<() => Promise<unknown>, ReturnType<typeof setTimeout>>();
+const bientot = (fn: () => Promise<unknown>, ms = 700) => {
+  clearTimeout(minuteries.get(fn));
+  minuteries.set(fn, setTimeout(() => { minuteries.delete(fn); enFile(fn); }, ms));
+};
 
 export const lireFoyer = async () => ((await db.reglages.get("foyer"))?.valeur as Foyer | undefined) ?? null;
 
@@ -32,7 +36,7 @@ export const lireFoyer = async () => ((await db.reglages.get("foyer"))?.valeur a
 const MESSAGES: Record<string, string> = {
   anonymous_provider_disabled: "Le serveur d'Echo n'accepte pas encore les téléphones. Dis-le à Claude : il y a un réglage à faire.",
   over_request_rate_limit: "Trop d'essais. Réessaie dans un moment.",
-  code_invalide: "Ce code d'invitation est faux ou n'est plus valable (il dure 2 jours).",
+  code_invalide: "Ce code est faux ou n'est plus valable (il dure 1 heure). Demande un nouveau code.",
   trop_essais: "Trop d'essais. Réessaie dans une heure.",
   deja_membre: "Ce téléphone est déjà dans un autre foyer.",
   complet: "Ce foyer est déjà complet.",
@@ -216,7 +220,7 @@ export async function demarrer() {
   const { data } = await supa.auth.getSession();
   if (!data.session) return; // plus connecté : les Réglages proposent de reconnecter ce téléphone
   synchroniser();
-  canal?.unsubscribe();
+  if (canal) supa.removeChannel(canal);
   canal = supa.channel("foyer-" + foyer.id)
     .on("postgres_changes", { event: "*", schema: "public", table: "elements", filter: `foyer_id=eq.${foyer.id}` }, () => bientot(recevoir, 300))
     .on("postgres_changes", { event: "*", schema: "public", table: "membres", filter: `foyer_id=eq.${foyer.id}` }, () => enFile(chargerMembres))

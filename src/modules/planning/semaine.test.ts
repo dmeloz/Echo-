@@ -2,7 +2,8 @@ import { describe, expect, it } from "vitest";
 import { auJour } from "../../lib/dates";
 import type { Tache } from "../../lib/types";
 import { construireResume } from "../../lib/resume";
-import { duJour, joursAVenir, proposerDeplacement } from "./semaine";
+import { duJour, joursAVenir, proposerDeplacement, proposerRepos } from "./semaine";
+import { ligneAccueil, type Code } from "../../lib/horaires";
 
 const now = new Date("2026-11-22T08:00:00");
 let n = 0;
@@ -58,5 +59,31 @@ describe("résumé du matin", () => {
     const r = construireResume([t({ titre: "Sortir les poubelles", qui: "moi" })], noms, "elle", now);
     expect(r.sections.map((s) => s.titre)).toEqual(["Melo aujourd'hui"]);
     expect(r.phrase).toBe("Rien pour toi aujourd'hui.");
+  });
+});
+
+describe("jours de repos et horaires", () => {
+  it("propose de mettre une petite chose du plus long jour de travail sur le jour de repos", () => {
+    const travail = new Map<string, Code>([[auJour(1, now), "C5"], [auJour(2, now), "C1"], [auJour(3, now), "R"], [auJour(4, now), "R"]]);
+    const liste = [
+      t({ titre: "Ménage", jour: auJour(2, now) }), t({ titre: "Banque", jour: auJour(2, now), heure: "10:00" }),
+      t({ titre: "Lessive", jour: auJour(1, now) }), t({ titre: "Sport", jour: auJour(3, now) }),
+      t({ titre: "Sarah", jour: auJour(2, now), qui: "elle" }),
+    ];
+    const p = proposerRepos(liste, travail, "moi", now);
+    expect(p?.tache.titre).toBe("Ménage");
+    expect(p?.vers).toBe(auJour(4, now));
+  });
+
+  it("ne propose rien sans jour de repos", () => {
+    expect(proposerRepos([t({ jour: auJour(1, now) })], new Map([[auJour(1, now), "C6" as Code]]), "moi", now)).toBeNull();
+  });
+
+  it("dit sur l'accueil ce qui reste du travail, puis plus rien", () => {
+    expect(ligneAccueil("C1", 8 * 60)).toBe("Travail 9 h – 14 h et 18 h 30 – 22 h 30");
+    expect(ligneAccueil("C1", 15 * 60)).toBe("Travail 18 h 30 – 22 h 30");
+    expect(ligneAccueil("C5", 17 * 60)).toBeNull();
+    expect(ligneAccueil("R", 17 * 60)).toBe("Repos");
+    expect(ligneAccueil(undefined, 0)).toBeNull();
   });
 });
