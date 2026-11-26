@@ -2,7 +2,6 @@ import { CalendarClock, Sun } from "pulsoicon-react";
 import { useState } from "react";
 import { CartePremier } from "../components/CartePremier";
 import { LigneTache } from "../components/LigneTache";
-import { ResumeMatin } from "../components/ResumeMatin";
 import { auJour, heureFr, minutes } from "../lib/dates";
 import { DUREE_RESPIRE, vibrer } from "../lib/gestes";
 import { niveau } from "../lib/importance";
@@ -62,7 +61,6 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
 
   return (
     <>
-      <ResumeMatin taches={taches} noms={noms} proprio={proprio} now={now} />
       <p className="phrase">{phrase}</p>
       {travail && codeDuJour && <p className={`travail-accueil code-${codeDuJour.toLowerCase()}`}>{travail}</p>}
       {taches.some((t) => t.ex) && (
