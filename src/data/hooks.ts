@@ -1,6 +1,8 @@
 import { CODES, type Horaire } from "../lib/horaires";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { auJour, plusJours } from "../lib/dates";
+import { completer } from "../lib/fixes";
 import type { Noms, Personne, Qui, Tache } from "../lib/types";
 import { nettoyerNoms } from "../lib/valider";
 import { NOMS_DEFAUT, db } from "./db";
@@ -9,7 +11,13 @@ import { NOMS_DEFAUT, db } from "./db";
 export const useAvecPhoto = () => useLiveQuery(async () => new Set((await db.photos.toArray()).map((p) => p.tacheId)), [], new Set<string>());
 
 // Un ancien code que l'app ne connaît plus (FOR, EPM) est simplement ignoré.
-export const useHoraires = () => useLiveQuery(async () => (await db.horaires.toArray()).filter((h) => h.code in CODES), [], [] as Horaire[]);
+// Les horaires fixes (Sarah) sont ajoutés par le calcul, d'un mois en arrière à un peu plus d'un an devant.
+export function useHoraires() {
+  const { moi, elle } = useNoms();
+  const today = auJour(0);
+  const poses = useLiveQuery(async () => (await db.horaires.toArray()).filter((h) => h.code in CODES && !CODES[h.code].auto), [], [] as Horaire[]);
+  return useMemo(() => completer(poses, { moi, elle }, plusJours(today, -40), plusJours(today, 420)), [poses, moi, elle, today]);
+}
 export const useTaches = () => useLiveQuery(() => db.taches.toArray(), [], undefined as Tache[] | undefined);
 
 export function useNoms(): Noms {

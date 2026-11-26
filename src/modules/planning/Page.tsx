@@ -8,6 +8,8 @@ import type { ContexteModule } from "../contrat";
 import { charge, duJour, faitesDuJour, joursAVenir, proposerDeplacement, proposerRepos } from "./semaine";
 import { CODES, heuresDe, phraseDe, type Code } from "../../lib/horaires";
 import { VueHoraires } from "./Horaires";
+import { CarteVacances, HorairesFixes } from "./Vacances";
+import { aHorairesFixes } from "../../lib/fixes";
 
 type Vue = "jour" | "semaine" | "horaires";
 const NOM_VUE: Record<Vue, string> = { jour: "Jour", semaine: "Semaine", horaires: "Mes horaires" };
@@ -39,7 +41,7 @@ export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
         ))}
       </div>
 
-      {vue === "horaires" ? <VueHoraires proprio={proprio} now={now} /> : <>
+      {vue === "horaires" ? <>{aHorairesFixes(noms, proprio) ? <HorairesFixes /> : <VueHoraires proprio={proprio} now={now} />}<CarteVacances noms={noms} now={now} /></> : <>
 
       <div className="bande-jours" role="group" aria-label="Choisir le jour">
         {jours.map((j) => {
@@ -49,7 +51,7 @@ export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
             <button key={j} type="button" aria-pressed={vue === "jour" && j === jourVu} onClick={() => choisirJour(j)}
               aria-label={`${libelleJour(j, now)} : ${liste.length} chose${liste.length > 1 ? "s" : ""}`}>
               <span>{j === today ? "Auj." : court(j)}</span><b>{numero(j)}</b>
-              {travail.get(j) && <em className={`code-mini code-${travail.get(j)!.toLowerCase()}`} aria-hidden="true">{CODES[travail.get(j)!].court}</em>}
+              {travail.get(j) && CODES[travail.get(j)!].court && <em className={`code-mini code-${travail.get(j)!.toLowerCase()}`} aria-hidden="true">{CODES[travail.get(j)!].court}</em>}
               <span className="points" aria-hidden="true">{Array.from({ length: Math.min(3, nm) }, (_, i) => <i key={"m" + i} />)}{Array.from({ length: Math.min(3, ne) }, (_, i) => <i key={"e" + i} className="elle" />)}</span>
             </button>
           );
@@ -95,7 +97,7 @@ function BandeauTravail({ code }: { code: Code }) {
   const c = CODES[code];
   return (
     <div className={`bandeau-travail code-${code.toLowerCase()}`}>
-      <b>{c.travail ? (heuresDe(code) ? `Travail ${c.court}` : c.libelle) : c.libelle}</b>
+      <b>{c.travail ? (heuresDe(code) ? `Travail${c.court ? " " + c.court : ""}` : c.libelle) : c.libelle}</b>
       {c.travail && heuresDe(code) && <span>{heuresDe(code)}</span>}
     </div>
   );
