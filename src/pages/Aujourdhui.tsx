@@ -31,12 +31,15 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
   const total = ouvertes.length + faites.length;
   const pct = total ? Math.round((faites.length / total) * 100) : 0;
   const [toutVoir, setToutVoir] = useState(false);
+  // Le prochain événement du jour, dit dans la phrase (les événements n'ont pas de case à cocher).
+  const evenement = taches.filter((t) => t.evt && t.jour === today && t.heure && minutes(t.fin || t.heure) >= nowMin).sort((a, b) => minutes(a.heure) - minutes(b.heure))[0];
   const [respire, setRespire] = useState<string | null>(null);
 
   let phrase: string;
   if (!ouvertes.length) phrase = faites.length ? `Tu as fait ${faites.length} chose${faites.length > 1 ? "s" : ""} aujourd'hui.` : "Rien de prévu, rien ne presse.";
   else phrase = `${ouvertes.length} chose${ouvertes.length > 1 ? "s" : ""} à faire${prochaine ? `, la prochaine à ${heureFr(prochaine.heure)}` : ""}.`;
 
+  if (evenement) phrase += ` ${evenement.titre} à ${heureFr(evenement.heure)}.`;
   const premiere = liste[0];
   // « Ensuite » peut montrer tout, seulement ce qui est pour soi, ou ce qui est pour l'autre (gardé sur le téléphone).
   const filtre = useReglage<Filtre>("filtreQui", "tout");

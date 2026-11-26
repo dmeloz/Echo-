@@ -34,7 +34,7 @@ export const cleHoraire = (qui: string, jour: string) => `horaire:${qui}|${jour}
 // Un changement qui vient de l'autre téléphone est appliqué dans une transaction marquée : il ne repart pas.
 const distantes = new WeakSet<Transaction>();
 export const marquerDistante = (tx: Transaction) => distantes.add(tx);
-const locale = (tx: Transaction) => !distantes.has(tx);
+export const locale = (tx: Transaction) => !distantes.has(tx);
 
 db.taches.hook("creating", (_pk, obj, tx) => { if (locale(tx)) noter("tache:" + obj.id); });
 db.taches.hook("updating", (_m, pk, _obj, tx) => { if (locale(tx)) noter("tache:" + pk); });

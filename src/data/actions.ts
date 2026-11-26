@@ -30,7 +30,7 @@ export async function premierLancement() {
   });
 }
 
-export interface Brouillon { titre: string; qui: Qui; jour: string; heure: string; niveau: Niveau | null; repete: Repete; note: string; etapes?: Etape[] }
+export interface Brouillon { titre: string; qui: Qui; jour: string; heure: string; niveau: Niveau | null; repete: Repete; note: string; etapes?: Etape[]; evt?: boolean; fin?: string }
 
 export async function ajouter(d: Brouillon, photos: Blob[] = []) {
   const t: Tache = { id: nouvelId(), ...d, fait: null, faitLe: null, cree: Date.now() };

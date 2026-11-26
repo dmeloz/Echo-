@@ -12,7 +12,7 @@ const ordre = (a: Tache, b: Tache) => (a.heure ? minutes(a.heure) : 9999) - (b.h
 
 // Ce qui est prévu un jour donné (ce qui n'est pas fait). Aujourd'hui garde aussi ce qui est en retard.
 export function duJour(taches: Tache[], jour: string, today: string): Tache[] {
-  return taches.filter((t) => !t.fait && (t.jour === jour || (jour === today && t.jour < today))).sort(ordre);
+  return taches.filter((t) => !t.fait && (t.jour === jour || (jour === today && t.jour < today && !t.evt))).sort(ordre);
 }
 export const faitesDuJour = (taches: Tache[], jour: string) => taches.filter((t) => t.fait && t.faitLe === jour).sort(ordre);
 
@@ -33,7 +33,7 @@ export function proposerDeplacement(taches: Tache[], ordrePersonnes: Personne[],
     if (max - min < 3) continue;
     const de = jours[nb.indexOf(max)], vers = jours[nb.indexOf(min)];
     const candidates = duJour(taches, de, today)
-      .filter((t) => t.qui === p && !t.heure && !t.repete)
+      .filter((t) => t.qui === p && !t.heure && !t.repete && !t.evt)
       .sort((a, b) => niveau(a, now) - niveau(b, now) || a.cree - b.cree);
     if (candidates[0]) return { pour: p, tache: candidates[0], de, vers, nbDe: max, nbVers: min };
   }
@@ -56,7 +56,7 @@ export function proposerRepos(taches: Tache[], travail: Map<string, Code>, p: Pe
     .filter((j) => { const c = travail.get(j); return c && CODES[c].travail; })
     .sort((a, b) => minutesDe(travail.get(b)!) - minutesDe(travail.get(a)!) || a.localeCompare(b));
   for (const de of charges) {
-    const t = pourP(de).filter((x) => !x.heure && !x.repete).sort((a, b) => niveau(a, now) - niveau(b, now) || a.cree - b.cree)[0];
+    const t = pourP(de).filter((x) => !x.heure && !x.repete && !x.evt).sort((a, b) => niveau(a, now) - niveau(b, now) || a.cree - b.cree)[0];
     if (t) return { tache: t, de, vers };
   }
   return null;

@@ -19,11 +19,12 @@ export function construireResume(taches: Tache[], noms: Noms, proprio: Personne,
   const today = auJour(0, now);
   const lautre = autre(proprio);
   const pourMoi = (t: Tache) => t.qui === proprio || t.qui === "nous";
-  const ouvertes = taches.filter((t) => !t.fait && t.jour <= today);
+  // Un événement passé ne traîne pas : seuls ceux d'aujourd'hui comptent.
+  const ouvertes = taches.filter((t) => !t.fait && (t.evt ? t.jour === today : t.jour <= today));
   const parHeure = (a: Tache, b: Tache) => minutes(a.heure) - minutes(b.heure);
 
   const agenda = ouvertes.filter((t) => pourMoi(t) && t.jour === today && t.heure).sort(parHeure);
-  const miennes = ouvertes.filter(pourMoi);
+  const miennes = ouvertes.filter((t) => pourMoi(t) && !t.evt);
   const importantes = miennes.filter((t) => niveau(t, now) === 2);
   const enRetard = miennes.filter((t) => t.jour < today);
   const siennes = ouvertes.filter((t) => t.qui === lautre && t.jour === today);

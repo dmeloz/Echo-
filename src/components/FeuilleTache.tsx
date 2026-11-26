@@ -35,7 +35,7 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
   useEffect(() => {
     if (!ouverte) return;
     const base = tache ?? { ...vide, ...(pre || {}) };
-    setB({ titre: base.titre, jour: base.jour, heure: base.heure || "", qui: base.qui, niveau: base.niveau ?? null, repete: base.repete || "", note: base.note || "", etapes: tache?.etapes ? [...tache.etapes] : [] });
+    setB({ titre: base.titre, jour: base.jour, heure: base.heure || "", qui: base.qui, niveau: base.niveau ?? null, repete: base.repete || "", note: base.note || "", etapes: tache?.etapes ? [...tache.etapes] : [], evt: !!tache?.evt, fin: tache?.fin ?? "" });
     setSur(false); setNouvelleEtape(""); setPhotosAjoutees([]); setPhotosRetirees([]); setEnvoi(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ouverte, tache, pre]);
@@ -55,11 +55,11 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
         <Drawer.Content className="feuille" aria-describedby={undefined}>
           <div className="feuille-defile">
             <div className="poignee" aria-hidden="true" />
-            <form onSubmit={async (e) => {
+            <form className={b.evt ? "feuille-evt" : undefined} onSubmit={async (e) => {
               e.preventDefault();
               const formulaire = e.currentTarget;
               const etapes = [...(b.etapes || []), ...(nouvelleEtape.trim() ? [{ id: nouvelId(), texte: nouvelleEtape.trim(), fait: false }] : [])];
-              const d = { ...b, titre: b.titre.trim(), note: b.note.trim(), etapes };
+              const d = { ...b, titre: b.titre.trim(), note: b.note.trim(), etapes, evt: !!b.evt, fin: b.evt && b.heure && (b.fin ?? "") > b.heure ? b.fin : "" };
               if (!d.titre || envoi) return;
               setEnvoi(true);
               try {
@@ -72,9 +72,16 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
                 toast("Pas enregistré. Le téléphone manque peut-être de place : libère un peu de stockage (ou retire une photo), puis réessaie.", { duration: 7000 });
               }
             }}>
-              <Drawer.Title asChild><h2>{tache ? "Modifier la tâche" : "Nouvelle tâche"}</h2></Drawer.Title>
+              <Drawer.Title asChild><h2>{b.evt ? (tache ? "Modifier l'événement" : "Nouvel événement") : (tache ? "Modifier la tâche" : "Nouvelle tâche")}</h2></Drawer.Title>
+              {tache?.ical?.serie && <p className="aide-champ">Cet événement se répète dans iCloud : change-le dans l'app Calendrier, il suivra ici.</p>}
               <div className="champ"><label htmlFor="f-titre">Quoi</label>
                 <input className="saisie" id="f-titre" required maxLength={140} enterKeyHint="done" value={b.titre} onChange={(e) => maj({ titre: e.target.value })} autoFocus={!tache && !pre} /></div>
+
+              <div className="champ"><span className="lab">C'est</span>
+                <div className="puces">
+                  {puce(!b.evt, () => maj({ evt: false }), "Une tâche")}
+                  {puce(!!b.evt, () => maj({ evt: true, repete: "" }), "Un événement")}
+                </div></div>
 
               <div className="champ"><span className="lab">Quand</span>
                 <div className="puces">
@@ -89,6 +96,8 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
                   {puce(!b.heure, () => maj({ heure: "" }), "Sans heure")}
                   <span className="puce" aria-pressed={!!b.heure}><label className="vh" htmlFor="f-time">Choisir l'heure</label>
                     <input type="time" id="f-time" value={b.heure} onChange={(e) => maj({ heure: e.target.value || "" })} /></span>
+                  {b.evt && b.heure && <span className="puce" aria-pressed={!!b.fin}><label htmlFor="f-fin">Fin</label>
+                    <input type="time" id="f-fin" value={b.fin ?? ""} onChange={(e) => maj({ fin: e.target.value || "" })} /></span>}
                 </div></div>
 
               <div className="champ"><span className="lab">Pour qui</span>
@@ -96,7 +105,7 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
                   {(["moi", "elle", "nous"] as Qui[]).map((q) => puce(b.qui === q, () => maj({ qui: q }), q === "nous" ? "Nous deux" : noms[q], q === "elle" ? "p-elle" : ""))}
                 </div></div>
 
-              <div className="champ"><span className="lab">Importance</span>
+              <div className="champ seul-tache"><span className="lab">Importance</span>
                 <div className="puces">
                   {puce(b.niveau === null, () => maj({ niveau: null }), `Proposée : ${NIVEAUX[propose].toLowerCase()}`)}
                   {([2, 1, 0] as Niveau[]).map((n) => puce(b.niveau === n, () => maj({ niveau: n }), NIVEAUX[n], n === 2 ? "p-imp" : ""))}
@@ -104,12 +113,12 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
                 <p className="aide-champ">« Proposée » : l'app choisit avec une règle simple (heure proche, facture, rendez-vous…). L'assistant IA prendra le relais plus tard.</p>
               </div>
 
-              <div className="champ"><span className="lab">Répéter</span>
+              <div className="champ seul-tache"><span className="lab">Répéter</span>
                 <div className="puces">
                   {([["", "Non"], ["jour", "Chaque jour"], ["semaine", "Chaque semaine"]] as Array<[Repete, string]>).map(([v, l]) => puce(b.repete === v, () => maj({ repete: v }), l))}
                 </div></div>
 
-              <div className="champ"><span className="lab">Étapes</span>
+              <div className="champ seul-tache"><span className="lab">Étapes</span>
                 {(b.etapes || []).length > 0 && (
                   <ul className="etapes">
                     {(b.etapes || []).map((e) => (

@@ -110,9 +110,9 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail }: { taches: 
   const iMaintenant = jour === today ? avecHeure.findIndex((t) => minutes(t.heure) > nowMin) : -1;
   const ligne = (t: Tache) => (
     <li key={t.id}>
-      <button className={`bloc-p ${classeQui(t)}${t.fait ? " fait" : ""}`} onClick={() => ouvrir(t)}>
+      <button className={`bloc-p ${classeQui(t)}${t.fait ? " fait" : ""}${t.evt ? " evt" : ""}`} onClick={() => ouvrir(t)}>
         <b>{t.titre}</b>
-        <small>{[t.jour < today ? (t.jour === auJour(-1, now) ? "D'hier" : "En retard") : "", t.qui === "nous" ? "À deux" : `Pour ${nomDe(noms, t.qui)}`, t.etapes?.length ? `${t.etapes.filter((e) => e.fait).length}/${t.etapes.length} étapes` : ""].filter(Boolean).join(" · ")}</small>
+        <small>{[t.evt ? (t.heure ? (t.fin ? `Jusqu'à ${heureFr(t.fin)}` : "") : "Toute la journée") : "", t.jour < today ? (t.jour === auJour(-1, now) ? "D'hier" : "En retard") : "", t.qui === "nous" ? "À deux" : `Pour ${nomDe(noms, t.qui)}`, t.etapes?.length ? `${t.etapes.filter((e) => e.fait).length}/${t.etapes.length} étapes` : ""].filter(Boolean).join(" · ")}</small>
       </button>
     </li>
   );

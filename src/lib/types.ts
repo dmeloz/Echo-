@@ -17,7 +17,13 @@ export interface Tache {
   cree: number;
   ex?: boolean; // tâche d'exemple
   etapes?: Etape[]; // sous-tâches
+  evt?: boolean; // un événement (rendez-vous) : pas de case à cocher
+  fin?: string; // heure de fin d'un événement, HH:MM
+  ical?: Ical; // le lien avec le calendrier iCloud
 }
+
+// Où se trouve l'événement dans iCloud. serie = occurrence d'une série ou d'un événement sur plusieurs jours (lecture seule).
+export interface Ical { uid: string; href: string; serie?: boolean }
 
 export interface Noms { moi: string; elle: string }
 

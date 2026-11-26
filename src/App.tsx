@@ -18,6 +18,7 @@ import { Bienvenue } from "./components/Bienvenue";
 import { Connexion } from "./components/Connexion";
 import { ResumeMatin } from "./components/ResumeMatin";
 import { suivre } from "./sync/moteur";
+import { demarrerIcloud } from "./sync/icloud";
 import { useLiveQuery } from "dexie-react-hooks";
 import { autre } from "./lib/types";
 import { Aujourdhui } from "./pages/Aujourdhui";
@@ -93,7 +94,7 @@ export default function App() {
 
   const [baseOk, setBaseOk] = useState(true);
   useEffect(() => {
-    baseOuverte().then((ok) => { setBaseOk(ok); if (ok) { premierLancement().catch(() => {}); garderLesDonnees(); suivre(); } });
+    baseOuverte().then((ok) => { setBaseOk(ok); if (ok) { premierLancement().catch(() => {}); garderLesDonnees(); suivre(); demarrerIcloud(); } });
   }, []);
   useEffect(() => {
     const suivre = () => setPage(depuisAdresse());

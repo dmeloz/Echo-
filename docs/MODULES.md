@@ -49,3 +49,9 @@ Les codes et leurs heures sont dans `src/lib/horaires.ts`.
 
 « Prendre la fiche en photo » envoie la photo (réduite à 2400 px) à la fonction Supabase `lire-horaires` (projet echo, code dans `supabase/functions/lire-horaires/`), qui la fait lire par Claude et renvoie un code par jour pour le nom donné. L'app montre un aperçu (jours douteux en pointillés), on corrige, puis on enregistre.
 Secrets de la fonction (dans Supabase, jamais dans l'app) : `ANTHROPIC_API_KEY` et `ECHO_CODE`. Le téléphone garde le nom sur la fiche et le code Echo (réglages `nomFiche`, `codeEcho`, exclus de la sauvegarde).
+
+## Agenda · Événements et iCloud (2026-11-26)
+
+- Un événement est une tâche avec `evt: true` (et `fin` en option) : pas de case à cocher, absent des listes de l'accueil (seul le prochain du jour est dit dans la phrase), visible dans l'Agenda et le résumé du matin.
+- iCloud dans les deux sens par la fonction serveur `icloud` (CalDAV). Secrets à poser dans Supabase : `ICLOUD_IDENTIFIANT` (identifiant Apple) et `ICLOUD_MOT_DE_PASSE` (mot de passe pour app, créé sur account.apple.com). Seuls les foyers de `prive.icloud_foyers` y ont droit.
+- Lire (`src/sync/icloud.ts`) : une semaine en arrière, trois mois devant, à l'ouverture de l'app (au plus toutes les 5 min). Écrire : file d'attente sur le téléphone, envoyée 1,5 s après un changement d'événement. Les occurrences d'une série (ou d'un événement sur plusieurs jours) sont en lecture seule.

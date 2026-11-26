@@ -20,6 +20,9 @@ export function nettoyerTache(x: unknown, today = auJour()): Tache | null {
         return t ? [{ id: texte((e as Record<string, unknown>).id, 40) || nouvelId(), texte: t, fait: !!(e as Record<string, unknown>).fait }] : [];
       }).slice(0, 50)
     : [];
+  const ic = o.ical && typeof o.ical === "object" ? (o.ical as Record<string, unknown>) : null;
+  const ical = ic && typeof ic.uid === "string" && typeof ic.href === "string" && /^https:\/\/[\w.-]+\.icloud\.com(:\d+)?\//.test(ic.href)
+    ? { uid: ic.uid.slice(0, 200), href: ic.href.slice(0, 500), ...(ic.serie === true ? { serie: true } : {}) } : null;
   return {
     id: texte(o.id, 40) || nouvelId(),
     titre,
@@ -35,6 +38,9 @@ export function nettoyerTache(x: unknown, today = auJour()): Tache | null {
     cree: typeof o.cree === "number" && Number.isFinite(o.cree) ? o.cree : Date.now(),
     ...(o.ex === true ? { ex: true } : {}),
     ...(etapes.length ? { etapes } : {}),
+    ...(o.evt === true ? { evt: true } : {}),
+    ...(o.evt === true && typeof o.fin === "string" && HEURE.test(o.fin) ? { fin: o.fin } : {}),
+    ...(ical ? { ical } : {}),
   };
 }
 

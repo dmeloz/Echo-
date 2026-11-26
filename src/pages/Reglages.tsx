@@ -4,6 +4,7 @@ import type { Noms, Personne, Tache } from "../lib/types";
 import { effacerExemples, remettreExemples, toutEffacer } from "../data/actions";
 import { marquerGuide, poserReglage, useReglage } from "../data/hooks";
 import { CodeInvitation } from "../components/Connexion";
+import { SectionIcloud } from "../components/Icloud";
 import { estConnecte, inviter, type Foyer, type Membre } from "../sync/moteur";
 import { MODULES, basculerModule } from "../modules/registre";
 import { exporter, importer } from "../data/sauvegarde";
@@ -31,6 +32,7 @@ export function Reglages({ taches, noms, masques, proprio, onGuide, onRelier }: 
         </label>
         <p className="aide-champ">La notification de 7 h viendra avec les notifications du téléphone.</p>
       </section>
+      <SectionIcloud relie={relie} />
       <section className="g reglages">
         <span className="lab">Modules</span>
         <p>Chaque partie de l'app est un module. Masque ceux dont vous ne vous servez pas : ils disparaissent du menu et de l'accueil.</p>

@@ -82,3 +82,12 @@ describe("dates en clair", () => {
   });
   it("écrit l'heure à la française", () => { expect(heureFr("09:00")).toBe("09 h"); expect(heureFr("19:30")).toBe("19 h 30"); });
 });
+
+describe("événements", () => {
+  it("garde un événement, sa fin et son lien iCloud, refuse un lien étranger", async () => {
+    const { nettoyerTache } = await import("./valider");
+    const t = nettoyerTache({ id: "e1", titre: "Dentiste", jour: "2026-12-03", heure: "15:00", evt: true, fin: "16:00", ical: { uid: "u", href: "https://p52-caldav.icloud.com:443/1/calendars/home/u.ics" } });
+    expect(t).toMatchObject({ evt: true, fin: "16:00", ical: { uid: "u" } });
+    expect(nettoyerTache({ titre: "X", evt: true, ical: { uid: "u", href: "https://exemple.com/u.ics" } })?.ical).toBeUndefined();
+  });
+});
