@@ -201,7 +201,7 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
         </details>
       )}
       <p className="aide-champ">
-        Tes horaires apparaissent dans le planning et dans ton résumé du matin.{" "}
+        Tes horaires apparaissent dans l'agenda et dans ton résumé du matin.{" "}
         {!reglagesPhoto && <button type="button" className="bouton-texte lien-petit" onClick={() => setReglagesPhoto(true)}>Réglages de la photo</button>}
       </p>
     </section>

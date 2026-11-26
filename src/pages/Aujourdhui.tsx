@@ -8,7 +8,8 @@ import { DUREE_RESPIRE, vibrer } from "../lib/gestes";
 import { niveau } from "../lib/importance";
 import { autre, type Noms, type Personne, type Tache } from "../lib/types";
 import { changerNiveau, cocher, effacerExemples } from "../data/actions";
-import { poserReglage, useAvecPhoto, useReglage } from "../data/hooks";
+import { poserReglage, useAvecPhoto, useHoraires, useReglage } from "../data/hooks";
+import { ligneAccueil } from "../lib/horaires";
 import type { Module } from "../modules/contrat";
 import { tachesDuJour } from "../lib/journee";
 
@@ -46,6 +47,9 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
   const reste = resteTout.filter(garde);
   const montres = toutVoir ? reste : reste.slice(0, VISIBLES);
   const avecPhoto = useAvecPhoto();
+  // Une seule petite ligne pour le travail du jour ; elle disparaît une fois le travail fini.
+  const codeDuJour = useHoraires().find((h) => h.qui === proprio && h.jour === today)?.code;
+  const travail = ligneAccueil(codeDuJour, nowMin);
   const ligne = (t: Tache) => <LigneTache key={t.id} t={t} n={niveau(t, now)} noms={noms} onCocher={cocher} onOuvrir={onOuvrir} onNiveau={changerNiveau} aPhoto={avecPhoto.has(t.id)} />;
 
   // « Elle respire » puis part : la carte grossit à peine, un trait se trace, puis la tâche est cochée.
@@ -60,6 +64,7 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
     <>
       <ResumeMatin taches={taches} noms={noms} proprio={proprio} now={now} />
       <p className="phrase">{phrase}</p>
+      {travail && codeDuJour && <p className={`travail-accueil code-${codeDuJour.toLowerCase()}`}>{travail}</p>}
       {taches.some((t) => t.ex) && (
         <div className="exemples">
           <span>Exemples pour essayer. Glisse une tâche vers la droite pour la monter, vers la gauche pour la descendre.</span>

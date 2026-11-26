@@ -28,7 +28,7 @@ Règles :
 
 | Module | État |
 | --- | --- |
-| Planning | construit : aujourd'hui et les six jours suivants, vue Jour et vue Semaine, idée pour alléger le jour le plus chargé. Il lit les tâches de la base (pas de table à lui). |
+| Agenda (id planning) | construit : aujourd'hui et les six jours suivants, vue Jour et vue Semaine, idée pour alléger le jour le plus chargé. Il lit les tâches de la base (pas de table à lui). |
 | Cuisine, Maison, Budget | pas encore construits |
 
 ## Ajouter un module
@@ -37,7 +37,7 @@ Règles :
 2. L'ajouter à la liste `MODULES` de `src/modules/registre.ts`.
 3. Passer `etat` à `"construit"` et fournir `Page` (et `Tuile` si besoin) quand il est prêt.
 
-## Planning · Mes horaires (2026-11-26)
+## Agenda · Mes horaires (2026-11-26)
 
 Troisième vue du Planning. Un code de travail par jour et par personne (table Dexie `horaires`, clé `[qui+jour]`), repris de la fiche du chef de Melo :
 C1 coupé 9 h – 14 h et 18 h 30 – 22 h 30, C5 8 h – 16 h 30 (lundi et mardi), C6 12 h – 21 h, Repos, Vacances, Congé (CHR) ; codes rares C2, C3, C4. FOR, EPM et Nyon de la fiche ne sont pas gardés (choix de Melo).
