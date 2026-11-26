@@ -709,3 +709,6 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .vac-qui button[aria-pressed="true"].moi { border-color: var(--bleu); color: var(--bleu); background: #fff; }
 .vac-qui button[aria-pressed="true"].elle { border-color: var(--turquoise); color: var(--turquoise); background: #fff; }
 .vac-echo { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; }
+
+/* Rappels */
+.saisie.heure-rappel { width: auto; flex: none; padding: 8px 12px; }
