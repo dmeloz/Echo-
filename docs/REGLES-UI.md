@@ -23,7 +23,7 @@ Pas de système de cartes à la Kora : les **tuiles des modules** en tiennent li
 - **Une tuile ouvre la page de son module.** Elle ne fait rien d'autre.
 - **Seule la carte « En premier » se retourne** (idée de Kora, validée par Melo) : devant la tâche, au dos ses étapes, sa note et les gestes rapides « À demain », « Pour l'autre », « Modifier ».
 
-Ordre de l'accueil : résumé du matin (jusqu'à midi) → phrase → En premier → Ensuite (3 lignes, « Voir les autres ») → Demain (carte calme) → modules.
+Ordre de l'accueil : résumé du matin (jusqu'à midi) → phrase (et « Sarah a fait… ») → En premier → Ensuite (3 lignes, « Voir les autres ») → Demain → Cette semaine (cartes calmes) → modules.
 
 ## 3. Mouvement
 
@@ -57,7 +57,7 @@ Un doublon ne tremble pas : « déjà là » n'est pas une erreur.
 
 ## 4. Gestes du doigt (choix d'Echo)
 
-Echo **garde** ses gestes : glisser → = plus important, glisser ← = plus tard ; toucher le rond = fait. (Kora fait → = fait, ← = supprimer : pas repris.)
+Echo **garde** ses gestes : glisser → = plus important, glisser ← = plus tard ; toucher le rond = fait ; rester appuyé 450 ms puis monter ou descendre = changer l'ordre (au-dessus de la liste = « En premier »). (Kora fait → = fait, ← = supprimer : pas repris.)
 Echo **garde** la barre d'ajout « + » (rangée derrière l'étoile Echo), le résumé du matin (voulu par Melo), et la capsule menu + Echo en bas **à droite**. Les interrupteurs sont « liquides » (la couleur se verse) ; la loupe de l'en-tête cherche dans les tâches (titre, note, étapes).
 
 ## 5. États
@@ -112,7 +112,7 @@ Aussi : rien sous 13 px (sauf une initiale dans une pastille, marquée « except
 1. **Un seul fichier de jetons** : le haut de `src/styles.css`. On n'écrit pas une couleur ou une durée ailleurs.
 2. **Ce fichier de règles** est relu avant chaque nouveau module.
 3. **Vérification automatique avant chaque version** : `npm run verifier` (rien sous 13 px, pas d'emoji), lancée par la mise en ligne avec les tests.
-4. **Corbeille de 30 jours** (plus tard, avec le partage à deux) : ce qu'on efface reste récupérable, avec qui l'a effacé et quand. Aujourd'hui : « Annuler » après chaque suppression.
+4. **Corbeille de 30 jours** (Réglages → Données et app) : ce qu'on efface reste récupérable, avec qui l'a effacé et quand, sur chaque téléphone.
 5. **Le guide** ne se remontre que si l'allure de l'app change vraiment.
 6. **Chaque module** suit `docs/MODULES.md` et ces règles.
 

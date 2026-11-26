@@ -16,7 +16,7 @@ describe("nettoyerTache (fichier de sauvegarde)", () => {
     for (const x of [null, 3, "x", {}, { titre: "   " }, { titre: 12 }]) expect(nettoyerTache(x)).toBeNull();
   });
   it("répare les champs abîmés au lieu de planter", () => {
-    const t = nettoyerTache({ titre: "Abîmée", jour: 42, heure: "25:99", qui: "voisin", niveau: 9, repete: "mois", note: null, fait: "oui", etapes: [{ texte: "ok" }, { texte: "" }, null] }, "2026-11-21")!;
+    const t = nettoyerTache({ titre: "Abîmée", jour: 42, heure: "25:99", qui: "voisin", niveau: 9, repete: "siecle", note: null, fait: "oui", etapes: [{ texte: "ok" }, { texte: "" }, null] }, "2026-11-21")!;
     expect(t).toMatchObject({ jour: "2026-11-21", heure: "", qui: "moi", niveau: null, repete: "", note: "", fait: null, faitLe: null });
     expect(t.etapes).toHaveLength(1);
     expect(t.id).toBeTruthy();
@@ -89,5 +89,18 @@ describe("événements", () => {
     const t = nettoyerTache({ id: "e1", titre: "Dentiste", jour: "2026-12-03", heure: "15:00", evt: true, fin: "16:00", ical: { uid: "u", href: "https://p52-caldav.icloud.com:443/1/calendars/home/u.ics" } });
     expect(t).toMatchObject({ evt: true, fin: "16:00", ical: { uid: "u" } });
     expect(nettoyerTache({ titre: "X", evt: true, ical: { uid: "u", href: "https://exemple.com/u.ics" } })?.ical).toBeUndefined();
+  });
+});
+
+describe("répétitions plus riches", () => {
+  it("toutes les 2 semaines, chaque mois, chaque année : toujours après aujourd'hui", () => {
+    expect(prochainJour("2026-11-26", "2semaines", "2026-11-26")).toBe("2026-12-10");
+    expect(prochainJour("2026-11-26", "mois", "2026-11-26")).toBe("2026-12-26");
+    expect(prochainJour("2026-11-26", "an", "2026-11-26")).toBe("2027-11-26");
+    expect(prochainJour("2026-08-26", "mois", "2026-11-26")).toBe("2026-12-26");
+  });
+  it("le 31 devient le dernier jour d'un mois plus court, sans glisser ensuite", () => {
+    expect(prochainJour("2027-01-31", "mois", "2027-01-31")).toBe("2027-02-28");
+    expect(prochainJour("2027-01-31", "mois", "2027-02-28")).toBe("2027-03-31");
   });
 });

@@ -1,6 +1,8 @@
 export type Qui = "moi" | "elle" | "nous";
 export type Niveau = 0 | 1 | 2; // 0 = plus tard, 1 = normal, 2 = important
-export type Repete = "" | "jour" | "semaine";
+export type Repete = "" | "jour" | "semaine" | "2semaines" | "mois" | "an";
+// Les mêmes mots partout (feuille, lignes, aperçu).
+export const REPETES: Record<Exclude<Repete, "">, string> = { jour: "chaque jour", semaine: "chaque semaine", "2semaines": "toutes les 2 semaines", mois: "chaque mois", an: "chaque année" };
 
 export interface Tache {
   id: string;
@@ -13,6 +15,8 @@ export interface Tache {
   note: string;
   fait: number | null;
   faitLe: string | null;
+  faitPar?: Personne; // qui l'a cochée (pour « Sarah a fait… »)
+  ordre?: number; // rang choisi à la main, parmi les tâches de même importance
   suite?: string | null; // id de la prochaine occurrence créée en cochant
   cree: number;
   ex?: boolean; // tâche d'exemple

@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { Bell, Calendar, ChevronLeft, ChevronRight, HardDrive, LayoutGrid, Sparkles, Users } from "pulsoicon-react";
 import { toast } from "sonner";
 import type { Noms, Personne, Tache } from "../lib/types";
-import { effacerExemples, remettreExemples, toutEffacer } from "../data/actions";
+import { effacerExemples, remettre, remettreExemples, toutEffacer } from "../data/actions";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "../data/db";
 import { marquerGuide, poserReglage, useReglage } from "../data/hooks";
 import { CodeInvitation } from "../components/Connexion";
 import { SectionIcloud } from "../components/Icloud";
@@ -39,7 +41,7 @@ export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]
       {theme === "notifications" && <SectionNotifications noms={noms} proprio={proprio} />}
       {theme === "agenda" && <SectionIcloud relie={relie} />}
       {theme === "modules" && <SectionModules masques={masques} />}
-      {theme === "app" && <SectionApp taches={taches} onGuide={onGuide} />}
+      {theme === "app" && <SectionApp taches={taches} onGuide={onGuide} toi={noms[proprio]} />}
     </div>
   );
 }
@@ -120,7 +122,28 @@ function SectionModules({ masques }: { masques: string[] }) {
 }
 
 // Données et app : la sauvegarde, les exemples, tout effacer, le guide et les mises à jour.
-function SectionApp({ taches, onGuide }: { taches: Tache[]; onGuide: () => void }) {
+// La corbeille : ce qui a été effacé depuis moins de 30 jours, par qui et quand, avec « Remettre ».
+function Corbeille({ toi }: { toi: string }) {
+  const effaces = useLiveQuery(() => db.corbeille.orderBy("quand").reverse().toArray(), [], []);
+  const ilYA = (quand: number) => { const j = Math.floor((Date.now() - quand) / 86400_000); return j < 1 ? "aujourd'hui" : j === 1 ? "hier" : `il y a ${j} jours`; };
+  return (
+    <section className="g reglages">
+      <span className="lab">Corbeille</span>
+      {!effaces.length ? <p>Rien dans la corbeille. Ce que tu effaces y reste 30 jours, le temps de changer d'avis.</p> : (
+        <ul className="corbeille">
+          {effaces.map((e) => (
+            <li key={e.id}>
+              <span><b>{e.tache.titre}</b><small>Effacé {e.par ? `par ${e.par === toi ? "toi" : e.par}, ` : ""}{ilYA(e.quand)}</small></span>
+              <button className="bouton second" onClick={() => { remettre(e.id); toast("Remis dans tes tâches"); }}>Remettre</button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function SectionApp({ taches, onGuide, toi }: { taches: Tache[]; onGuide: () => void; toi: string }) {
   const [sur, setSur] = useState(false);
   const [recherche, setRecherche] = useState(false);
   const maj = useMiseAJour();
@@ -147,6 +170,7 @@ function SectionApp({ taches, onGuide }: { taches: Tache[]; onGuide: () => void 
           }}>{sur ? "Touche encore pour confirmer" : relie ? "Tout effacer, pour vous deux" : "Tout effacer"}</button>
         </div>
       </section>
+      <Corbeille toi={toi} />
       <section className="g reglages">
         <span className="lab">Le guide</span>
         <div className="rangee"><button className="bouton second" onClick={() => { marquerGuide(false); onGuide(); }}>Revoir le guide</button></div>

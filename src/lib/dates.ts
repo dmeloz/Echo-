@@ -11,6 +11,11 @@ export const plusJours = (jour: string, n: number) => {
   d.setDate(d.getDate() + n);
   return iso(d);
 };
+export const plusMois = (jour: string, n: number) => {
+  const [a, m, j] = jour.split("-").map(Number);
+  const dernier = new Date(a, m - 1 + n + 1, 0).getDate(); // dernier jour du mois d'arrivée
+  return iso(new Date(a, m - 1 + n, Math.min(j, dernier), 12));
+};
 export const minutes = (h: string) => {
   const [a, b] = h.split(":").map(Number);
   return a * 60 + b;

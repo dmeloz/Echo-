@@ -1,10 +1,11 @@
 import { toast } from "sonner";
 import { auJour, libelleJour, nouvelId } from "../lib/dates";
 import { NIVEAUX, niveau } from "../lib/importance";
-import type { Etape, Niveau, Personne, Qui, Repete, Tache } from "../lib/types";
+import type { Etape, Niveau, Noms, Personne, Qui, Repete, Tache } from "../lib/types";
+import { reordonner } from "../lib/ordre";
 import type { Code, Horaire } from "../lib/horaires";
 import { prochainJour } from "../lib/valider";
-import { db } from "./db";
+import { NOMS_DEFAUT, db } from "./db";
 
 export function exemples(): Tache[] {
   const t = auJour(), h = new Date().getHours();
@@ -71,16 +72,16 @@ export async function modifier(id: string, d: Brouillon, photos: Blob[] = [], ph
 export async function cocher(tache: Tache) {
   let message = "Fait !";
   let deja = false;
-  await db.transaction("rw", db.taches, async () => {
+  await db.transaction("rw", db.taches, db.reglages, async () => {
     // On relit la tâche : deux touchers rapides ne doivent pas la cocher (ou la répéter) deux fois.
     const t = await db.taches.get(tache.id);
     if (!t) { deja = true; return; }
     if (t.fait) { deja = true; if (tache.fait) await annulerFait(t.id); return; }
-    const maj: Partial<Tache> = { fait: Date.now(), faitLe: auJour() };
+    const maj: Partial<Tache> = { fait: Date.now(), faitLe: auJour(), faitPar: ((await db.reglages.get("proprio"))?.valeur as Personne | undefined) ?? "moi" };
     // Une tâche qui revient : on prépare la suivante.
     if (t.repete) {
       const suiv = prochainJour(t.jour, t.repete);
-      const copie: Tache = { ...t, id: nouvelId(), jour: suiv, fait: null, faitLe: null, suite: null, cree: Date.now(), etapes: t.etapes?.map((e) => ({ ...e, fait: false })) };
+      const copie: Tache = { ...t, ordre: undefined, id: nouvelId(), jour: suiv, fait: null, faitLe: null, suite: null, cree: Date.now(), etapes: t.etapes?.map((e) => ({ ...e, fait: false })) };
       await db.taches.add(copie);
       maj.suite = copie.id;
       message = `Fait. Revient ${libelleJour(suiv).toLowerCase()}`.replace(/\.?$/, ".");
@@ -99,7 +100,7 @@ async function annulerFait(id: string) {
     const suite = await db.taches.get(t.suite);
     if (suite && !suite.fait) await db.taches.delete(t.suite);
   }
-  await db.taches.update(id, { fait: null, faitLe: null, suite: null });
+  await db.taches.update(id, { fait: null, faitLe: null, suite: null, faitPar: undefined });
 }
 export const decocher = (id: string) => db.transaction("rw", db.taches, () => annulerFait(id));
 
@@ -111,15 +112,47 @@ export async function changerNiveau(t: Tache, sens: 1 | -1) {
   toast(`Rangé en « ${NIVEAUX[n]} »`, { action: { label: "Annuler", onClick: () => db.taches.update(t.id, { niveau: avant }) } });
 }
 
+// Supprimer = mettre à la corbeille (30 jours). Les photos restent sur le téléphone jusqu'à la fin du délai.
+export const DELAI_CORBEILLE = 30 * 86400_000;
 export async function supprimer(id: string) {
-  const t = await db.taches.get(id);
-  if (!t) return;
-  const photos = await db.photos.where("tacheId").equals(id).toArray();
-  await db.transaction("rw", db.taches, db.photos, async () => {
+  let fait = false;
+  await db.transaction("rw", db.taches, db.corbeille, db.reglages, async () => {
+    const t = await db.taches.get(id);
+    if (!t) return;
+    const proprio = ((await db.reglages.get("proprio"))?.valeur as Personne | undefined) ?? "moi";
+    const noms = ((await db.reglages.get("noms"))?.valeur as Noms | undefined) ?? NOMS_DEFAUT;
+    await db.corbeille.put({ id, tache: t, par: noms[proprio] ?? "", quand: Date.now() });
     await db.taches.delete(id);
-    await db.photos.where("tacheId").equals(id).delete();
+    fait = true;
   });
-  toast("Tâche supprimée", { action: { label: "Annuler", onClick: () => db.transaction("rw", db.taches, db.photos, async () => { await db.taches.add(t); await db.photos.bulkAdd(photos); }) } });
+  if (fait) toast("Mis à la corbeille", { action: { label: "Annuler", onClick: () => remettre(id) } });
+}
+
+// Sortir une tâche de la corbeille : elle revient comme avant (sans son ancien lien iCloud, qui n'existe plus).
+export const remettre = (id: string) => db.transaction("rw", db.taches, db.corbeille, async () => {
+  const e = await db.corbeille.get(id);
+  if (!e) return;
+  await db.taches.put({ ...e.tache, ical: undefined });
+  await db.corbeille.delete(id);
+});
+
+// Au démarrage : ce qui est à la corbeille depuis plus de 30 jours s'en va pour de bon, avec ses photos.
+export const viderVieilleCorbeille = (now = Date.now()) => db.transaction("rw", db.corbeille, db.photos, async () => {
+  const ids = await db.corbeille.where("quand").below(now - DELAI_CORBEILLE).primaryKeys();
+  await db.corbeille.bulkDelete(ids);
+  await db.photos.where("tacheId").anyOf(ids).delete();
+});
+
+// Changer l'ordre à la main : la tâche se pose avant « avantId » (ou tout en bas), avec Annuler.
+export async function ranger(liste: Tache[], id: string, avantId: string | null, now = new Date()) {
+  const changes = reordonner(liste, id, avantId, now);
+  if (!changes.length) return;
+  const avant = changes.map(({ id: i }) => { const t = liste.find((x) => x.id === i)!; return { id: i, niveau: t.niveau, ordre: t.ordre }; });
+  const poser = (cs: Array<{ id: string; niveau: Niveau | null; ordre?: number }>) => db.transaction("rw", db.taches, async () => {
+    for (const c of cs) await db.taches.update(c.id, { niveau: c.niveau, ordre: c.ordre });
+  });
+  await poser(changes);
+  toast("Ordre changé", { action: { label: "Annuler", onClick: () => poser(avant) } });
 }
 
 export const effacerExemples = () => db.transaction("rw", db.taches, db.photos, async () => {
@@ -129,7 +162,7 @@ export const effacerExemples = () => db.transaction("rw", db.taches, db.photos, 
 });
 
 export const remettreExemples = () => db.taches.bulkAdd(exemples());
-export const toutEffacer = () => db.transaction("rw", db.taches, db.photos, async () => { await db.taches.clear(); await db.photos.clear(); });
+export const toutEffacer = () => db.transaction("rw", db.taches, db.photos, db.corbeille, async () => { await db.taches.clear(); await db.photos.clear(); await db.corbeille.clear(); });
 
 // « À demain » : la tâche quitte aujourd'hui sans être perdue.
 export async function aDemain(t: Tache) {
