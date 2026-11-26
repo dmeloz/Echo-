@@ -115,3 +115,7 @@ Aussi : rien sous 13 px (sauf une initiale dans une pastille, marquée « except
 4. **Corbeille de 30 jours** (plus tard, avec le partage à deux) : ce qu'on efface reste récupérable, avec qui l'a effacé et quand. Aujourd'hui : « Annuler » après chaque suppression.
 5. **Le guide** ne se remontre que si l'allure de l'app change vraiment.
 6. **Chaque module** suit `docs/MODULES.md` et ces règles.
+
+## L'atelier de design
+
+`atelier.html` (à côté de l'app, même adresse + `/atelier.html`) montre la vraie app dans un cadre et permet de régler ses couleurs, tailles, espaces et CSS. Les changements se copient (« Copier pour Claude ») pour être écrits pour de bon dans `src/styles.css` ; l'interrupteur « Essayer dans la vraie app » les garde sur l'appareil (clé `echo-atelier-garde`, relue par `src/main.tsx`).
