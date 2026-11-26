@@ -21,7 +21,7 @@ export interface Tache {
 
 export interface Noms { moi: string; elle: string }
 
-// « moi » = Melo et « elle » = Sarah, quel que soit le téléphone.
+// « moi » et « elle » sont deux places dans le foyer (les prénoms viennent du foyer), quel que soit le téléphone.
 // Le propriétaire du téléphone est choisi au premier lancement.
 export type Personne = "moi" | "elle";
 export const autre = (p: Personne): Personne => (p === "moi" ? "elle" : "moi");
