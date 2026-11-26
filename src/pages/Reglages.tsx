@@ -108,8 +108,8 @@ function SectionFoyer({ noms, proprio, onRelier }: { noms: Noms; proprio: Person
       <span className="lab">Foyer</span>
       {membres.length > 0 && <div className="membres">{membres.map((m) => <span key={m.userId}><i className={m.place}>{(m.prenom[0] || "?").toUpperCase()}</i>{m.prenom}{m.place === proprio ? " (toi)" : ""}</span>)}</div>}
       {!connecte ? <>
-        <p>Ce téléphone n'est plus connecté : les changements attendent ici. Reconnecte-le avec ton e-mail.</p>
-        <div className="rangee"><button className="bouton" onClick={onRelier}>Reconnecter</button></div>
+        <p>Ce téléphone n'est plus relié : les changements attendent ici. Crée un code sur l'autre téléphone, puis entre-le ici.</p>
+        <div className="rangee"><button className="bouton" onClick={onRelier}>Entrer un code</button></div>
       </> : seul ? <>
         <p>Invite {lautre} : sur son téléphone, Echo lui demandera ce code.</p>
         {code ? <CodeInvitation code={code} /> : (

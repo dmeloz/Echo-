@@ -27,18 +27,14 @@ const bientot = (fn: () => Promise<unknown>, ms = 700) => { clearTimeout(minuter
 
 export const lireFoyer = async () => ((await db.reglages.get("foyer"))?.valeur as Foyer | undefined) ?? null;
 
-/* ---------- Connexion : un code à 6 chiffres reçu par e-mail ---------- */
+/* ---------- Connexion : pas d'e-mail, un compte anonyme par téléphone, relié au foyer par un code ---------- */
 
 const MESSAGES: Record<string, string> = {
-  email_address_not_authorized: "Le serveur d'Echo ne peut pas encore écrire à cette adresse. Dis-le à Claude : il y a un réglage à faire.",
-  over_email_send_rate_limit: "Trop de codes demandés. Réessaie dans un moment.",
+  anonymous_provider_disabled: "Le serveur d'Echo n'accepte pas encore les téléphones. Dis-le à Claude : il y a un réglage à faire.",
   over_request_rate_limit: "Trop d'essais. Réessaie dans un moment.",
-  otp_expired: "Ce code est faux ou n'est plus valable. Demande un nouveau code.",
-  validation_failed: "Vérifie l'adresse e-mail.",
-  email_address_invalid: "Vérifie l'adresse e-mail.",
   code_invalide: "Ce code d'invitation est faux ou n'est plus valable (il dure 2 jours).",
   trop_essais: "Trop d'essais. Réessaie dans une heure.",
-  deja_membre: "Ce compte est déjà dans un autre foyer.",
+  deja_membre: "Ce téléphone est déjà dans un autre foyer.",
   complet: "Ce foyer est déjà complet.",
 };
 function dire(e: { code?: string; message?: string } | null): string {
@@ -47,34 +43,29 @@ function dire(e: { code?: string; message?: string } | null): string {
   return cle ? MESSAGES[cle] : "Ça n'a pas marché. Réessaie dans un instant.";
 }
 
-export async function envoyerCode(email: string) {
-  const { error } = await supa.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { shouldCreateUser: true } });
-  if (error) throw new Error(dire(error));
-}
-
-// Vérifie le code. Retourne true si ce compte avait déjà un foyer (téléphone changé, app réinstallée).
-export async function verifierCode(email: string, code: string): Promise<boolean> {
-  const { data, error } = await supa.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.replace(/\D/g, ""), type: "email" });
-  if (error || !data.user) throw new Error(dire(error ?? { code: "otp_expired" }));
-  const { data: m } = await supa.from("membres").select("foyer_id, place").eq("user_id", data.user.id).maybeSingle();
-  if (m) { await entrer(m.foyer_id, m.place, data.user.id); return true; }
-  return false;
+// Le compte de ce téléphone : créé sans rien demander, gardé dans l'app.
+async function compte(): Promise<string> {
+  const { data } = await supa.auth.getSession();
+  if (data.session) return data.session.user.id;
+  const r = await supa.auth.signInAnonymously();
+  if (r.error || !r.data.user) throw new Error(dire(r.error));
+  return r.data.user.id;
 }
 
 export async function creerFoyer(prenom: string, place: Personne) {
-  const { data: u } = await supa.auth.getUser();
+  const moi = await compte();
   const { data, error } = await supa.rpc("creer_foyer", { p_prenom: prenom, p_place: place });
-  if (error || !u.user) throw new Error(dire(error));
-  const { data: m } = await supa.from("membres").select("place").eq("user_id", u.user.id).single();
-  await entrer(data as string, (m?.place as Personne) ?? place, u.user.id);
+  if (error) throw new Error(dire(error));
+  const { data: m } = await supa.from("membres").select("place").eq("user_id", moi).single();
+  await entrer(data as string, (m?.place as Personne) ?? place, moi);
 }
 
 export async function rejoindreFoyer(code: string, prenom: string) {
-  const { data: u } = await supa.auth.getUser();
+  const moi = await compte();
   const { data, error } = await supa.rpc("rejoindre_foyer", { p_code: code.replace(/\D/g, ""), p_prenom: prenom });
   const r = (data as Array<{ foyer: string; place: Personne }> | null)?.[0];
-  if (error || !r || !u.user) throw new Error(dire(error));
-  await entrer(r.foyer, r.place, u.user.id);
+  if (error || !r) throw new Error(dire(error));
+  await entrer(r.foyer, r.place, moi);
 }
 
 export async function inviter(): Promise<string> {

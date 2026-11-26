@@ -1,4 +1,5 @@
 -- Le foyer et la synchro d'Echo. Chacun ne voit que son foyer (règles RLS).
+-- Pas d'e-mail : chaque téléphone a un compte anonyme, relié au foyer par un code d'invitation.
 create schema if not exists prive;
 
 create table public.foyers (
@@ -104,15 +105,17 @@ begin
 end $$;
 
 -- Rejoindre un foyer avec le code reçu. 10 essais ratés par heure au plus.
+-- Foyer plein : le nouveau téléphone remplace l'autre membre (pas celui qui a créé le code),
+-- c'est ce qui permet de revenir après avoir changé de téléphone ou réinstallé Echo.
 create function public.rejoindre_foyer(p_code text, p_prenom text) returns table (foyer uuid, place text)
 language plpgsql security definer set search_path = '' as $$
-declare f uuid; p text; deja uuid;
+declare f uuid; inviteur uuid; p text; deja uuid;
 begin
   if auth.uid() is null then raise exception 'non_connecte'; end if;
   if (select count(*) from prive.tentatives t where t.user_id = auth.uid() and t.quand > now() - interval '1 hour') >= 10 then
     raise exception 'trop_essais';
   end if;
-  select i.foyer_id into f from public.invitations i where i.code = trim(p_code) and i.expire > now();
+  select i.foyer_id, i.cree_par into f, inviteur from public.invitations i where i.code = trim(p_code) and i.expire > now();
   if f is null then
     insert into prive.tentatives (user_id) values (auth.uid());
     raise exception 'code_invalide';
@@ -124,7 +127,11 @@ begin
   end if;
   if deja is not null then raise exception 'deja_membre'; end if;
   select x into p from unnest(array['moi','elle']) x where x not in (select m.place from public.membres m where m.foyer_id = f) limit 1;
-  if p is null then raise exception 'complet'; end if;
+  if p is null then
+    select m.place into p from public.membres m where m.foyer_id = f and m.user_id <> inviteur limit 1;
+    if p is null then raise exception 'complet'; end if;
+    delete from public.membres m where m.foyer_id = f and m.place = p;
+  end if;
   insert into public.membres (foyer_id, user_id, prenom, place) values (f, auth.uid(), trim(p_prenom), p);
   delete from public.invitations where code = trim(p_code);
   return query select f, p;
