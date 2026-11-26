@@ -28,6 +28,7 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
   const [reglagesPhoto, setReglagesPhoto] = useState(false);
   const nomFiche = useReglage<string>("nomFiche", "");
   const codeEcho = useReglage<string>("codeEcho", "");
+  const relie = !!useReglage<unknown>("foyer", null); // relié au foyer : la session suffit, pas besoin du code
   const photo = useRef<HTMLInputElement>(null);
   const tous = useHoraires();
   const miens = tous.filter((h) => h.qui === proprio);
@@ -83,7 +84,7 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
   };
 
   const prendrePhoto = () => {
-    if (!nomFiche.trim() || !codeEcho.trim()) { setReglagesPhoto(true); return; }
+    if (!nomFiche.trim() || (!codeEcho.trim() && !relie)) { setReglagesPhoto(true); return; }
     photo.current?.click();
   };
   const lirePhoto = async (fichier: File | undefined) => {
@@ -159,10 +160,10 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
           <label className="champ">Ton nom sur la fiche
             <input defaultValue={nomFiche} placeholder="NOM Prénom, comme sur la fiche" autoComplete="off" onBlur={(e) => poserReglage("nomFiche", e.target.value.trim())} />
           </label>
-          <label className="champ">Code Echo
+          <label className="champ">Code Echo{relie ? " (pas besoin si le foyer suffit)" : ""}
             <input defaultValue={codeEcho} type="password" placeholder="Le code secret du foyer" autoComplete="off" onBlur={(e) => poserReglage("codeEcho", e.target.value.trim())} />
           </label>
-          <p className="aide-champ">Gardés sur ce téléphone seulement. Le code empêche quelqu'un d'autre d'utiliser la lecture par photo.</p>
+          <p className="aide-champ">{relie ? "Gardés sur ce téléphone seulement. Ce téléphone est relié au foyer : le code ne sert que si Echo ne te reconnaît pas." : "Gardés sur ce téléphone seulement. Le code empêche quelqu'un d'autre d'utiliser la lecture par photo."}</p>
           <div className="rangee"><button type="button" className="bouton petit" onClick={() => setReglagesPhoto(false)}>C'est bon</button></div>
         </div>
       )}

@@ -62,7 +62,7 @@ function Sommaire({ taches, noms, masques, proprio, onOuvrir }: { taches: Tache[
 
   const lignes: Array<{ id: Theme; Icone: typeof Users; etat: string; turquoise?: boolean }> = [
     { id: "foyer", Icone: Users, etat: !foyer ? "Seulement sur ce téléphone" : membres.length > 1 ? membres.map((m) => m.prenom).join(" et ") : `Invite ${lautre}` },
-    { id: "echo", Icone: Sparkles, turquoise: true, etat: !assistant ? "Éteint · l'app comprend seule" : codeEcho ? "Comprend tes phrases et propose" : "Code du foyer à mettre" },
+    { id: "echo", Icone: Sparkles, turquoise: true, etat: !assistant ? "Éteint · l'app comprend seule" : codeEcho || foyer ? "Comprend tes phrases et propose" : "Relie le foyer ou mets le code" },
     { id: "notifications", Icone: Bell, etat: !foyer || !r.actif ? "Éteintes sur ce téléphone" : r.matin ? `Allumées · résumé à ${r.matin.replace(":", " h ")}` : "Allumées" },
     { id: "agenda", Icone: Calendar, turquoise: true, etat: icloud ? "Relié à iCloud" : "iCloud pas relié" },
     { id: "modules", Icone: LayoutGrid, etat: `${affiches} affiché${affiches > 1 ? "s" : ""} sur ${MODULES.length}` },
@@ -286,7 +286,7 @@ function SectionEcho() {
       <label className="champ">Code Echo
         <input key={code} defaultValue={code} type="password" placeholder="Le code secret du foyer" autoComplete="off" onBlur={(e) => poserReglage("codeEcho", e.target.value.trim())} />
       </label>
-      <p className="aide-champ">Le même code que pour la lecture de la fiche d'horaires. Il reste sur ce téléphone.</p>
+      <p className="aide-champ">Pas besoin du code si ce téléphone est relié au foyer. Sinon, c'est le même code que pour la lecture de la fiche d'horaires. Il reste sur ce téléphone.</p>
     </section>
   );
 }

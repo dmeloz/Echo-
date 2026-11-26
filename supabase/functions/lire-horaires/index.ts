@@ -1,7 +1,8 @@
 // Lit une photo de la fiche d'horaires et renvoie les codes d'une personne, jour par jour.
 // La clé Anthropic reste ici (secret ANTHROPIC_API_KEY) : elle n'est jamais dans l'app.
-// L'app doit envoyer le code secret du foyer (secret ECHO_CODE) : sans lui, la fonction refuse.
+// Qui peut l'appeler : un membre connecté d'un foyer, ou le code secret du foyer (voir ../_shared/garde.ts). Appels comptés.
 import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
+import { garder } from "../_shared/garde.ts";
 
 const ORIGINES = ["https://dmeloz.github.io", "http://localhost:5173", "http://localhost:4173"];
 const MAX_IMAGE = 7_000_000; // caractères base64 (~5 Mo)
@@ -47,7 +48,7 @@ Dans remarque, une phrase courte en français pour l'utilisateur (vide si tout e
 function cors(origine: string | null) {
   return {
     "Access-Control-Allow-Origin": origine && ORIGINES.includes(origine) ? origine : ORIGINES[0],
-    "Access-Control-Allow-Headers": "content-type, x-echo-code",
+    "Access-Control-Allow-Headers": "content-type, x-echo-code, authorization",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
@@ -55,20 +56,14 @@ function cors(origine: string | null) {
 const repondre = (corps: unknown, statut: number, origine: string | null) =>
   new Response(JSON.stringify(corps), { status: statut, headers: { ...cors(origine), "Content-Type": "application/json" } });
 
-function egal(a: string, b: string) {
-  if (!a || !b || a.length !== b.length) return false;
-  let d = 0;
-  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return d === 0;
-}
 
 Deno.serve(async (req) => {
   const origine = req.headers.get("origin");
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(origine) });
   if (req.method !== "POST") return repondre({ erreur: "methode" }, 405, origine);
 
-  const secret = Deno.env.get("ECHO_CODE") ?? "";
-  if (!egal(req.headers.get("x-echo-code") ?? "", secret)) return repondre({ erreur: "code" }, 401, origine);
+  const g = await garder(req, "lire-horaires", { parPersonne: 15, tous: 40 });
+  if (!g.ok) return repondre({ erreur: g.erreur }, g.statut, origine);
   if (!Deno.env.get("ANTHROPIC_API_KEY")) return repondre({ erreur: "cle" }, 503, origine);
 
   let corps: { image?: string; type?: string; nom?: string; mois?: string };
