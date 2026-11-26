@@ -160,12 +160,10 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
           <label className="champ">Ton nom sur la fiche
             <input defaultValue={nomFiche} placeholder="NOM Prénom, comme sur la fiche" autoComplete="off" onBlur={(e) => poserReglage("nomFiche", e.target.value.trim())} />
           </label>
-          {!relie && (
-            <label className="champ">Code Echo
-              <input defaultValue={codeEcho} type="password" placeholder="Le code secret du foyer" autoComplete="off" onBlur={(e) => poserReglage("codeEcho", e.target.value.trim())} />
-            </label>
-          )}
-          <p className="aide-champ">{relie ? "Gardé sur ce téléphone seulement. Ce téléphone est relié au foyer : pas besoin de code." : "Gardés sur ce téléphone seulement. Le code empêche quelqu'un d'autre d'utiliser la lecture par photo."}</p>
+          <label className="champ">Code Echo{relie ? " (pas besoin si le foyer suffit)" : ""}
+            <input defaultValue={codeEcho} type="password" placeholder="Le code secret du foyer" autoComplete="off" onBlur={(e) => poserReglage("codeEcho", e.target.value.trim())} />
+          </label>
+          <p className="aide-champ">{relie ? "Gardés sur ce téléphone seulement. Ce téléphone est relié au foyer : le code ne sert que si Echo ne te reconnaît pas." : "Gardés sur ce téléphone seulement. Le code empêche quelqu'un d'autre d'utiliser la lecture par photo."}</p>
           <div className="rangee"><button type="button" className="bouton petit" onClick={() => setReglagesPhoto(false)}>C'est bon</button></div>
         </div>
       )}

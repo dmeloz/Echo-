@@ -68,8 +68,10 @@ export async function creerFoyer(prenom: string, place: Personne) {
 export async function rejoindreFoyer(code: string, prenom: string) {
   const moi = await compte();
   const { data, error } = await supa.rpc("rejoindre_foyer", { p_code: code.replace(/\D/g, ""), p_prenom: prenom });
+  if (error) throw new Error(dire(error));
+  // Aucune ligne : le code est faux ou périmé (le serveur note l'essai sans lever d'erreur).
   const r = (data as Array<{ foyer: string; place: Personne }> | null)?.[0];
-  if (error || !r) throw new Error(dire(error));
+  if (!r?.foyer) throw new Error(MESSAGES.code_invalide);
   await entrer(r.foyer, r.place, moi);
 }
 

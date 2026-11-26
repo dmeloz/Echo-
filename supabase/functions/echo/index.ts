@@ -105,9 +105,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(origine) });
   if (req.method !== "POST") return repondre({ erreur: "methode" }, 405, origine);
 
-  if (!Deno.env.get("ANTHROPIC_API_KEY")) return repondre({ erreur: "cle" }, 503, origine);
   const g = await garder(req, "echo", { parPersonne: 60, tous: 200 });
   if (!g.ok) return repondre({ erreur: g.erreur }, g.statut, origine);
+  if (!Deno.env.get("ANTHROPIC_API_KEY")) return repondre({ erreur: "cle" }, 503, origine);
 
   let d: Demande;
   try { d = await req.json(); } catch { return repondre({ erreur: "requete" }, 400, origine); }

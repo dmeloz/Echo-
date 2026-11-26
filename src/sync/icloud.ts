@@ -116,7 +116,11 @@ db.taches.hook("updating", (mods, pk, o, tx) => {
   const apres = { ...o, ...(mods as Partial<Tache>) };
   if (aEnvoyer(o) || aEnvoyer(apres)) noter(String(pk), o.ical?.href);
 });
-db.taches.hook("deleting", (pk, o, tx) => { if (actif && locale(tx) && !depuisIcloud.has(tx) && o?.ical?.href && !o.ical.serie) noter(String(pk), o.ical.href); });
+db.taches.hook("deleting", (pk, o, tx) => {
+  if (!actif || !locale(tx) || depuisIcloud.has(tx) || o?.ical?.serie) return;
+  // Un événement pas encore arrivé dans iCloud mais en cours d'envoi : on le note aussi, il sera effacé après.
+  if (o?.ical?.href || (o?.evt && (enCours || lireFile()[String(pk)]))) noter(String(pk), o?.ical?.href);
+});
 
 export async function envoyer() {
   if (enCours || !actif || !navigator.onLine) return;
@@ -135,6 +139,8 @@ export async function envoyer() {
             titre: t.titre, note: t.note, jour: t.jour, heure: t.heure, fin: t.fin ?? "",
           });
           await db.transaction("rw", db.taches, async (tx) => { depuisIcloud.add(tx); await db.taches.update(id, { ical: { uid: t.ical?.uid ?? t.id, href: r.href } }); });
+          // Changé (ou effacé) pendant l'envoi : on garde l'adresse iCloud pour le prochain passage.
+          if (changesPendant.has(id)) { const f = lireFile(); if (f[id]) { f[id].href = r.href; ecrireFile(f); } }
         }
         if (!changesPendant.has(id)) {
           const f = lireFile();
