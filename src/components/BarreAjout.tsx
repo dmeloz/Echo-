@@ -25,13 +25,14 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const boite = useRef<HTMLDivElement>(null);
   const code = useReglage<string>("codeEcho", "").trim();
   const actif = useReglage("assistantEcho", true);
+  const relie = !!useReglage<unknown>("foyer", null); // relié au foyer : la session suffit, pas besoin du code
   const [echo, setEcho] = useState<EtatEcho>(null);
   const [simple, setSimple] = useState(false); // Echo n'a pas répondu : on reste en mode simple pour cette phrase
   const demande = useRef(0);
   const v = texte.trim();
   const r = v ? comprendre(v, noms, undefined, proprio) : null;
   const n = r ? (r.niveau ?? niveauPropose(r)) : 1;
-  const parEcho = actif && !!code && !simple;
+  const parEcho = actif && (!!code || relie) && !simple;
 
   const setTexte = (t: string) => { onTexte(t); demande.current++; setEcho(null); setSimple(false); };
   const annulerEcho = () => { demande.current++; setEcho(null); };

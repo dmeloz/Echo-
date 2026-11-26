@@ -1,7 +1,7 @@
 // Quels rappels envoyer maintenant ? Fichier sans dépendance : il sert à la fonction du serveur et aux tests.
 
 export interface Abonne { id: string; place: "moi" | "elle"; fuseau: string; aLHeure: boolean; matin: string | null }
-export interface TacheLue { id: string; titre: string; jour: string; heure: string; qui: "moi" | "elle" | "nous"; fait: number | null }
+export interface TacheLue { id: string; titre: string; jour: string; heure: string; qui: "moi" | "elle" | "nous"; fait: number | null; evt?: boolean }
 export interface Envoi { cle: string; titre: string; texte: string; tag: string }
 
 export const FENETRE = 5; // minutes : un rappel part dans les 5 minutes qui suivent son heure (si un passage a été manqué)
@@ -31,7 +31,8 @@ export function aEnvoyer(a: Abonne, taches: TacheLue[], now: Date): Envoi[] {
   }
 
   if (a.matin && due(a.matin, ici.minutes)) {
-    const jour = miennes.filter((t) => t.jour <= ici.jour);
+    // Un rendez-vous n'a pas de case à cocher : seuls ceux du jour comptent (comme le résumé dans l'app).
+    const jour = miennes.filter((t) => (t.evt ? t.jour === ici.jour : t.jour <= ici.jour));
     if (jour.length) {
       const premiere = [...jour].sort((x, y) => (x.heure ? min(x.heure) : 9999) - (y.heure ? min(y.heure) : 9999))[0];
       const n = jour.length;

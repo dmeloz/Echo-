@@ -96,11 +96,15 @@ export async function lireIcloud(): Promise<Calendrier[]> {
 type Envoi = Record<string, { href?: string }>;
 function lireFile(): Envoi { try { return JSON.parse(localStorage.getItem(FILE) || "{}") as Envoi; } catch { return {}; } }
 const ecrireFile = (f: Envoi) => { try { localStorage.setItem(FILE, JSON.stringify(f)); } catch { /* rien */ } };
+let enCours = false;
 let minuteur: ReturnType<typeof setTimeout> | undefined;
+// Changé pendant un envoi en cours : on ne le retire pas de la file, et on relance un envoi à la fin.
+const changesPendant = new Set<string>();
 function noter(id: string, href?: string) {
   const f = lireFile();
   f[id] = { href: href ?? f[id]?.href };
   ecrireFile(f);
+  if (enCours) changesPendant.add(id);
   clearTimeout(minuteur);
   minuteur = setTimeout(() => void envoyer(), 1500);
 }
@@ -114,7 +118,6 @@ db.taches.hook("updating", (mods, pk, o, tx) => {
 });
 db.taches.hook("deleting", (pk, o, tx) => { if (actif && locale(tx) && !depuisIcloud.has(tx) && o?.ical?.href && !o.ical.serie) noter(String(pk), o.ical.href); });
 
-let enCours = false;
 export async function envoyer() {
   if (enCours || !actif || !navigator.onLine) return;
   enCours = true;
@@ -133,15 +136,20 @@ export async function envoyer() {
           });
           await db.transaction("rw", db.taches, async (tx) => { depuisIcloud.add(tx); await db.taches.update(id, { ical: { uid: t.ical?.uid ?? t.id, href: r.href } }); });
         }
-        const f = lireFile();
-        delete f[id];
-        ecrireFile(f);
+        if (!changesPendant.has(id)) {
+          const f = lireFile();
+          delete f[id];
+          ecrireFile(f);
+        }
       } catch (e) {
         console.warn("[Echo iCloud]", e);
-        break; // on réessaiera plus tard, dans l'ordre
+        changesPendant.clear();
+        return; // on réessaiera plus tard, dans l'ordre
       }
     }
   } finally { enCours = false; }
+  // Des changements sont arrivés pendant l'envoi : ils partent tout de suite, sans attendre le prochain passage.
+  if (changesPendant.size) { changesPendant.clear(); void envoyer(); }
 }
 
 /* ---------- Démarrage ---------- */

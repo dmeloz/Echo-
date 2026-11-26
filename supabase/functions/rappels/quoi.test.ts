@@ -35,6 +35,11 @@ describe("rappels : à l'heure d'une tâche", () => {
 });
 
 describe("rappels : le résumé du matin", () => {
+  it("ne compte pas les rendez-vous passés (ils n'ont pas de case à cocher), mais garde ceux du jour", () => {
+    const r = aEnvoyer(a, [t({ id: "1", titre: "Dentiste", jour: "2026-11-20", heure: "10:00", evt: true }), t({ id: "2", titre: "Réunion", heure: "16:00", evt: true })], a7h30);
+    expect(r.map((e) => e.titre)).toEqual(["Une chose à faire aujourd'hui"]);
+    expect(r[0].texte).toBe("Réunion à 16 h");
+  });
   it("dit combien de choses et la première, retards compris", () => {
     const r = aEnvoyer(a, [t({ id: "1", heure: "15:00" }), t({ id: "2", titre: "Facture", jour: "2026-11-25" }), t({ id: "3", jour: "2026-11-28" })], a7h30);
     expect(r).toEqual([{ cle: "m|tel1|2026-11-27", titre: "2 choses à faire aujourd'hui", texte: "En premier : Vétérinaire à 15 h", tag: "matin" }]);

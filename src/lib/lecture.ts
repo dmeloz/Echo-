@@ -1,4 +1,5 @@
 import type { Code } from "./horaires";
+import { entetesIA } from "../sync/client";
 
 // Lire une photo de la fiche d'horaires : la photo part vers la fonction « lire-horaires » du projet Supabase d'Echo,
 // qui la fait lire par Claude. La clé de l'IA reste sur le serveur ; l'app envoie seulement le code secret du foyer.
@@ -9,7 +10,8 @@ export interface JourLu { jour: number; code: Code | "AUTRE" | "VIDE"; sur: bool
 export interface Lecture { ligne_trouvee: boolean; nom_lu: string; mois_concorde: boolean; jours: JourLu[]; remarque: string; nbJours: number }
 
 const MESSAGES: Record<string, string> = {
-  code: "Le code Echo n'est pas le bon. Vérifie-le dans « Réglages de la photo ».",
+  code: "Echo ne te reconnaît pas. Relie ce téléphone au foyer, ou vérifie le code dans « Réglages de la photo ».",
+  limite: "Beaucoup de photos lues cette dernière heure. Réessaie un peu plus tard.",
   cle: "La lecture par photo n'est pas encore branchée (la clé de l'IA manque côté serveur).",
   image: "La photo n'a pas pu être lue. Reprends-la bien à plat, avec toute la fiche.",
   nom: "Écris ton nom tel qu'il est sur la fiche.",
@@ -38,7 +40,7 @@ export async function lireFiche(p: { data: string; type: string; nom: string; mo
   try {
     r = await fetch(ADRESSE_LECTURE, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-echo-code": p.code },
+      headers: await entetesIA(p.code),
       body: JSON.stringify({ image: p.data, type: p.type, nom: p.nom, mois: p.mois }),
     });
   } catch {

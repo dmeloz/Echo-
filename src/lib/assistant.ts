@@ -1,5 +1,6 @@
 import { auJour, nouvelId, z } from "./dates";
 import type { Brouillon } from "../data/actions";
+import { entetesIA } from "../sync/client";
 import type { Noms, Personne, Qui, Repete, Tache } from "./types";
 
 // L'assistant Echo : la phrase part vers la fonction « echo » du projet Supabase, qui la fait comprendre par Claude (Haiku 5.5).
@@ -15,7 +16,8 @@ export interface TacheEcho {
 export interface PropositionEcho { taches: TacheEcho[]; reponse: string }
 
 const MESSAGES: Record<string, string> = {
-  code: "Le code Echo n'est pas le bon. Vérifie-le dans Réglages → Echo.",
+  code: "Echo ne te reconnaît pas. Relie ce téléphone au foyer, ou vérifie le code dans Réglages → Echo.",
+  limite: "Echo a beaucoup servi cette dernière heure. Réessaie un peu plus tard.",
   cle: "Echo n'est pas encore branché (la clé de l'IA manque côté serveur).",
   refus: "Echo n'a pas pu traiter cette phrase.",
   occupe: "Echo est très demandé. Réessaie dans une minute.",
@@ -39,7 +41,7 @@ export async function demanderEcho(p: { texte: string; code: string; noms: Noms;
   try {
     r = await fetch(ADRESSE_ECHO, {
       method: "POST",
-      headers: { "content-type": "application/json", "x-echo-code": p.code },
+      headers: await entetesIA(p.code),
       body: JSON.stringify({
         texte: p.texte, aujourdhui: auJour(0, now), maintenant: `${z(now.getHours())}:${z(now.getMinutes())}`,
         noms: p.noms, proprio: p.proprio, prevu: contexte(p.taches, now),

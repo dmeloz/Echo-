@@ -30,9 +30,20 @@ Deno.serve(async (req) => {
   const { data: membres } = await base.from("membres").select("user_id, foyer_id, place").in("user_id", [...new Set(abonnes.map((a: Ligne) => a.user_id))]);
   const parUser = new Map((membres ?? []).map((m) => [m.user_id, m]));
   const foyers = [...new Set((membres ?? []).map((m) => m.foyer_id))];
-  const { data: elements } = await base.from("elements").select("foyer_id, data").eq("genre", "tache").eq("supprime", false).in("foyer_id", foyers);
+  // Seulement les tâches pas faites, jusqu'à demain (tous fuseaux), lues par pages : pas de limite à 1000 lignes.
+  const demain = new Date(now.getTime() + 2 * 86400_000).toISOString().slice(0, 10);
+  const elements: Array<{ foyer_id: string; data: unknown }> = [];
+  for (let de = 0; ; de += 1000) {
+    const { data: page, error: e } = await base.from("elements").select("foyer_id, data")
+      .eq("genre", "tache").eq("supprime", false).in("foyer_id", foyers)
+      .is("data->>fait", null).lte("data->>jour", demain)
+      .order("foyer_id").order("cle").range(de, de + 999);
+    if (e) return Response.json({ erreur: e.message }, { status: 500 });
+    elements.push(...(page ?? []));
+    if (!page || page.length < 1000) break;
+  }
   const taches = new Map<string, TacheLue[]>();
-  for (const e of elements ?? []) {
+  for (const e of elements) {
     const d = e.data as TacheLue | null;
     if (!d || typeof d.titre !== "string" || typeof d.jour !== "string") continue;
     taches.set(e.foyer_id, [...(taches.get(e.foyer_id) ?? []), d]);

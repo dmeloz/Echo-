@@ -1,8 +1,9 @@
 // L'assistant Echo : comprend une phrase libre (« dentiste jeudi 15h pour Sarah, et rappelle-moi les poubelles chaque mardi »)
 // et propose des tâches. Il ne fait rien lui-même : l'app montre la proposition et c'est la personne qui confirme.
 // Modèle : Claude Haiku 5.5 (rapide et peu cher). La clé reste ici (secret ANTHROPIC_API_KEY), jamais dans l'app.
-// L'app doit envoyer le code secret du foyer (secret ECHO_CODE), comme pour la lecture des horaires.
+// Qui peut l'appeler : un membre connecté d'un foyer, ou le code secret du foyer (voir ../_shared/garde.ts). Appels comptés.
 import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
+import { garder } from "../_shared/garde.ts";
 
 const ORIGINES = ["https://dmeloz.github.io", "http://localhost:5173", "http://localhost:4173"];
 const MAX_TEXTE = 1000;
@@ -59,7 +60,7 @@ Les tâches déjà prévues te sont données pour le contexte seulement : ne les
 function cors(origine: string | null) {
   return {
     "Access-Control-Allow-Origin": origine && ORIGINES.includes(origine) ? origine : ORIGINES[0],
-    "Access-Control-Allow-Headers": "content-type, x-echo-code",
+    "Access-Control-Allow-Headers": "content-type, x-echo-code, authorization",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
   };
@@ -67,12 +68,6 @@ function cors(origine: string | null) {
 const repondre = (corps: unknown, statut: number, origine: string | null) =>
   new Response(JSON.stringify(corps), { status: statut, headers: { ...cors(origine), "Content-Type": "application/json" } });
 
-function egal(a: string, b: string) {
-  if (!a || !b || a.length !== b.length) return false;
-  let d = 0;
-  for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  return d === 0;
-}
 
 const JOUR = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const HEURE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -110,9 +105,9 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(origine) });
   if (req.method !== "POST") return repondre({ erreur: "methode" }, 405, origine);
 
-  const secret = Deno.env.get("ECHO_CODE") ?? "";
-  if (!egal(req.headers.get("x-echo-code") ?? "", secret)) return repondre({ erreur: "code" }, 401, origine);
   if (!Deno.env.get("ANTHROPIC_API_KEY")) return repondre({ erreur: "cle" }, 503, origine);
+  const g = await garder(req, "echo", { parPersonne: 60, tous: 200 });
+  if (!g.ok) return repondre({ erreur: g.erreur }, g.statut, origine);
 
   let d: Demande;
   try { d = await req.json(); } catch { return repondre({ erreur: "requete" }, 400, origine); }

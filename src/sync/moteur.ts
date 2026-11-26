@@ -38,7 +38,7 @@ const MESSAGES: Record<string, string> = {
   anonymous_provider_disabled: "Le serveur d'Echo n'accepte pas encore les téléphones. Dis-le à Claude : il y a un réglage à faire.",
   over_request_rate_limit: "Trop d'essais. Réessaie dans un moment.",
   code_invalide: "Ce code est faux ou n'est plus valable (il dure 1 heure). Demande un nouveau code.",
-  trop_essais: "Trop d'essais. Réessaie dans une heure.",
+  trop_essais: "Trop d'essais ratés pour l'instant. Attends un moment (jusqu'à une heure) et réessaie, avec un nouveau code si besoin.",
   deja_membre: "Ce téléphone est déjà dans un autre foyer.",
   complet: "Ce foyer est déjà complet.",
 };
