@@ -30,6 +30,7 @@ describe("lire ce qu'on écrit", () => {
     expect(lireArticles("1,5 kg de carottes\nune botte de coriandre; des œufs")).toEqual([
       { nom: "Carottes", qte: "1,5 kg" }, { nom: "Coriandre", qte: "1 botte" }, { nom: "Œufs", qte: "" },
     ]);
+    expect(lireArticles("lait 1,5 l, tomates 4")).toEqual([{ nom: "Lait", qte: "1,5 l" }, { nom: "Tomates", qte: "4" }]);
     expect(lireArticles("  ,  ")).toEqual([]);
   });
   it("reconnaît le même produit au singulier, au pluriel, avec ou sans accents", () => {
@@ -43,6 +44,9 @@ describe("lire ce qu'on écrit", () => {
     expect(lireDemande("courses : pain, yaourts")).toEqual([{ nom: "Pain", qte: "" }, { nom: "Yaourts", qte: "" }]);
     expect(lireDemande("Appeler le plombier demain")).toBeNull();
     expect(lireDemande("Faire les courses samedi")).toBeNull();
+    for (const phrase of ["Penser aux courses", "Rembourser Sarah pour les courses", "Plus de 30 min de sport par jour", "plus d'excuses"]) expect(lireDemande(phrase)).toBeNull();
+    expect(lireDemande("on n'a plus de tahini")).toEqual([{ nom: "Tahini", qte: "" }]);
+    expect(lireDemande("du lait aux courses")).toEqual([{ nom: "Lait", qte: "" }]);
     expect(cuisine.comprendre?.("plus de lait")?.titre).toBe("Lait");
   });
 });
@@ -53,6 +57,7 @@ describe("les rayons", () => {
     expect([r("Carottes"), r("Lait"), r("Œufs"), r("Bœuf haché"), r("Pois chiches"), r("Baguette"), r("Papier toilette"), r("Dentifrice"), r("Jus d'orange"), r("Truc inconnu")])
       .toEqual(["fruits", "frais", "frais", "boucherie", "epicerie", "boulangerie", "maison", "hygiene", "boissons", "autre"]);
     expect([r("Lait de coco"), r("Sauce tomate"), r("Crème solaire"), r("Pommes de terre")]).toEqual(["epicerie", "epicerie", "hygiene", "fruits"]);
+    expect([r("Essuie-tout"), r("Pizza"), r("Haricots"), r("Lave-vaisselle")]).toEqual(["maison", "surgeles", "fruits", "maison"]);
   });
   it("retient un rayon corrigé à la main", async () => {
     const [a] = await ajouterArticles([{ nom: "Tahini", qte: "" }]);

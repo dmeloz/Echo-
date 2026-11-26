@@ -6,6 +6,7 @@ import { reordonner } from "../lib/ordre";
 import type { Code, Horaire } from "../lib/horaires";
 import { prochainJour } from "../lib/valider";
 import { NOMS_DEFAUT, db } from "./db";
+import { TABLES_MODULES } from "../sync/genres";
 
 export function exemples(): Tache[] {
   const t = auJour(), h = new Date().getHours();
@@ -162,7 +163,11 @@ export const effacerExemples = () => db.transaction("rw", db.taches, db.photos, 
 });
 
 export const remettreExemples = () => db.taches.bulkAdd(exemples());
-export const toutEffacer = () => db.transaction("rw", db.taches, db.photos, db.corbeille, async () => { await db.taches.clear(); await db.photos.clear(); await db.corbeille.clear(); });
+// Tout effacer : les tâches, et aussi les données des modules (courses, stock, repas, habitudes, goûts).
+export const toutEffacer = () => db.transaction("rw", [db.taches, db.photos, db.corbeille, ...TABLES_MODULES], async () => {
+  await db.taches.clear(); await db.photos.clear(); await db.corbeille.clear();
+  for (const t of TABLES_MODULES) await t.clear();
+});
 
 // « À demain » : la tâche quitte aujourd'hui sans être perdue.
 export async function aDemain(t: Tache) {

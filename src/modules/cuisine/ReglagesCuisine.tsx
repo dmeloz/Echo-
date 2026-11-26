@@ -16,7 +16,7 @@ export function ReglagesCuisine({ proprio }: ContexteModule) {
       <section className="g reglages">
         <span className="lab">Courses</span>
         <label className="module-ligne">
-          <span><b>Achats habituels</b><small>Echo remet tout seul dans la liste ce que vous achetez régulièrement. Retire un article et il le proposera moins souvent.</small></span>
+          <span><b>Achats habituels</b><small>Echo remet tout seul dans la liste ce que vous achetez régulièrement. Retire un article et il le proposera moins souvent. Ce réglage vaut pour ce téléphone : pour tout arrêter, éteins-le sur les deux.</small></span>
           <input type="checkbox" role="switch" className="interrupteur" checked={actif} onChange={() => poserReglage("cuisineHabituels", !actif)} />
         </label>
         {habituels.length > 0 ? (

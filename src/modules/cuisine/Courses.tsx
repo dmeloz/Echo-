@@ -15,10 +15,9 @@ export const Coche = () => <svg className="coche-trait" width="15" height="15" v
 
 // Qui a ajouté l'article : l'initiale de la personne, ou E quand Echo a remis un achat habituel.
 export function Auteur({ a, noms }: { a: Article; noms: Noms }) {
-  const echo = a.par === "echo";
-  const qui = a.fait && a.faitPar ? a.faitPar : a.par;
-  const nom = echo ? "Echo, achat habituel" : noms[qui as "moi" | "elle"];
-  return <i className={`av ${echo && !a.fait ? "echo" : qui}`} role="img" aria-label={`${a.fait ? "Coché" : "Ajouté"} par ${nom}`}>{echo && !a.fait ? "E" : initialeDe(noms, qui as "moi" | "elle")}</i>;
+  const qui = a.fait && a.faitPar ? a.faitPar : a.par; // une personne, ou « echo »
+  const nom = qui === "echo" ? "Echo, achat habituel" : noms[qui];
+  return <i className={`av ${qui}`} role="img" aria-label={`${a.fait && a.faitPar ? "Coché" : "Ajouté"} par ${nom}`}>{qui === "echo" ? "E" : initialeDe(noms, qui)}</i>;
 }
 
 interface Props extends ContexteModule { courses: Article[] | undefined; onMagasin: () => void }

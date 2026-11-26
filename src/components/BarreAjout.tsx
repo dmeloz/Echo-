@@ -28,6 +28,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const actif = useReglage("assistantEcho", true);
   const relie = !!useReglage<unknown>("foyer", null); // relié au foyer : la session suffit, pas besoin du code
   const [echo, setEcho] = useState<EtatEcho>(null);
+  const [tache, setTache] = useState(false); // « Plutôt une tâche » : la phrase n'est pas pour un module
   const [simple, setSimple] = useState(false); // Echo n'a pas répondu : on reste en mode simple pour cette phrase
   const demande = useRef(0);
   const v = texte.trim();
@@ -35,10 +36,10 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const n = r ? (r.niveau ?? niveauPropose(r)) : 1;
   // Une phrase pour un module (« plus de lait » → les courses) ne devient pas une tâche et ne part pas à l'assistant.
   const { actifs } = useModulesActifs();
-  const pour = v ? actifs.map((m) => (m.etat === "construit" ? m.comprendre?.(v) ?? null : null)).find((x) => x) ?? null : null;
+  const pour = v && !tache ? actifs.map((m) => (m.etat === "construit" ? m.comprendre?.(v) ?? null : null)).find((x) => x) ?? null : null;
   const parEcho = actif && (!!code || relie) && !simple && !pour;
 
-  const setTexte = (t: string) => { onTexte(t); demande.current++; setEcho(null); setSimple(false); };
+  const setTexte = (t: string) => { onTexte(t); demande.current++; setEcho(null); setSimple(false); setTache(false); };
   const annulerEcho = () => { demande.current++; setEcho(null); };
 
   const enregistrer = (faire: () => Promise<unknown>, garde: string) => {
@@ -110,7 +111,10 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
           {pour ? (
             <>
               <div className="ligne-ap"><b>{pour.titre}</b><span className="tag">{pour.ou}</span></div>
-              <div className="pied-ap"><span>Touche ✓ : je l'ajoute, sans créer de tâche.</span></div>
+              <div className="pied-ap">
+                <span>Touche ✓ : je l'ajoute, sans créer de tâche.</span>
+                <button type="button" className="bouton-texte" onPointerDown={(e) => e.preventDefault()} onClick={() => setTache(true)}>Plutôt une tâche</button>
+              </div>
             </>
           ) : parEcho ? (
             <div className="pied-ap"><span>Touche ✓ : Echo comprend ta phrase et te propose quoi ajouter.</span></div>
