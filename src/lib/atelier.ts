@@ -1,7 +1,5 @@
-// L'atelier de design (atelier.html) : ses réglages, et le CSS qu'ils donnent.
-// L'app relit CLE_GARDE au démarrage : c'est ainsi que les essais de l'atelier se voient dans la vraie app.
+// L'atelier de design (outil de travail, publié à part de l'app) : ses réglages, et le CSS qu'ils donnent.
 export const CLE_BROUILLON = "echo-atelier";
-export const CLE_GARDE = "echo-atelier-garde";
 
 export type Etat = {
   jetons: Record<string, string>;                 // --bleu → #2f6bff

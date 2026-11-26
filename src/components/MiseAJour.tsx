@@ -1,5 +1,5 @@
 import { Download } from "pulsoicon-react";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 import { installer, majEtat, useMiseAJour } from "../data/miseAJour";
 
@@ -15,7 +15,10 @@ export function MiseAJour() {
       setInterval(verifier, 60 * 60 * 1000);
     },
   });
-  useEffect(() => { majEtat({ disponible: aMettreAJour, installer: () => updateServiceWorker(true) }); }, [aMettreAJour, updateServiceWorker]);
+  // Seul « il y a du nouveau » relance l'effet : sans mise en cache (atelier de design), la fonction change à chaque rendu.
+  const installerMaj = useRef(updateServiceWorker);
+  useEffect(() => { installerMaj.current = updateServiceWorker; });
+  useEffect(() => { majEtat({ disponible: aMettreAJour, installer: () => installerMaj.current(true) }); }, [aMettreAJour]);
 
   const { disponible, enCours } = useMiseAJour();
   if (!disponible) return null;

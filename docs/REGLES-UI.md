@@ -118,4 +118,4 @@ Aussi : rien sous 13 px (sauf une initiale dans une pastille, marquée « except
 
 ## L'atelier de design
 
-`atelier.html` (à côté de l'app, même adresse + `/atelier.html`) montre la vraie app dans un cadre et permet de régler ses couleurs, tailles, espaces et CSS. Les changements se copient (« Copier pour Claude ») pour être écrits pour de bon dans `src/styles.css` ; l'interrupteur « Essayer dans la vraie app » les garde sur l'appareil (clé `echo-atelier-garde`, relue par `src/main.tsx`).
+Outil de travail de Melo, **hors de l'app** : une page du projet Claude qui montre la vraie app dans un cadre et permet de régler couleurs, tailles et espaces sans code. `npm run atelier` construit `dist-atelier/` (l'app en `app.html`, la page en `page.html`) ; Claude publie ce dossier. « Envoyer à Claude » range le design dans la base de la page (`atelier/design`) ; Claude le relit et l'écrit dans `src/styles.css`. À republier quand l'app change.

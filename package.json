@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "verifier": "node scripts/verifier-ui.mjs"
+    "verifier": "node scripts/verifier-ui.mjs",
+    "atelier": "ATELIER=1 VITE_APP=app.html vite build && node scripts/atelier-page.mjs"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.3.0",
