@@ -1,0 +1,246 @@
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import { toast } from "sonner";
+import { NOMS_DEFAUT, db } from "../data/db";
+import { CODES, type Horaire } from "../lib/horaires";
+import type { Noms, Personne } from "../lib/types";
+import { nettoyerNoms, nettoyerTache } from "../lib/valider";
+import { supa } from "./client";
+import { cleHoraire, lireFile, marquerDistante, noter, retirer, surChangement } from "./file";
+
+// La synchro du foyer. Chaque téléphone garde toutes les données chez lui (Echo marche hors ligne)
+// et échange ses changements avec le serveur : il envoie ce qui a changé ici, il reçoit ce qui a changé ailleurs.
+// Si les deux changent la même tâche, le dernier changement arrivé au serveur gagne.
+
+export interface Foyer { id: string; userId: string }
+export interface Membre { userId: string; prenom: string; place: Personne }
+type Ligne = { genre: "tache" | "horaire"; cle: string; data: unknown; supprime: boolean; par: string | null; maj: string };
+
+const CURSEUR = "echo-curseur"; // l'heure (serveur) du dernier changement reçu
+let foyer: Foyer | null = null;
+let canal: RealtimeChannel | null = null;
+
+// Une seule opération de synchro à la fois, dans l'ordre.
+let chaine: Promise<unknown> = Promise.resolve();
+const enFile = (fn: () => Promise<unknown>) => (chaine = chaine.then(fn).catch((e) => console.warn("[Echo synchro]", e)));
+let minuterie: ReturnType<typeof setTimeout> | undefined;
+const bientot = (fn: () => Promise<unknown>, ms = 700) => { clearTimeout(minuterie); minuterie = setTimeout(() => enFile(fn), ms); };
+
+export const lireFoyer = async () => ((await db.reglages.get("foyer"))?.valeur as Foyer | undefined) ?? null;
+
+/* ---------- Connexion : un code à 6 chiffres reçu par e-mail ---------- */
+
+const MESSAGES: Record<string, string> = {
+  email_address_not_authorized: "Le serveur d'Echo ne peut pas encore écrire à cette adresse. Dis-le à Claude : il y a un réglage à faire.",
+  over_email_send_rate_limit: "Trop de codes demandés. Réessaie dans un moment.",
+  over_request_rate_limit: "Trop d'essais. Réessaie dans un moment.",
+  otp_expired: "Ce code est faux ou n'est plus valable. Demande un nouveau code.",
+  validation_failed: "Vérifie l'adresse e-mail.",
+  email_address_invalid: "Vérifie l'adresse e-mail.",
+  code_invalide: "Ce code d'invitation est faux ou n'est plus valable (il dure 2 jours).",
+  trop_essais: "Trop d'essais. Réessaie dans une heure.",
+  deja_membre: "Ce compte est déjà dans un autre foyer.",
+  complet: "Ce foyer est déjà complet.",
+};
+function dire(e: { code?: string; message?: string } | null): string {
+  if (!navigator.onLine) return "Pas de connexion internet. Réessaie quand tu as du réseau.";
+  const cle = Object.keys(MESSAGES).find((k) => e?.code === k || e?.message?.includes(k));
+  return cle ? MESSAGES[cle] : "Ça n'a pas marché. Réessaie dans un instant.";
+}
+
+export async function envoyerCode(email: string) {
+  const { error } = await supa.auth.signInWithOtp({ email: email.trim().toLowerCase(), options: { shouldCreateUser: true } });
+  if (error) throw new Error(dire(error));
+}
+
+// Vérifie le code. Retourne true si ce compte avait déjà un foyer (téléphone changé, app réinstallée).
+export async function verifierCode(email: string, code: string): Promise<boolean> {
+  const { data, error } = await supa.auth.verifyOtp({ email: email.trim().toLowerCase(), token: code.replace(/\D/g, ""), type: "email" });
+  if (error || !data.user) throw new Error(dire(error ?? { code: "otp_expired" }));
+  const { data: m } = await supa.from("membres").select("foyer_id, place").eq("user_id", data.user.id).maybeSingle();
+  if (m) { await entrer(m.foyer_id, m.place, data.user.id); return true; }
+  return false;
+}
+
+export async function creerFoyer(prenom: string, place: Personne) {
+  const { data: u } = await supa.auth.getUser();
+  const { data, error } = await supa.rpc("creer_foyer", { p_prenom: prenom, p_place: place });
+  if (error || !u.user) throw new Error(dire(error));
+  const { data: m } = await supa.from("membres").select("place").eq("user_id", u.user.id).single();
+  await entrer(data as string, (m?.place as Personne) ?? place, u.user.id);
+}
+
+export async function rejoindreFoyer(code: string, prenom: string) {
+  const { data: u } = await supa.auth.getUser();
+  const { data, error } = await supa.rpc("rejoindre_foyer", { p_code: code.replace(/\D/g, ""), p_prenom: prenom });
+  const r = (data as Array<{ foyer: string; place: Personne }> | null)?.[0];
+  if (error || !r || !u.user) throw new Error(dire(error));
+  await entrer(r.foyer, r.place, u.user.id);
+}
+
+export async function inviter(): Promise<string> {
+  const { data, error } = await supa.rpc("creer_invitation");
+  if (error) throw new Error(dire(error));
+  return data as string;
+}
+
+// Entrer dans le foyer : ce téléphone prend sa place (moi ou elle), et tout ce qu'il contient part au foyer.
+async function entrer(foyerId: string, place: Personne, userId: string) {
+  const avant = (await db.reglages.get("proprio"))?.valeur as Personne | undefined;
+  await db.transaction("rw", [db.taches, db.horaires, db.photos, db.reglages], async () => {
+    const ex = (await db.taches.filter((t) => !!t.ex).toArray()).map((t) => t.id);
+    await db.taches.bulkDelete(ex);
+    await db.photos.where("tacheId").anyOf(ex).delete();
+    // Les tâches notées « pour moi » sur ce téléphone restent à la bonne personne.
+    if (avant && avant !== place) {
+      const inv = (q: Personne): Personne => (q === "moi" ? "elle" : "moi");
+      const taches = await db.taches.toArray();
+      await db.taches.bulkPut(taches.map((t) => (t.qui === "nous" ? t : { ...t, qui: inv(t.qui) })));
+      const horaires = await db.horaires.toArray();
+      await db.horaires.clear();
+      await db.horaires.bulkPut(horaires.map((h) => ({ ...h, qui: inv(h.qui) })));
+    }
+    await db.reglages.bulkPut([{ cle: "proprio", valeur: place }, { cle: "foyer", valeur: { id: foyerId, userId } }]);
+  });
+  for (const t of await db.taches.toArray()) noter("tache:" + t.id);
+  for (const h of await db.horaires.toArray()) noter(cleHoraire(h.qui, h.jour));
+  try { localStorage.removeItem(CURSEUR); } catch { /* rien */ }
+  await demarrer();
+}
+
+/* ---------- Envoyer et recevoir ---------- */
+
+async function lireLigne(c: string) {
+  const i = c.indexOf(":");
+  const genre = c.slice(0, i), cle = c.slice(i + 1);
+  if (genre === "tache") {
+    const t = await db.taches.get(cle);
+    if (t?.ex) return null; // les exemples restent sur ce téléphone
+    return { foyer_id: foyer!.id, genre, cle, data: t ?? null, supprime: !t };
+  }
+  const [qui, jour] = cle.split("|");
+  const h = await db.horaires.get([qui, jour]);
+  return { foyer_id: foyer!.id, genre, cle, data: h ?? null, supprime: !h };
+}
+
+async function envoyer() {
+  if (!foyer || !navigator.onLine) return;
+  const file = lireFile();
+  const cles = Object.keys(file);
+  for (let i = 0; i < cles.length; i += 200) {
+    const lot = cles.slice(i, i + 200);
+    const lignes = (await Promise.all(lot.map(lireLigne))).filter((l) => l !== null);
+    if (lignes.length) {
+      const { error } = await supa.from("elements").upsert(lignes, { onConflict: "foyer_id,genre,cle" });
+      if (error) throw error;
+    }
+    retirer(Object.fromEntries(lot.map((c) => [c, file[c]])));
+  }
+}
+
+async function recevoir() {
+  if (!foyer || !navigator.onLine) return;
+  let curseur: string | null = null;
+  try { curseur = localStorage.getItem(CURSEUR); } catch { /* rien */ }
+  const premier = !curseur;
+  // On repart un peu avant le curseur : un changement enregistré au même moment n'est jamais manqué.
+  let depuis = curseur ? new Date(Date.parse(curseur) - 10_000).toISOString() : "1970-01-01T00:00:00Z";
+  for (;;) {
+    const { data, error } = await supa.from("elements").select("genre, cle, data, supprime, par, maj")
+      .eq("foyer_id", foyer.id).gt("maj", depuis).order("maj").limit(500);
+    if (error) throw error;
+    if (!data.length) break;
+    await appliquer(data as Ligne[], premier);
+    depuis = data[data.length - 1].maj;
+    if (!curseur || Date.parse(depuis) > Date.parse(curseur)) curseur = depuis;
+    if (data.length < 500) break;
+  }
+  if (curseur) try { localStorage.setItem(CURSEUR, curseur); } catch { /* rien */ }
+}
+
+const JOUR = /^\d{4}-\d{2}-\d{2}$/;
+function nettoyerHoraire(x: unknown): Horaire | null {
+  const o = (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
+  if ((o.qui !== "moi" && o.qui !== "elle") || typeof o.jour !== "string" || !JOUR.test(o.jour) || typeof o.code !== "string" || !(o.code in CODES)) return null;
+  return { qui: o.qui, jour: o.jour, code: o.code as Horaire["code"] };
+}
+
+// Applique les changements reçus. Ce qui attend encore d'être envoyé depuis ce téléphone n'est pas écrasé.
+export async function appliquer(lignes: Ligne[], premier: boolean, moi = foyer?.userId) {
+  const attente = lireFile();
+  const nouvelles: Array<{ par: string; texte: string }> = [];
+  await db.transaction("rw", [db.taches, db.horaires, db.photos], async (tx) => {
+    marquerDistante(tx);
+    for (const l of lignes) {
+      if (`${l.genre}:${l.cle}` in attente) continue;
+      if (l.genre === "tache") {
+        const avant = await db.taches.get(l.cle);
+        if (l.supprime) {
+          if (avant) { await db.taches.delete(l.cle); await db.photos.where("tacheId").equals(l.cle).delete(); }
+          continue;
+        }
+        const t = nettoyerTache(l.data);
+        if (!t || t.id !== l.cle) continue; // une tâche abîmée est ignorée, jamais appliquée
+        await db.taches.put(t);
+        if (premier || !l.par || l.par === moi) continue;
+        if (!avant) nouvelles.push({ par: l.par, texte: `a ajouté « ${t.titre} »` });
+        else if (!avant.fait && t.fait) nouvelles.push({ par: l.par, texte: `a terminé « ${t.titre} »` });
+      } else {
+        const [qui, jour] = l.cle.split("|");
+        const h = l.supprime ? null : nettoyerHoraire(l.data);
+        if (h) await db.horaires.put(h);
+        else await db.horaires.delete([qui, jour]);
+      }
+    }
+  });
+  if (nouvelles.length) await prevenir(nouvelles);
+}
+
+// « Sarah a terminé … » : un petit message quand l'autre ajoute ou termine quelque chose.
+async function prevenir(nouvelles: Array<{ par: string; texte: string }>) {
+  const membres = ((await db.reglages.get("membres"))?.valeur as Membre[] | undefined) ?? [];
+  const prenom = (id: string) => membres.find((m) => m.userId === id)?.prenom ?? "L'autre";
+  if (nouvelles.length > 3) { toast(`${prenom(nouvelles[0].par)} a fait ${nouvelles.length} changements`); return; }
+  for (const n of nouvelles) toast(`${prenom(n.par)} ${n.texte}`, { duration: 5000 });
+}
+
+// Les prénoms viennent du foyer : chacun a donné le sien au premier lancement.
+async function chargerMembres() {
+  if (!foyer) return;
+  const { data, error } = await supa.from("membres").select("user_id, prenom, place").eq("foyer_id", foyer.id);
+  if (error) throw error;
+  const membres: Membre[] = data.map((m) => ({ userId: m.user_id, prenom: m.prenom, place: m.place }));
+  const actuels = nettoyerNoms((await db.reglages.get("noms"))?.valeur, NOMS_DEFAUT);
+  const noms: Noms = { ...actuels };
+  for (const m of membres) noms[m.place] = m.prenom;
+  await db.reglages.bulkPut([{ cle: "membres", valeur: membres }, { cle: "noms", valeur: noms }]);
+}
+
+const synchroniser = () => enFile(async () => { await envoyer(); await recevoir(); await chargerMembres(); });
+
+/* ---------- Démarrage ---------- */
+
+export async function demarrer() {
+  foyer = await lireFoyer();
+  if (!foyer) return;
+  const { data } = await supa.auth.getSession();
+  if (!data.session) return; // plus connecté : les Réglages proposent de reconnecter ce téléphone
+  synchroniser();
+  canal?.unsubscribe();
+  canal = supa.channel("foyer-" + foyer.id)
+    .on("postgres_changes", { event: "*", schema: "public", table: "elements", filter: `foyer_id=eq.${foyer.id}` }, () => bientot(recevoir, 300))
+    .on("postgres_changes", { event: "*", schema: "public", table: "membres", filter: `foyer_id=eq.${foyer.id}` }, () => enFile(chargerMembres))
+    .subscribe();
+}
+
+let ecoute = false;
+export function suivre() {
+  if (ecoute || typeof window === "undefined") return;
+  ecoute = true;
+  surChangement(() => bientot(envoyer));
+  addEventListener("online", () => foyer && synchroniser());
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && foyer) synchroniser(); });
+  demarrer().catch((e) => console.warn("[Echo synchro]", e));
+}
+
+// Pour les Réglages : ce téléphone est-il encore connecté ?
+export const estConnecte = async () => !!(await supa.auth.getSession()).data.session;

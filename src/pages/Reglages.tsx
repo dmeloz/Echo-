@@ -1,42 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import type { Noms, Personne, Tache } from "../lib/types";
 import { effacerExemples, remettreExemples, toutEffacer } from "../data/actions";
-import { choisirProprio, enregistrerNoms, marquerGuide, poserReglage, useReglage } from "../data/hooks";
+import { marquerGuide, poserReglage, useReglage } from "../data/hooks";
+import { CodeInvitation } from "../components/Connexion";
+import { estConnecte, inviter, type Foyer, type Membre } from "../sync/moteur";
 import { MODULES, basculerModule } from "../modules/registre";
 import { exporter, importer } from "../data/sauvegarde";
 import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
 
-export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onGuide: () => void }) {
+export function Reglages({ taches, noms, masques, proprio, onGuide, onRelier }: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onGuide: () => void; onRelier: () => void }) {
   const [sur, setSur] = useState(false);
   const [recherche, setRecherche] = useState(false);
   const maj = useMiseAJour();
   const resume = useReglage("resumeMatin", true);
   const nb = taches.length;
-  const changer = (cle: keyof Noms, valeur: string, defaut: string) => {
-    enregistrerNoms({ ...noms, [cle]: valeur.trim() || defaut });
-    toast("Prénom enregistré");
-  };
+  const relie = !!useReglage<Foyer | null>("foyer", null);
   return (
     <>
+      <SectionFoyer noms={noms} proprio={proprio} onRelier={onRelier} />
       <section className="g reglages">
-        <div className="champ"><label htmlFor="r-moi">Son prénom à lui</label>
-          <input className="saisie" id="r-moi" maxLength={24} defaultValue={noms.moi} onBlur={(e) => e.target.value.trim() !== noms.moi && changer("moi", e.target.value, "Melo")} /></div>
-        <div className="champ"><label htmlFor="r-elle">Son prénom à elle</label>
-          <input className="saisie" id="r-elle" maxLength={24} defaultValue={noms.elle} onBlur={(e) => e.target.value.trim() !== noms.elle && changer("elle", e.target.value, "Sarah")} /></div>
-        <div className="champ"><span className="lab">Ce téléphone est celui de</span>
-          <div className="puces">
-            {(["moi", "elle"] as Personne[]).map((p) => (
-              <button key={p} type="button" className={`puce${p === "elle" ? " p-elle" : ""}`} aria-pressed={proprio === p}
-                onClick={() => { if (p !== proprio) { choisirProprio(p); toast(`C'est maintenant le téléphone de ${noms[p]}`); } }}>{noms[p]}</button>
-            ))}
-          </div></div>
+        <span className="lab">Le guide</span>
         <div className="rangee"><button className="bouton second" onClick={() => { marquerGuide(false); onGuide(); }}>Revoir le guide</button></div>
       </section>
       <section className="g reglages">
         <span className="lab">Le matin</span>
         <label className="module-ligne">
-          <span><b>Résumé du matin</b><small>En haut de l'accueil jusqu'à midi : ta journée, celle de {noms[proprio === "moi" ? "elle" : "moi"]}, et ce qui arrive dans la semaine.</small></span>
+          <span><b>Résumé du matin</b><small>Le petit soleil en haut de l'accueil : ta journée, celle de {noms[proprio === "moi" ? "elle" : "moi"]}, et ce qui arrive dans la semaine.</small></span>
           <input type="checkbox" role="switch" className="interrupteur" checked={resume} onChange={() => poserReglage("resumeMatin", !resume)} />
         </label>
         <p className="aide-champ">La notification de 7 h viendra avec les notifications du téléphone.</p>
@@ -58,7 +48,7 @@ export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: 
       </section>
       <section className="g reglages">
         <span className="lab">Tes données</span>
-        <p>{nb} tâche{nb > 1 ? "s" : ""} enregistrée{nb > 1 ? "s" : ""} sur cet appareil. Rien n'est envoyé ailleurs pour l'instant. Le partage entre vous deux arrivera avec la synchro. En attendant, fais une sauvegarde de temps en temps.</p>
+        <p>{nb} tâche{nb > 1 ? "s" : ""} enregistrée{nb > 1 ? "s" : ""} sur cet appareil.{relie ? " Tâches et horaires sont aussi gardés dans votre foyer ; les photos restent sur ce téléphone." : " Rien n'est envoyé ailleurs tant que le téléphone n'est pas relié au foyer."} Une sauvegarde de temps en temps ne fait pas de mal.</p>
         <div className="rangee">
           <button className="bouton" onClick={() => exporter()}>Faire une sauvegarde</button>
           <label className="bouton second">Récupérer une sauvegarde
@@ -72,7 +62,7 @@ export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: 
           <button className={`bouton danger${sur ? " sur" : ""}`} onClick={() => {
             if (!sur) { setSur(true); setTimeout(() => setSur(false), 4000); return; }
             toutEffacer(); setSur(false); toast("Tout est effacé");
-          }}>{sur ? "Touche encore pour confirmer" : "Tout effacer"}</button>
+          }}>{sur ? "Touche encore pour confirmer" : relie ? "Tout effacer, pour vous deux" : "Tout effacer"}</button>
         </div>
       </section>
       <section className="g reglages">
@@ -92,5 +82,44 @@ export function Reglages({ taches, noms, masques, proprio, onGuide }: { taches: 
       </section>
       <p className="note-donnees">Icônes : PulsoIcon (licence ISC). Planning est construit ; Cuisine, Maison et Budget pas encore.</p>
     </>
+  );
+}
+
+// Le foyer : qui en fait partie, et un code pour inviter l'autre. Les prénoms ne se changent pas ici.
+function SectionFoyer({ noms, proprio, onRelier }: { noms: Noms; proprio: Personne; onRelier: () => void }) {
+  const foyer = useReglage<Foyer | null>("foyer", null);
+  const membres = useReglage<Membre[]>("membres", []);
+  const [connecte, setConnecte] = useState(true);
+  const [code, setCode] = useState("");
+  const [occupe, setOccupe] = useState(false);
+  useEffect(() => { if (foyer) estConnecte().then(setConnecte); }, [foyer]);
+  const lautre = noms[proprio === "moi" ? "elle" : "moi"];
+
+  if (!foyer) return (
+    <section className="g reglages">
+      <span className="lab">Foyer</span>
+      <p>Echo est seulement sur ce téléphone. Relie-le au foyer pour partager tâches et horaires avec {lautre}.</p>
+      <div className="rangee"><button className="bouton" onClick={onRelier}>Relier ce téléphone</button></div>
+    </section>
+  );
+  const seul = membres.length < 2;
+  return (
+    <section className="g reglages">
+      <span className="lab">Foyer</span>
+      {membres.length > 0 && <div className="membres">{membres.map((m) => <span key={m.userId}><i className={m.place}>{(m.prenom[0] || "?").toUpperCase()}</i>{m.prenom}{m.place === proprio ? " (toi)" : ""}</span>)}</div>}
+      {!connecte ? <>
+        <p>Ce téléphone n'est plus connecté : les changements attendent ici. Reconnecte-le avec ton e-mail.</p>
+        <div className="rangee"><button className="bouton" onClick={onRelier}>Reconnecter</button></div>
+      </> : seul ? <>
+        <p>Invite {lautre} : sur son téléphone, Echo lui demandera ce code.</p>
+        {code ? <CodeInvitation code={code} /> : (
+          <div className="rangee"><button className="bouton" disabled={occupe} onClick={async () => {
+            setOccupe(true);
+            try { setCode(await inviter()); } catch (e) { toast(e instanceof Error ? e.message : "Ça n'a pas marché."); }
+            setOccupe(false);
+          }}>{occupe ? "Un instant…" : "Créer un code d'invitation"}</button></div>
+        )}
+      </> : <p>Tout ce que l'un ajoute ou termine arrive chez l'autre, avec un petit message.</p>}
+    </section>
   );
 }

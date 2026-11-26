@@ -12,9 +12,13 @@ import { MiseAJour } from "./components/MiseAJour";
 import type { Compris } from "./lib/comprendre";
 import type { Tache } from "./lib/types";
 import { premierLancement } from "./data/actions";
-import { baseOuverte, garderLesDonnees } from "./data/db";
+import { baseOuverte, db, garderLesDonnees } from "./data/db";
 import { initialeDe, poserReglage, useMaintenant, useNoms, useProfil, useReglage, useTaches } from "./data/hooks";
 import { Bienvenue } from "./components/Bienvenue";
+import { Connexion } from "./components/Connexion";
+import { ResumeMatin } from "./components/ResumeMatin";
+import { suivre } from "./sync/moteur";
+import { useLiveQuery } from "dexie-react-hooks";
 import { autre } from "./lib/types";
 import { Aujourdhui } from "./pages/Aujourdhui";
 import { tachesDuJour } from "./lib/journee";
@@ -35,6 +39,10 @@ export default function App() {
   const { proprio: proprioBrut, guideVu } = useProfil();
   const proprio = proprioBrut ?? "moi";
   const [guideFerme, setGuideFerme] = useState(false);
+  // Relier le téléphone au foyer : proposé une fois à ceux qui avaient Echo avant la synchro, puis depuis les Réglages.
+  const etatFoyer = useLiveQuery(async () => ({ foyer: (await db.reglages.get("foyer"))?.valeur, proposee: !!(await db.reglages.get("connexionProposee"))?.valeur }), []);
+  const aProposer = !!etatFoyer && !etatFoyer.foyer && !etatFoyer.proposee;
+  const [relier, setRelier] = useState(false);
   const now = useMaintenant();
   const [page, setPage] = useState(depuisAdresse);
   const [apercu, setApercu] = useState<string | null>(null);
@@ -85,7 +93,7 @@ export default function App() {
 
   const [baseOk, setBaseOk] = useState(true);
   useEffect(() => {
-    baseOuverte().then((ok) => { setBaseOk(ok); if (ok) { premierLancement().catch(() => {}); garderLesDonnees(); } });
+    baseOuverte().then((ok) => { setBaseOk(ok); if (ok) { premierLancement().catch(() => {}); garderLesDonnees(); suivre(); } });
   }, []);
   useEffect(() => {
     const suivre = () => setPage(depuisAdresse());
@@ -126,6 +134,7 @@ export default function App() {
               <h1 className="page-titre">{vue.libelle}</h1>
             </div>
             <div className="entete-droite">
+              {vue.id === "aujourdhui" && taches && <ResumeMatin taches={liste} noms={noms} proprio={proprio} now={now} />}
               <button type="button" className="loupe-ouvrir" aria-label="Chercher dans Echo" onClick={() => setRecherche("")}><Search size={20} strokeWidth={2} /></button>
               <a className="duo" href="#reglages" aria-label="Les deux profils du foyer" onClick={(e) => { e.preventDefault(); aller("reglages"); }}>
                 <i className={proprio}>{initialeDe(noms, proprio)}</i><i className={autre(proprio)}>{initialeDe(noms, autre(proprio))}</i>
@@ -140,7 +149,7 @@ export default function App() {
           <div className="cadre arrivee">
             {!baseOk ? <BaseFermee /> : taches === undefined ? <Squelette />
               : module ? (module.Page && module.etat === "construit" ? <module.Page noms={noms} proprio={proprio} now={now} aller={aller} ouvrir={(t) => ouvrir(t)} /> : <Bientot module={module} onAller={aller} />)
-              : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} proprio={proprio} onGuide={() => setGuideFerme(false)} />
+              : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} proprio={proprio} onGuide={() => setGuideFerme(false)} onRelier={() => setRelier(true)} />
               : <Aujourdhui taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} />}
           </div>
           </Secours>}
@@ -154,6 +163,10 @@ export default function App() {
       <MiseAJour />
       {proprioBrut !== undefined && (proprioBrut === null || (!guideVu && !guideFerme)) && (
         <Bienvenue noms={noms} proprio={proprioBrut} onFini={() => setGuideFerme(true)} />
+      )}
+      {proprioBrut && (relier || (guideVu && aProposer)) && (
+        <Connexion prenom={noms[proprioBrut]} proprio={proprioBrut} onFini={() => { setRelier(false); poserReglage("connexionProposee", true); }}
+          onPlusTard={() => { setRelier(false); poserReglage("connexionProposee", true); }} />
       )}
       {/* Les messages (avec Annuler) prennent la place de la barre rangée, à gauche de la capsule. */}
       <Toaster position="bottom-center" offset={BORDS_MESSAGE} mobileOffset={BORDS_MESSAGE} toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: 4000 }} />

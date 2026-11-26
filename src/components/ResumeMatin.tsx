@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarDays, ListChecks, Sunrise, User, Volume2, X } from "pulsoicon-react";
+import { CalendarDays, ListChecks, Sunrise, User, Volume2, X } from "pulsoicon-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { auJour } from "../lib/dates";
@@ -11,8 +11,8 @@ interface Props { taches: Tache[]; noms: Noms; proprio: Personne; now: Date }
 const ICONES: Record<SectionResume["id"], typeof Sunrise> = { agenda: CalendarDays, important: ListChecks, autre: User, semaine: CalendarDays };
 const parle = () => typeof window !== "undefined" && "speechSynthesis" in window;
 
-// Le résumé du matin : une pastille en haut de l'accueil, qui ouvre la journée racontée en plein écran.
-// La pastille reste jusqu'à midi ; une fois lu, elle devient discrète. On peut la couper dans les Réglages.
+// Le résumé du matin : un petit bouton soleil en haut de l'accueil, à côté de la loupe, qui ouvre la journée racontée
+// dans une fenêtre. Un point orange le signale le matin tant qu'il n'est pas lu. On peut le couper dans les Réglages.
 export function ResumeMatin({ taches, noms, proprio, now }: Props) {
   const actif = useReglage("resumeMatin", true);
   const luLe = useReglage<string | null>("resumeLu", null);
@@ -33,7 +33,7 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ouvert]);
 
-  if (!actif || (lu && now.getHours() >= 12)) return null;
+  if (!actif) return null;
   const r = construireResume(taches, noms, proprio, now, travail);
 
   function terminer() {
@@ -55,14 +55,13 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
 
   return (
     <>
-      <button className={`matin${lu ? " lu" : ""}`} onClick={() => setOuvert(true)}>
-        <span className="matin-icone" aria-hidden="true"><Sunrise size={lu ? 18 : 22} strokeWidth={1.8} /></span>
-        {lu ? <span className="matin-texte"><b>Résumé du matin lu · le revoir</b></span>
-          : <span className="matin-texte"><b>Ton résumé du matin</b><small>{r.sections.length ? "Une minute à lire" : "Une journée calme"}</small></span>}
-        {!lu && <ArrowRight size={18} strokeWidth={2} />}
+      <button type="button" className={`matin-bouton${!lu && now.getHours() < 12 ? " nouveau" : ""}`} aria-label={lu ? "Revoir le résumé du matin" : "Ouvrir ton résumé du matin"} onClick={() => setOuvert(true)}>
+        <Sunrise size={20} strokeWidth={2} />
       </button>
 
       {ouvert && createPortal(
+        <>
+        <div className="resume-fond" aria-hidden="true" onClick={terminer} />
         <div className="resume" role="dialog" aria-modal="true" aria-labelledby="resume-titre">
           <div className="resume-haut">
             <button ref={fermer} className="rond-fermer" aria-label="Fermer le résumé" onClick={terminer}><X size={20} strokeWidth={2.2} /></button>
@@ -90,7 +89,8 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
             {parle() && <button className="bouton second" onClick={ecouter} aria-pressed={lecture}><Volume2 size={18} strokeWidth={2} /> {lecture ? "Arrêter" : "Écouter"}</button>}
             <button className="bouton" onClick={terminer}>Commencer ma journée</button>
           </div>
-        </div>,
+        </div>
+        </>,
         document.body,
       )}
     </>
