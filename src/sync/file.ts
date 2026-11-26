@@ -1,5 +1,6 @@
 import type { Transaction } from "dexie";
 import { db } from "../data/db";
+import { GENRES } from "./genres";
 
 // La file d'envoi : la liste de ce qui a changé sur ce téléphone et n'est pas encore parti au foyer.
 // Elle ne garde que des clés (« tache:abc », « horaire:moi|2026-11-26 ») : au moment d'envoyer,
@@ -42,3 +43,10 @@ db.taches.hook("deleting", (pk, _obj, tx) => { if (locale(tx)) noter("tache:" + 
 db.horaires.hook("creating", (_pk, o, tx) => { if (locale(tx)) noter(cleHoraire(o.qui, o.jour)); });
 db.horaires.hook("updating", (_m, _pk, o, tx) => { if (locale(tx)) noter(cleHoraire(o.qui, o.jour)); });
 db.horaires.hook("deleting", (_pk, o, tx) => { if (locale(tx)) noter(cleHoraire(o.qui, o.jour)); });
+
+// Les tables des modules : même règle, une clé « genre:clé ».
+for (const [genre, { table }] of Object.entries(GENRES)) {
+  table.hook("creating", (pk, _o, tx) => { if (locale(tx)) noter(`${genre}:${pk}`); });
+  table.hook("updating", (_m, pk, _o, tx) => { if (locale(tx)) noter(`${genre}:${pk}`); });
+  table.hook("deleting", (pk, _o, tx) => { if (locale(tx)) noter(`${genre}:${pk}`); });
+}

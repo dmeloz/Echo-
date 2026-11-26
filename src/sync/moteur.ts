@@ -6,6 +6,7 @@ import type { Noms, Personne } from "../lib/types";
 import { nettoyerNoms, nettoyerTache } from "../lib/valider";
 import { supa } from "./client";
 import { autrePrenom } from "../lib/types";
+import { GENRES, TABLES_MODULES } from "./genres";
 import { cleHoraire, lireFile, marquerDistante, noter, retirer, surChangement } from "./file";
 
 // La synchro du foyer. Chaque téléphone garde toutes les données chez lui (Echo marche hors ligne)
@@ -14,7 +15,7 @@ import { cleHoraire, lireFile, marquerDistante, noter, retirer, surChangement } 
 
 export interface Foyer { id: string; userId: string }
 export interface Membre { userId: string; prenom: string; place: Personne }
-type Ligne = { genre: "tache" | "horaire"; cle: string; data: unknown; supprime: boolean; par: string | null; maj: string };
+type Ligne = { genre: string; cle: string; data: unknown; supprime: boolean; par: string | null; maj: string };
 
 const CURSEUR = "echo-curseur"; // l'heure (serveur) du dernier changement reçu
 let foyer: Foyer | null = null;
@@ -84,7 +85,10 @@ export async function inviter(): Promise<string> {
 // Entrer dans le foyer : ce téléphone prend sa place (moi ou elle), et tout ce qu'il contient part au foyer.
 async function entrer(foyerId: string, place: Personne, userId: string) {
   const avant = (await db.reglages.get("proprio"))?.valeur as Personne | undefined;
-  await db.transaction("rw", [db.taches, db.horaires, db.photos, db.reglages], async () => {
+  // Ce rangement n'est pas un changement à envoyer : vider puis réécrire une table (échange des places) ferait partir
+  // des suppressions vers le foyer. Ce qui doit partir est noté juste après, d'après ce que le téléphone contient vraiment.
+  await db.transaction("rw", [db.taches, db.horaires, db.photos, db.reglages, db.cuisine_courses, db.cuisine_gouts], async (tx) => {
+    marquerDistante(tx);
     const ex = (await db.taches.filter((t) => !!t.ex).toArray()).map((t) => t.id);
     await db.taches.bulkDelete(ex);
     await db.photos.where("tacheId").anyOf(ex).delete();
@@ -96,11 +100,26 @@ async function entrer(foyerId: string, place: Personne, userId: string) {
       const horaires = await db.horaires.toArray();
       await db.horaires.clear();
       await db.horaires.bulkPut(horaires.map((h) => ({ ...h, qui: inv(h.qui) })));
+      // Cuisine : qui a ajouté ou coché un article, et les goûts de chacun, suivent la personne.
+      const courses = await db.cuisine_courses.toArray();
+      await db.cuisine_courses.bulkPut(courses.map((a) => ({ ...a, par: a.par === "echo" ? a.par : inv(a.par), ...(a.faitPar ? { faitPar: inv(a.faitPar) } : {}) })));
+      const gouts = await db.cuisine_gouts.toArray();
+      await db.cuisine_gouts.clear();
+      await db.cuisine_gouts.bulkPut(gouts.map((g) => ({ ...g, qui: inv(g.qui) })));
     }
     await db.reglages.bulkPut([{ cle: "proprio", valeur: place }, { cle: "foyer", valeur: { id: foyerId, userId } }]);
   });
   for (const t of await db.taches.toArray()) noter("tache:" + t.id);
   for (const h of await db.horaires.toArray()) noter(cleHoraire(h.qui, h.jour));
+  // Les données des modules. Pour une clé « naturelle » (un produit, un jour, une personne), ce que le foyer a déjà gagne :
+  // le téléphone qui arrive ne remplace pas l'historique d'achats ou les goûts des autres.
+  const naturels = Object.keys(GENRES).filter((g) => GENRES[g].naturelle);
+  const { data: dejaLa, error } = await supa.from("elements").select("genre, cle").eq("foyer_id", foyerId).in("genre", naturels).eq("supprime", false);
+  const pris = new Set((dejaLa ?? []).map((l) => `${l.genre}:${l.cle}`));
+  for (const [genre, g] of Object.entries(GENRES)) {
+    if (g.naturelle && error) continue; // foyer illisible pour l'instant : on n'écrase rien
+    for (const cle of await g.table.toCollection().primaryKeys()) if (!pris.has(`${genre}:${cle}`)) noter(`${genre}:${cle}`);
+  }
   try { localStorage.removeItem(CURSEUR); } catch { /* rien */ }
   await demarrer();
 }
@@ -115,6 +134,11 @@ async function lireLigne(c: string) {
     if (t?.ex) return null; // les exemples restent sur ce téléphone
     return { foyer_id: foyer!.id, genre, cle, data: t ?? null, supprime: !t };
   }
+  if (genre in GENRES) {
+    const x = await GENRES[genre].table.get(cle);
+    return { foyer_id: foyer!.id, genre, cle, data: x ?? null, supprime: !x };
+  }
+  if (genre !== "horaire") return null; // un genre que cette version ne connaît pas
   const [qui, jour] = cle.split("|");
   const h = await db.horaires.get([qui, jour]);
   return { foyer_id: foyer!.id, genre, cle, data: h ?? null, supprime: !h };
@@ -167,7 +191,7 @@ export async function appliquer(lignes: Ligne[], premier: boolean, moi = foyer?.
   const attente = lireFile();
   const nouvelles: Array<{ par: string; texte: string }> = [];
   const membres = ((await db.reglages.get("membres"))?.valeur as Membre[] | undefined) ?? [];
-  await db.transaction("rw", [db.taches, db.horaires, db.photos, db.corbeille], async (tx) => {
+  await db.transaction("rw", [db.taches, db.horaires, db.photos, db.corbeille, ...TABLES_MODULES], async (tx) => {
     marquerDistante(tx);
     for (const l of lignes) {
       if (`${l.genre}:${l.cle}` in attente) continue;
@@ -189,7 +213,13 @@ export async function appliquer(lignes: Ligne[], premier: boolean, moi = foyer?.
         if (premier || !l.par || l.par === moi) continue;
         if (!avant) nouvelles.push({ par: l.par, texte: `a ajouté « ${t.titre} »` });
         else if (!avant.fait && t.fait) nouvelles.push({ par: l.par, texte: `a terminé « ${t.titre} »` });
-      } else {
+      } else if (l.genre in GENRES) {
+        // Les données d'un module : la ligne nettoyée remplace celle d'ici ; abîmée, elle est ignorée.
+        const g = GENRES[l.genre];
+        if (l.supprime) { await g.table.delete(l.cle); continue; }
+        const x = g.nettoyer(l.data) as Record<string, unknown> | null;
+        if (x && x[g.cle] === l.cle) await g.table.put(x);
+      } else if (l.genre === "horaire") {
         const [qui, jour] = l.cle.split("|");
         const h = l.supprime ? null : nettoyerHoraire(l.data);
         if (h) await db.horaires.put(h);

@@ -325,7 +325,7 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 
 /* Messages (Sonner) */
 .message { display: flex; align-items: center; gap: 14px; background: var(--encre); color: #fff; border-radius: 999px; padding: 10px 10px 10px 18px; font: 600 14px var(--police); box-shadow: 0 10px 30px rgb(18 40 58 / .3); width: auto; }
-.message [data-button] { border: 0; background: rgb(255 255 255 / .16); color: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 700; font-size: 13px; margin-left: auto; }
+.message [data-button] { flex: none; white-space: nowrap; border: 0; background: rgb(255 255 255 / .16); color: #fff; border-radius: 999px; padding: 6px 12px; font-weight: 700; font-size: 13px; margin-left: auto; }
 @media (max-width: 600px) { [data-sonner-toaster] { width: auto !important; } [data-sonner-toaster] [data-sonner-toast] { width: 100% !important; } }
 .clavier-ouvert .barre-bas { bottom: calc(var(--clavier) + 8px); }
 .clavier-ouvert .capsule { bottom: calc(var(--clavier) + 5px); }
@@ -758,3 +758,129 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .corbeille li { display: flex; align-items: center; gap: 10px; }
 .corbeille span { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
 .corbeille small { color: var(--discret); font-size: var(--t-petit); }
+
+/* ===== Module Cuisine ===== */
+/* Le petit bouton qu'un module pose dans l'en-tête (« Au magasin »). */
+#entete-module { display: contents; }
+/* La page prend toute la largeur (560 px au plus), même quand son contenu est étroit ou qu'un carrousel dépasse. */
+.cadre > .cadre { width: 100%; }
+.entete > div:first-child { min-width: 0; }
+.entete:has(.pilule-entete) .date { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pilule-entete { display: inline-flex; align-items: center; gap: var(--e3); height: 40px; padding: 0 13px; border-radius: 999px; border: 1px solid var(--bord); background: var(--verre-fort); color: var(--accent); font-weight: 700; font-size: 14px; white-space: nowrap; box-shadow: 0 6px 16px var(--ombre); }
+.pilule-entete:active { scale: .95; }
+
+/* Le champ pour écrire les articles, le micro à droite. */
+.ajout-courses { display: flex; align-items: center; gap: var(--e3); padding: 6px 6px 6px 16px; border-radius: 999px; }
+.ajout-courses input { flex: 1; min-width: 0; height: 44px; border: 0; background: transparent; font-size: 16px; font-weight: 500; outline: none; }
+.rond-champ { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; background: #fff; color: var(--encre); display: grid; place-items: center; }
+.rond-champ.plein, .rond-champ.ecoute { background: var(--accent); color: #fff; }
+.rond-champ:active { scale: .92; }
+
+/* Les rayons : des pilules qui disent ce qu'il reste, puis une carte par rayon, la suivante dépasse à droite. */
+.rayons { display: flex; gap: var(--e4); overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 2px 16px; }
+.rayons::-webkit-scrollbar, .carrousel::-webkit-scrollbar { display: none; }
+.ray { flex: none; min-height: 40px; border: 1px solid var(--bord); border-radius: 999px; padding: 8px 14px; background: var(--verre-fort); color: var(--encre); font-weight: 600; font-size: 14px; white-space: nowrap; transition: background var(--m-onglet) var(--douce), color var(--m-onglet); }
+.ray b { font-variant-numeric: tabular-nums; opacity: .65; margin-left: 2px; }
+.ray[aria-selected="true"] { background: var(--encre); color: #fff; border-color: var(--encre); }
+.carrousel { display: flex; align-items: flex-start; gap: var(--e5); overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
+  margin: 0 -16px -14px; padding: 4px 16px 26px; scroll-padding-left: 16px; }
+.carrousel::after { content: ""; flex: none; width: calc(16% - var(--e5)); }
+.carte-rayon { flex: none; width: 84%; scroll-snap-align: start; border-radius: var(--r4); padding: 18px 18px 8px; transition: opacity var(--m-onglet) var(--douce); }
+.carte-rayon:only-child { width: 100%; }
+.carte-rayon:not([aria-current="true"]) { opacity: .75; }
+.carte-rayon header { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e4); padding-bottom: 10px; }
+.carte-rayon h2 { font-size: var(--t-carte); font-weight: 700; letter-spacing: -.01em; text-wrap: balance; }
+.carte-rayon header span { flex: none; font-size: 14px; color: var(--discret); font-variant-numeric: tabular-nums; }
+.art { border-top: 1px solid var(--trait); }
+.art-ligne { display: flex; align-items: center; gap: var(--e5); min-height: 54px; }
+.case { position: relative; width: 28px; height: 28px; flex: none; border-radius: 9px; border: 2px solid rgb(18 40 58 / .25); background: transparent; display: grid; place-items: center; color: #fff; transition: background var(--m-ligne) var(--douce), border-color var(--m-ligne); }
+button.case::after { content: ""; position: absolute; inset: -9px; } /* zone de toucher de 44 points */
+.case.cochee { background: var(--turquoise); border-color: var(--turquoise); }
+.coche-trait path { stroke-dasharray: 24; animation: coche-trace var(--m-ligne) var(--douce); }
+@keyframes coche-trace { from { stroke-dashoffset: 24; } }
+.art-nom { flex: 1; min-width: 0; min-height: 44px; border: 0; background: none; text-align: left; font-size: 17px; font-weight: 500; color: var(--encre); overflow: hidden; text-overflow: ellipsis; }
+.art.fait .art-nom { color: var(--discret); text-decoration: line-through; }
+.qte { flex: none; font-size: 14px; color: var(--discret); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.av { width: 24px; height: 24px; flex: none; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 13px; font-weight: 700; color: #fff; background: var(--bleu); }
+.av.elle { background: var(--turquoise-texte); }
+.av.echo { background: var(--bleu-pale); color: var(--bleu); }
+.art-plus { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e4); padding: 0 0 var(--e5); animation: reglage-entre var(--m-apparition) var(--douce); }
+.art-plus label { display: flex; flex-direction: column; gap: var(--e2); min-width: 0; }
+.art-plus label span { font-size: var(--t-petit); font-weight: 700; color: var(--discret); }
+.art-plus .saisie { padding: 10px 12px; min-width: 0; }
+.art-plus .bouton-texte { grid-column: 1 / -1; justify-self: start; }
+.bouton-texte.danger { color: var(--urgent); }
+.points-rayons { display: flex; gap: var(--e3); justify-content: center; }
+.points-rayons i { width: 8px; height: 8px; border-radius: 999px; background: rgb(18 40 58 / .18); transition: width var(--m-onglet) var(--douce), background var(--m-onglet); }
+.points-rayons i.la { width: 22px; background: var(--encre); }
+.deja-pris { padding: 4px 16px; }
+.deja-pris ul { padding-bottom: var(--e3); }
+.deja-tete { display: flex; align-items: center; gap: var(--e5); width: 100%; min-height: 48px; border: 0; background: none; text-align: left; color: var(--discret); font-size: 15px; }
+.deja-tete b { flex: 1; font-weight: 600; }
+.deja-tete .case, .deja-magasin .case { width: 24px; height: 24px; border-radius: 8px; }
+
+/* Au magasin : tout est plus gros, une main suffit. */
+.magasin { display: flex; flex-direction: column; gap: var(--e5); }
+.magasin-tete { display: flex; align-items: center; gap: var(--e5); }
+.magasin-tete div { display: flex; flex-direction: column; }
+.magasin-tete b { font-size: 18px; }
+.magasin-tete span { font-size: var(--t-petit); color: var(--discret); font-variant-numeric: tabular-nums; }
+.magasin-barre { height: 6px; border-radius: 999px; background: rgb(18 40 58 / .08); overflow: hidden; }
+.magasin-barre i { display: block; height: 100%; border-radius: 999px; background: var(--turquoise); transition: width var(--m-barre) var(--douce); }
+.liste-magasin { padding: 0; overflow: hidden; }
+.liste-magasin h2 { padding: 14px 16px 6px; font-size: var(--t-petit); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--discret); }
+.liste-magasin.ensuite { opacity: .7; }
+.art-magasin { display: flex; align-items: center; gap: var(--e6); width: 100%; min-height: 64px; padding: 14px 16px; border: 0; border-top: 1px solid var(--trait); background: transparent; text-align: left; font-size: 21px; font-weight: 600; color: var(--encre); }
+.liste-magasin > .art-magasin:first-child, .liste-magasin h2 + .art-magasin { border-top: 0; }
+.art-magasin .case { width: 32px; height: 32px; border-radius: 10px; }
+.art-magasin .art-nom { min-height: 0; font: inherit; }
+.art-magasin.fait .art-nom { color: var(--discret); text-decoration: line-through; }
+.art-magasin:active { background: rgb(255 255 255 / .55); }
+.magasin-lab { padding: var(--e2) var(--e2) 0; }
+.deja-magasin { display: flex; flex-direction: column; gap: var(--e4); opacity: .7; }
+.deja-magasin div { display: flex; align-items: center; gap: var(--e5); font-size: 15px; color: var(--discret); }
+.deja-magasin b { flex: 1; font-weight: 600; }
+
+/* Semaine : un jour = une ligne. */
+.semaine-dates { font-size: 14px; color: var(--discret); padding: 0 var(--e2); }
+.semaine-repas { padding: 0; overflow: hidden; }
+.jour-repas { display: flex; align-items: center; gap: var(--e5); width: 100%; min-height: 54px; padding: 8px 16px; border: 0; border-top: 1px solid var(--trait); background: transparent; text-align: left; color: var(--encre); }
+.jour-repas:first-child { border-top: 0; }
+.jour-repas > span, .jour-repas > label { width: 36px; flex: none; font-size: var(--t-petit); font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--discret); }
+.jour-repas .auj { color: var(--accent); }
+.jour-repas b { flex: 1; min-width: 0; font-size: 16px; font-weight: 600; }
+.jour-repas b.libre { font-weight: 500; color: var(--discret); }
+.jour-repas .saisie { flex: 1; min-width: 0; padding: 9px 12px; }
+button.jour-repas:active { background: rgb(255 255 255 / .55); }
+
+/* Stock : ce qu'il faut manger vite, puis quatre endroits. */
+.lieux { display: grid; grid-template-columns: 1fr 1fr; gap: var(--e4); }
+.lieux .tuile { font: inherit; color: var(--encre); }
+.manger-vite { display: flex; flex-direction: column; gap: var(--e3); background: rgb(207 238 233 / .55); }
+.manger-vite .lab { color: var(--turquoise-texte); }
+.manger-vite li, .liste-stock li { display: flex; align-items: center; gap: var(--e5); min-height: 44px; }
+.manger-vite li + li, .liste-stock li + li { border-top: 1px solid var(--trait); }
+.manger-vite b, .liste-stock b { flex: 1; min-width: 0; font-size: 16px; font-weight: 600; }
+.manger-vite span, .liste-stock span { font-size: 14px; color: var(--discret); }
+.manger-vite .retard, .liste-stock .vite { color: var(--urgent); font-weight: 700; }
+.ajout-stock { display: flex; flex-wrap: wrap; align-items: center; gap: var(--e4); }
+.ajout-stock .saisie { flex: 1 1 100%; }
+.ajout-stock .puce { flex: 1; display: flex; align-items: center; gap: var(--e4); }
+.liste-stock { padding: 4px 16px; }
+.liste-stock .retirer { position: relative; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgb(18 40 58 / .07); color: var(--discret); display: grid; place-items: center; }
+
+/* Le questionnaire des goûts (popup au premier passage, et dans les Réglages). */
+.gouts { position: fixed; z-index: 13; left: 10px; right: 10px; top: calc(env(safe-area-inset-top, 0px) + 10px); max-width: 560px; margin: 0 auto; max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 20px); overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: var(--e5); padding: 22px 18px 16px; border-radius: 30px; background: var(--fond); box-shadow: 0 24px 60px rgb(18 40 58 / .28); animation: resume-arrive var(--m-feuille) var(--douce); }
+.gouts h2 { font-size: var(--t-carte); font-weight: 800; letter-spacing: -.01em; }
+.gouts > p { font-size: 15px; color: var(--discret); text-wrap: pretty; }
+.gouts-form { display: flex; flex-direction: column; gap: var(--e6); }
+.gouts-form .champ .lab { text-wrap: balance; }
+.gouts-form .puce { min-height: 40px; }
+.gouts-pied { justify-content: flex-end; align-items: center; }
+.habituels li { display: flex; align-items: center; gap: var(--e5); padding: 4px 6px; }
+.habituels li + li { border-top: 1px solid var(--trait); }
+.habituels li > span { flex: 1; min-width: 0; }
+.habituels b { display: block; font-size: 15px; }
+.habituels small { display: block; font-size: var(--t-petit); color: var(--discret); }
+@media (prefers-reduced-motion: reduce) { .gouts, .art-plus, .coche-trait path { animation: none; } .carrousel { scroll-behavior: auto; } }

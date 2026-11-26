@@ -15,6 +15,9 @@ export interface ContexteModule {
   ouvrir: (t: Tache) => void; // ouvre la feuille d'une tâche (la feuille appartient à la base)
 }
 
+// Une phrase prise par un module : ce qu'on montre avant d'envoyer, et ce qui se passe à l'envoi.
+export interface PourModule { titre: string; ou: string; faire: () => Promise<unknown> }
+
 export interface Module {
   id: string;            // aussi l'adresse de la page : #cuisine
   libelle: string;       // le nom dans le menu
@@ -23,6 +26,9 @@ export interface Module {
   prevu: string[];       // ce que le module fera (montré tant qu'il n'est pas construit)
   Page?: ComponentType<ContexteModule>;   // la page du module
   Tuile?: ComponentType<ContexteModule>;  // sa tuile sur l'accueil (sinon une tuile simple)
-  // Plus tard, quand la base les aura : tables de données propres (préfixe <id>_),
-  // actions pour l'assistant IA, notifications, réglages propres au module.
+  Reglages?: ComponentType<ContexteModule>; // sa sous-page dans les Réglages (une ligne du sommaire à son nom)
+  // Ce que le module sait faire d'une phrase écrite dans la barre d'Echo. null : ce n'est pas pour lui.
+  comprendre?: (texte: string) => PourModule | null;
+  // Ses tables de données (préfixe <id>_) sont déclarées dans src/data/db.ts, et dans src/sync/genres.ts si elles partent au foyer.
+  // Plus tard : actions pour l'assistant IA, notifications.
 }

@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { Noms, Tache } from "../lib/types";
 import type { Horaire } from "../lib/horaires";
+import type { Article, Gouts, Habitude, Produit, Repas } from "../modules/cuisine/donnees";
 
 // Les données restent sur l'appareil (IndexedDB). La synchro à deux viendra plus tard (Supabase).
 export interface Reglage { cle: string; valeur: unknown }
@@ -14,11 +15,18 @@ export const db = new Dexie("echo") as Dexie & {
   photos: EntityTable<Photo, "id">;
   horaires: Dexie.Table<Horaire, [string, string]>;
   corbeille: EntityTable<Efface, "id">;
+  // Le module Cuisine (tables préfixées par son id).
+  cuisine_courses: EntityTable<Article, "id">;
+  cuisine_habitudes: EntityTable<Habitude, "cle">;
+  cuisine_repas: EntityTable<Repas, "jour">;
+  cuisine_stock: EntityTable<Produit, "id">;
+  cuisine_gouts: EntityTable<Gouts, "qui">;
 };
 db.version(1).stores({ taches: "id, jour, faitLe", reglages: "cle" });
 db.version(2).stores({ photos: "id, tacheId" });
 db.version(3).stores({ horaires: "[qui+jour], jour" }); // un code de travail par personne et par jour
 db.version(4).stores({ corbeille: "id, quand" });
+db.version(5).stores({ cuisine_courses: "id", cuisine_habitudes: "cle", cuisine_repas: "jour", cuisine_stock: "id", cuisine_gouts: "qui" });
 
 export const NOMS_DEFAUT: Noms = { moi: "Dany", elle: "Sarah" };
 

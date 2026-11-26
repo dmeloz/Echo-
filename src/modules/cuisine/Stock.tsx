@@ -1,0 +1,81 @@
+import { useLiveQuery } from "dexie-react-hooks";
+import { ChevronLeft, House, Package, Plus, Refrigerator, Snowflake, X } from "pulsoicon-react";
+import { useEffect, useState } from "react";
+import { db } from "../../data/db";
+import { auJour, libelleJour } from "../../lib/dates";
+import type { ContexteModule } from "../contrat";
+import { ajouterProduit, retirerProduit } from "./actions";
+import { LIEUX, type Lieu, type Produit } from "./donnees";
+
+const ICONES: Record<Lieu, typeof House> = { frigo: Refrigerator, congelateur: Snowflake, placard: Package, maison: House };
+
+// Le stock, forme simple du lot 1 : ce qu'il faut manger vite, puis quatre endroits. On ajoute à la main.
+// (Le ticket de caisse et le code-barres arrivent avec le lot 4.)
+export function Stock({ now }: ContexteModule) {
+  const produits = useLiveQuery(() => db.cuisine_stock.toArray(), [], [] as Produit[]);
+  const [lieu, setLieu] = useState<Lieu | null>(null);
+  const today = auJour(0, now), limite = auJour(3, now);
+  const vite = produits.filter((p) => p.avant && p.avant <= limite).sort((a, b) => a.avant!.localeCompare(b.avant!));
+  const quand = (p: Produit) => (p.avant! < today ? "dépassé" : libelleJour(p.avant!, now).toLowerCase());
+  useEffect(() => {
+    if (!lieu) return;
+    const retour = () => setLieu(null);
+    addEventListener("echo-retour", retour);
+    return () => removeEventListener("echo-retour", retour);
+  }, [lieu]);
+
+  if (lieu) {
+    const ici = produits.filter((p) => p.lieu === lieu).sort((a, b) => (a.avant ?? "9").localeCompare(b.avant ?? "9") || a.nom.localeCompare(b.nom));
+    return (
+      <div className="reglage-page" key={lieu}>
+        <button type="button" className="retour" onClick={() => setLieu(null)}><ChevronLeft size={20} strokeWidth={2.2} />Stock</button>
+        <h2 className="reglage-titre">{LIEUX.find((l) => l.id === lieu)!.nom}</h2>
+        <form className="g ajout-stock" autoComplete="off" onSubmit={(e) => {
+          e.preventDefault();
+          const f = e.currentTarget, nom = f.elements.namedItem("nom") as HTMLInputElement, avant = f.elements.namedItem("avant") as HTMLInputElement;
+          if (!nom.value.trim()) return;
+          ajouterProduit(nom.value, lieu, avant.value); f.reset(); nom.focus();
+        }}>
+          <label className="vh" htmlFor="stock-nom">Produit</label>
+          <input id="stock-nom" name="nom" className="saisie" placeholder="Ajouter un produit" maxLength={60} enterKeyHint="done" />
+          <label className="puce">À manger avant <input type="date" name="avant" min={today} /></label>
+          <button type="submit" className="rond-champ plein" aria-label="Ajouter au stock"><Plus size={20} strokeWidth={2.4} /></button>
+        </form>
+        {ici.length > 0 ? (
+          <ul className="g liste-stock">
+            {ici.map((p) => (
+              <li key={p.id}>
+                <b>{p.nom}</b>
+                {p.avant && <span className={p.avant <= limite ? "vite" : ""}>{quand(p)}</span>}
+                <button type="button" className="retirer" aria-label={`Retirer ${p.nom}`} onClick={() => retirerProduit(p.id)}><X size={16} strokeWidth={2.2} /></button>
+              </li>
+            ))}
+          </ul>
+        ) : <p className="note-donnees">Rien ici pour l'instant.</p>}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {vite.length > 0 && (
+        <section className="g manger-vite">
+          <span className="lab">À manger vite</span>
+          <ul>{vite.map((p) => <li key={p.id}><b>{p.nom}</b><span className={p.avant! <= today ? "retard" : ""}>{quand(p)}</span></li>)}</ul>
+        </section>
+      )}
+      <div className="lieux">
+        {LIEUX.map(({ id, nom }) => {
+          const Icone = ICONES[id], n = produits.filter((p) => p.lieu === id).length;
+          return (
+            <button key={id} type="button" className="tuile" onClick={() => setLieu(id)}>
+              <span className="tuile-icone" aria-hidden="true"><Icone size={18} strokeWidth={1.8} animated={false} /></span>
+              <b>{nom}</b><span>{n ? `${n} produit${n > 1 ? "s" : ""}` : "Vide"}</span>
+            </button>
+          );
+        })}
+      </div>
+      <p className="note-donnees">Pas besoin de tout noter : mets ici ce que tu veux suivre. Bientôt, la photo du ticket de caisse remplira le stock toute seule.</p>
+    </>
+  );
+}
