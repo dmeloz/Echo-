@@ -35,7 +35,7 @@ export function FeuilleTache({ ouverte, tache, pre, noms, proprio, onFermer }: P
   useEffect(() => {
     if (!ouverte) return;
     const base = tache ?? { ...vide, ...(pre || {}) };
-    setB({ titre: base.titre, jour: base.jour, heure: base.heure || "", qui: base.qui, niveau: base.niveau ?? null, repete: base.repete || "", note: base.note || "", etapes: tache?.etapes ? [...tache.etapes] : [], evt: !!tache?.evt, fin: tache?.fin ?? "" });
+    setB({ titre: base.titre, jour: base.jour, heure: base.heure || "", qui: base.qui, niveau: base.niveau ?? null, repete: base.repete || "", note: base.note || "", etapes: base.etapes ? [...base.etapes] : [], evt: !!base.evt, fin: base.fin ?? "" });
     setSur(false); setNouvelleEtape(""); setPhotosAjoutees([]); setPhotosRetirees([]); setEnvoi(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ouverte, tache, pre]);

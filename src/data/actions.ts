@@ -42,6 +42,17 @@ export async function ajouter(d: Brouillon, photos: Blob[] = []) {
   toast(`Ajouté${quand}`, { action: { label: "Annuler", onClick: () => retirer(t.id) } });
 }
 
+// Ajouter d'un coup ce qu'Echo a proposé : un seul message, et « Annuler » retire tout.
+export async function ajouterTout(ds: Brouillon[]) {
+  if (ds.length === 1) return ajouter(ds[0]);
+  const ts: Tache[] = ds.map((d, i) => ({ id: nouvelId() + i, ...d, fait: null, faitLe: null, cree: Date.now() + i }));
+  await db.taches.bulkAdd(ts);
+  toast(`${ts.length} ajoutés`, { action: { label: "Annuler", onClick: () => db.transaction("rw", db.taches, db.photos, async () => {
+    await db.taches.bulkDelete(ts.map((t) => t.id));
+    await db.photos.where("tacheId").anyOf(ts.map((t) => t.id)).delete();
+  }) } });
+}
+
 // Retirer une tâche et ses photos (sans message).
 const retirer = (id: string) => db.transaction("rw", db.taches, db.photos, async () => {
   await db.taches.delete(id);

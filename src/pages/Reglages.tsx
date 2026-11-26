@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, Calendar, ChevronLeft, ChevronRight, HardDrive, LayoutGrid, Users } from "pulsoicon-react";
+import { Bell, Calendar, ChevronLeft, ChevronRight, HardDrive, LayoutGrid, Sparkles, Users } from "pulsoicon-react";
 import { toast } from "sonner";
 import type { Noms, Personne, Tache } from "../lib/types";
 import { effacerExemples, remettreExemples, toutEffacer } from "../data/actions";
@@ -12,9 +12,9 @@ import { exporter, importer } from "../data/sauvegarde";
 import { RAPPELS_DEFAUT, reglerRappels, type Rappels } from "../data/rappels";
 import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
 
-type Theme = "foyer" | "notifications" | "agenda" | "modules" | "app";
+type Theme = "foyer" | "echo" | "notifications" | "agenda" | "modules" | "app";
 
-// Réglages : un sommaire de 5 lignes qui disent leur état, et un toucher ouvre la page du thème.
+// Réglages : un sommaire de 6 lignes qui disent leur état, et un toucher ouvre la page du thème.
 // Le retour (bouton ou geste de l'iPhone) passe par l'historique du navigateur.
 export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onGuide: () => void; onRelier: () => void }) {
   const [theme, setTheme] = useState<Theme | null>(() => (history.state?.reglage as Theme | undefined) ?? null);
@@ -35,6 +35,7 @@ export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]
       <button type="button" className="retour" onClick={fermer}><ChevronLeft size={20} strokeWidth={2.2} />Réglages</button>
       <h2 className="reglage-titre">{TITRES[theme]}</h2>
       {theme === "foyer" && <SectionFoyer noms={noms} proprio={proprio} onRelier={onRelier} />}
+      {theme === "echo" && <SectionEcho />}
       {theme === "notifications" && <SectionNotifications noms={noms} proprio={proprio} />}
       {theme === "agenda" && <SectionIcloud relie={relie} />}
       {theme === "modules" && <SectionModules masques={masques} />}
@@ -43,13 +44,15 @@ export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]
   );
 }
 
-const TITRES: Record<Theme, string> = { foyer: "Foyer", notifications: "Notifications", agenda: "Agenda", modules: "Modules", app: "Données et app" };
+const TITRES: Record<Theme, string> = { foyer: "Foyer", echo: "Echo", notifications: "Notifications", agenda: "Agenda", modules: "Modules", app: "Données et app" };
 
 function Sommaire({ taches, noms, masques, proprio, onOuvrir }: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onOuvrir: (t: Theme) => void }) {
   const foyer = useReglage<Foyer | null>("foyer", null);
   const membres = useReglage<Membre[]>("membres", []);
   const r = useReglage<Rappels>("rappels", RAPPELS_DEFAUT);
   const icloud = useReglage("icloud", false);
+  const assistant = useReglage("assistantEcho", true);
+  const codeEcho = useReglage<string>("codeEcho", "").trim();
   const maj = useMiseAJour();
   const lautre = noms[proprio === "moi" ? "elle" : "moi"];
   const affiches = MODULES.filter((m) => !masques.includes(m.id)).length;
@@ -57,10 +60,11 @@ function Sommaire({ taches, noms, masques, proprio, onOuvrir }: { taches: Tache[
 
   const lignes: Array<{ id: Theme; Icone: typeof Users; etat: string; turquoise?: boolean }> = [
     { id: "foyer", Icone: Users, etat: !foyer ? "Seulement sur ce téléphone" : membres.length > 1 ? membres.map((m) => m.prenom).join(" et ") : `Invite ${lautre}` },
-    { id: "notifications", Icone: Bell, turquoise: true, etat: !foyer || !r.actif ? "Éteintes sur ce téléphone" : r.matin ? `Allumées · résumé à ${r.matin.replace(":", " h ")}` : "Allumées" },
-    { id: "agenda", Icone: Calendar, etat: icloud ? "Relié à iCloud" : "iCloud pas relié" },
-    { id: "modules", Icone: LayoutGrid, turquoise: true, etat: `${affiches} affiché${affiches > 1 ? "s" : ""} sur ${MODULES.length}` },
-    { id: "app", Icone: HardDrive, etat: maj.disponible ? "Une mise à jour est prête" : `${nb} tâche${nb > 1 ? "s" : ""} · sauvegarde, guide, version` },
+    { id: "echo", Icone: Sparkles, turquoise: true, etat: !assistant ? "Éteint · l'app comprend seule" : codeEcho ? "Comprend tes phrases et propose" : "Code du foyer à mettre" },
+    { id: "notifications", Icone: Bell, etat: !foyer || !r.actif ? "Éteintes sur ce téléphone" : r.matin ? `Allumées · résumé à ${r.matin.replace(":", " h ")}` : "Allumées" },
+    { id: "agenda", Icone: Calendar, turquoise: true, etat: icloud ? "Relié à iCloud" : "iCloud pas relié" },
+    { id: "modules", Icone: LayoutGrid, etat: `${affiches} affiché${affiches > 1 ? "s" : ""} sur ${MODULES.length}` },
+    { id: "app", Icone: HardDrive, turquoise: true, etat: maj.disponible ? "Une mise à jour est prête" : `${nb} tâche${nb > 1 ? "s" : ""} · sauvegarde, guide, version` },
   ];
   return (
     <>
@@ -240,6 +244,25 @@ function SectionRappels({ relie }: { relie: boolean }) {
         </>}
         <p className="aide-champ">Sur iPhone, les notifications marchent quand Echo est ouvert depuis l'écran d'accueil.</p>
       </>}
+    </section>
+  );
+}
+
+// L'assistant Echo : comprendre les phrases avec l'IA (Claude Haiku 5.5, sur le serveur du foyer). Il propose, tu confirmes.
+function SectionEcho() {
+  const actif = useReglage("assistantEcho", true);
+  const code = useReglage<string>("codeEcho", "");
+  return (
+    <section className="g reglages">
+      <span className="lab">L'assistant</span>
+      <label className="module-ligne">
+        <span><b>Echo comprend mes phrases</b><small>Écris ou dis une phrase libre, même avec plusieurs choses dedans : Echo propose les tâches et les rendez-vous, et rien n'est ajouté sans ton accord. Sans internet, l'app comprend seule, plus simplement.</small></span>
+        <input type="checkbox" role="switch" className="interrupteur" checked={actif} onChange={() => poserReglage("assistantEcho", !actif)} />
+      </label>
+      <label className="champ">Code Echo
+        <input key={code} defaultValue={code} type="password" placeholder="Le code secret du foyer" autoComplete="off" onBlur={(e) => poserReglage("codeEcho", e.target.value.trim())} />
+      </label>
+      <p className="aide-champ">Le même code que pour la lecture de la fiche d'horaires. Il reste sur ce téléphone.</p>
     </section>
   );
 }

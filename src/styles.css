@@ -251,6 +251,18 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .apercu .tag { background: rgb(18 40 58 / .07); border-radius: 999px; padding: 3px 9px; font-weight: 600; }
 .apercu .tag.imp { background: var(--bleu-pale); color: var(--bleu); }
 .apercu .pied-ap { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: var(--t-petit); color: var(--discret); }
+/* Echo réfléchit / propose (assistant) */
+.apercu.echo-pense { flex-direction: row; align-items: center; gap: 10px; font-size: 14px; color: var(--discret); }
+.echo-points { display: inline-flex; gap: 4px; }
+.echo-points i { width: 6px; height: 6px; border-radius: 50%; background: var(--bleu); animation: echo-point 1s ease-in-out infinite; }
+.echo-points i:nth-child(2) { animation-delay: .15s; }
+.echo-points i:nth-child(3) { animation-delay: .3s; }
+@keyframes echo-point { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { .echo-points i { animation: none; opacity: .7; } }
+.apercu.echo-propose { max-height: 52vh; overflow-y: auto; }
+.echo-dit { margin: 0; font-size: 14.5px; color: var(--encre); }
+.apercu.echo-propose .ligne-ap + .ligne-ap { border-top: 1px solid rgb(18 40 58 / .08); padding-top: 8px; }
+.apercu .pied-ap .echo-ok { margin-left: auto; padding: 8px 16px; min-height: 40px; }
 
 /* ---------- La capsule du pouce : le menu en haut, l'étoile Echo en bas ---------- */
 .capsule { position: fixed; z-index: 6; right: calc(env(safe-area-inset-right, 0px) + 14px); bottom: calc(env(safe-area-inset-bottom, 0px) + 14px + var(--clavier)); width: 58px; padding: 4px; border-radius: 29px;

@@ -1,9 +1,10 @@
 import { auJour, sansAccents, z } from "./dates";
-import { autre, type Niveau, type Personne, type Qui, type Repete } from "./types";
+import { autre, type Etape, type Niveau, type Personne, type Qui, type Repete } from "./types";
 
 // Comprendre une phrase sans IA : le jour, l'heure, pour qui, la répétition.
 // L'assistant IA prendra le relais plus tard, pour les phrases plus libres.
-export interface Compris { titre: string; jour: string; heure: string; qui: Qui; repete: Repete; niveau: Niveau | null }
+// evt, fin et etapes ne viennent que d'une proposition de l'assistant Echo (pour « Modifier »).
+export interface Compris { titre: string; jour: string; heure: string; qui: Qui; repete: Repete; niveau: Niveau | null; evt?: boolean; fin?: string; etapes?: Etape[] }
 
 const JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
 const echapperRe = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
