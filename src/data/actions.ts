@@ -71,13 +71,21 @@ export async function modifier(id: string, d: Brouillon, photos: Blob[] = [], ph
 }
 
 export async function cocher(tache: Tache) {
+  const r = await marquerFait(tache.id, !!tache.fait);
+  if (!r) return;
+  toast(r.message, { action: { label: "Annuler", onClick: () => decocher(tache.id) } });
+}
+
+// Cocher une tâche, sans message (aussi utilisé par Echo). null : rien à faire (déjà cochée, ou effacée).
+// dejaCochee : la personne voyait la tâche cochée ; un deuxième toucher la décoche.
+export async function marquerFait(id: string, dejaCochee = false): Promise<{ message: string } | null> {
   let message = "Fait !";
   let deja = false;
   await db.transaction("rw", db.taches, db.reglages, async () => {
     // On relit la tâche : deux touchers rapides ne doivent pas la cocher (ou la répéter) deux fois.
-    const t = await db.taches.get(tache.id);
+    const t = await db.taches.get(id);
     if (!t) { deja = true; return; }
-    if (t.fait) { deja = true; if (tache.fait) await annulerFait(t.id); return; }
+    if (t.fait) { deja = true; if (dejaCochee) await annulerFait(t.id); return; }
     const maj: Partial<Tache> = { fait: Date.now(), faitLe: auJour(), faitPar: ((await db.reglages.get("proprio"))?.valeur as Personne | undefined) ?? "moi" };
     // Une tâche qui revient : on prépare la suivante.
     if (t.repete) {
@@ -89,8 +97,7 @@ export async function cocher(tache: Tache) {
     }
     await db.taches.update(t.id, maj);
   });
-  if (deja) return;
-  toast(message, { action: { label: "Annuler", onClick: () => decocher(tache.id) } });
+  return deja ? null : { message };
 }
 
 async function annulerFait(id: string) {
@@ -116,6 +123,10 @@ export async function changerNiveau(t: Tache, sens: 1 | -1) {
 // Supprimer = mettre à la corbeille (30 jours). Les photos restent sur le téléphone jusqu'à la fin du délai.
 export const DELAI_CORBEILLE = 30 * 86400_000;
 export async function supprimer(id: string) {
+  if (await mettreCorbeille(id)) toast("Mis à la corbeille", { action: { label: "Annuler", onClick: () => remettre(id) } });
+}
+// Mettre à la corbeille sans message (aussi utilisé par Echo). false : la tâche n'existe plus.
+export async function mettreCorbeille(id: string) {
   let fait = false;
   await db.transaction("rw", db.taches, db.corbeille, db.reglages, async () => {
     const t = await db.taches.get(id);
@@ -126,7 +137,7 @@ export async function supprimer(id: string) {
     await db.taches.delete(id);
     fait = true;
   });
-  if (fait) toast("Mis à la corbeille", { action: { label: "Annuler", onClick: () => remettre(id) } });
+  return fait;
 }
 
 // Sortir une tâche de la corbeille : elle revient comme avant (sans son ancien lien iCloud, qui n'existe plus).

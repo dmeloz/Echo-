@@ -1,9 +1,14 @@
-// L'assistant Echo : comprend une phrase libre (« dentiste jeudi 15h pour Sarah, et rappelle-moi les poubelles chaque mardi »)
-// et propose des tâches. Il ne fait rien lui-même : l'app montre la proposition et c'est la personne qui confirme.
+// L'assistant Echo. Deux façons de l'appeler :
+// 1. « agent » (depuis le lot 1 du moteur) : un tour de la boucle d'Echo. L'app envoie la conversation, Claude répond
+//    par du texte ou par des demandes d'outils (liste fermée : ../_shared/echo-outils.ts). C'est l'app qui exécute les outils
+//    sur ses données et qui demande l'accord de la personne : ici on ne touche à aucune donnée du foyer.
+// 2. L'ancienne façon (une phrase → des tâches proposées), gardée pour les téléphones qui n'ont pas encore la mise à jour.
 // Modèle : Claude Haiku 5.5 (rapide et peu cher). La clé reste ici (secret ANTHROPIC_API_KEY), jamais dans l'app.
 // Qui peut l'appeler : un membre connecté d'un foyer, ou le code secret du foyer (voir ../_shared/garde.ts). Appels comptés.
 import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
+import { createClient } from "npm:@supabase/supabase-js@2";
 import { garder } from "../_shared/garde.ts";
+import { MAX_MESSAGES, demandeTour } from "../_shared/echo-outils.ts";
 
 const ORIGINES = ["https://dmeloz.github.io", "http://localhost:5173", "http://localhost:4173"];
 const MAX_TEXTE = 1000;
@@ -105,12 +110,15 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(origine) });
   if (req.method !== "POST") return repondre({ erreur: "methode" }, 405, origine);
 
-  const g = await garder(req, "echo", { parPersonne: 60, tous: 200 });
+  let d: Demande & DemandeAgent;
+  try { d = await req.json(); } catch { return repondre({ erreur: "requete" }, 400, origine); }
+  // Un tour de boucle compte comme un appel : jusqu'à 6 par phrase, d'où une limite plus large en mode agent.
+  const agent = d.mode === "agent";
+  const g = await garder(req, agent ? "echo-agent" : "echo", agent ? { parPersonne: 240, tous: 400 } : { parPersonne: 60, tous: 200 });
   if (!g.ok) return repondre({ erreur: g.erreur }, g.statut, origine);
   if (!Deno.env.get("ANTHROPIC_API_KEY")) return repondre({ erreur: "cle" }, 503, origine);
+  if (agent) return tourAgent(d, origine);
 
-  let d: Demande;
-  try { d = await req.json(); } catch { return repondre({ erreur: "requete" }, 400, origine); }
   const texte = court(d.texte, MAX_TEXTE);
   if (!texte) return repondre({ erreur: "texte" }, 400, origine);
   if (typeof d.aujourdhui !== "string" || !JOUR.test(d.aujourdhui)) return repondre({ erreur: "requete" }, 400, origine);
@@ -150,3 +158,61 @@ Deno.serve(async (req) => {
     return repondre({ erreur: "service" }, 502, origine);
   }
 });
+
+// ---------- Le mode agent : un tour de la boucle ----------
+
+interface DemandeAgent { mode?: unknown; situation?: unknown; messages?: unknown }
+
+// Le budget du jour, en dollars, pour tout Echo (secret ECHO_BUDGET_JOUR, 0,50 $ sinon).
+// Au-delà, Echo s'arrête jusqu'à minuit (heure de Zurich) au lieu de dépenser.
+const budgetJour = () => {
+  const b = Number(Deno.env.get("ECHO_BUDGET_JOUR") ?? "");
+  return Number.isFinite(b) && b > 0 ? b : 0.5;
+};
+// Prix de Claude Haiku 5.5 en micro-dollars par jeton : 0,10 $ et 0,50 $ le million (lus, écrits).
+// Les jetons lus en cache sont comptés plein tarif : le budget est un plafond, mieux vaut le surestimer.
+const coutMicro = (u: Anthropic.Usage) =>
+  Math.ceil(((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)) * 0.1 + (u.output_tokens ?? 0) * 0.5);
+
+const MAX_SITUATION = 4000;
+const MAX_CONVERSATION = 120_000; // caractères de la conversation envoyée (les résultats d'outils comptent)
+
+function base() {
+  return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
+}
+
+// La conversation vient de l'app : on vérifie sa forme, pas son sens (Claude relit ses propres réponses telles quelles).
+// deno-lint-ignore no-explicit-any
+function conversationValide(m: any): m is Anthropic.MessageParam[] {
+  if (!Array.isArray(m) || m.length < 1 || m.length > MAX_MESSAGES) return false;
+  if (JSON.stringify(m).length > MAX_CONVERSATION) return false;
+  return m.every((x, i) => x && (x.role === (i % 2 ? "assistant" : "user")) && (typeof x.content === "string" || Array.isArray(x.content)))
+    && m.at(-1).role === "user";
+}
+
+async function tourAgent(d: DemandeAgent, origine: string | null) {
+  const situation = court(d.situation, MAX_SITUATION);
+  if (!situation || !conversationValide(d.messages)) return repondre({ erreur: "requete" }, 400, origine);
+  const messages = d.messages;
+
+  const db = base();
+  const { data: depense, error: errDepense } = await db.rpc("depense_echo_du_jour");
+  if (errDepense) { console.error("[echo] depense", errDepense.message); return repondre({ erreur: "service" }, 502, origine); }
+  if (Number(depense ?? 0) >= budgetJour() * 1e6) return repondre({ erreur: "budget" }, 429, origine);
+
+  const client = new Anthropic();
+  try {
+    const r = await client.messages.create({ ...demandeTour(situation, messages), messages });
+    const { error: errNote } = await db.rpc("noter_depense_echo", { p_micro: coutMicro(r.usage) });
+    if (errNote) console.error("[echo] noter_depense", errNote.message);
+    if (r.stop_reason === "refusal") return repondre({ erreur: "refus" }, 422, origine);
+    if (r.stop_reason === "max_tokens") return repondre({ erreur: "lecture" }, 502, origine);
+    return repondre({ content: r.content, stop_reason: r.stop_reason }, 200, origine);
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) return repondre({ erreur: "cle" }, 503, origine);
+    if (e instanceof Anthropic.RateLimitError) return repondre({ erreur: "occupe" }, 429, origine);
+    if (e instanceof Anthropic.BadRequestError) { console.error("[echo] requete", e.message); return repondre({ erreur: "requete" }, 400, origine); }
+    if (e instanceof Anthropic.APIError) return repondre({ erreur: "service" }, 502, origine);
+    return repondre({ erreur: "service" }, 502, origine);
+  }
+}

@@ -2,6 +2,7 @@ import { auJour, nouvelId, z } from "./dates";
 import type { Brouillon } from "../data/actions";
 import { entetesIA } from "../sync/client";
 import type { Noms, Personne, Qui, Repete, Tache } from "./types";
+import type { Appeler, Tour } from "./echo/boucle";
 
 // L'assistant Echo : la phrase part vers la fonction « echo » du projet Supabase, qui la fait comprendre par Claude (Haiku 5.5).
 // Echo propose, la personne confirme : rien n'est ajouté sans un toucher sur « Ajouter ».
@@ -23,6 +24,8 @@ const MESSAGES: Record<string, string> = {
   occupe: "Echo est très demandé. Réessaie dans une minute.",
   lecture: "Echo n'a pas compris. Reformule ta phrase.",
   service: "Echo ne répond pas pour l'instant.",
+  budget: "Echo a assez travaillé aujourd'hui (budget du jour atteint). Il revient demain.",
+  requete: "Echo n'a pas pu lire ta demande. Reformule-la plus simplement.",
 };
 export class ErreurEcho extends Error {}
 
@@ -65,4 +68,19 @@ export function versBrouillon(t: TacheEcho): Brouillon {
   if (t.etapes.length) b.etapes = t.etapes.map((texte, i) => ({ id: nouvelId() + i, texte, fait: false }));
   if (t.evenement && t.heure) { b.evt = true; if (t.fin) b.fin = t.fin; }
   return b;
+}
+
+// Un tour de la boucle d'Echo (src/lib/echo/boucle.ts) : la conversation part au serveur, la réponse de Claude revient.
+export function appelerServeur(code: string): Appeler {
+  return async (corps) => {
+    let r: Response;
+    try {
+      r = await fetch(ADRESSE_ECHO, { method: "POST", headers: await entetesIA(code), body: JSON.stringify(corps), signal: AbortSignal.timeout(30000) });
+    } catch {
+      throw new ErreurEcho("Pas de connexion avec Echo.");
+    }
+    const c = await r.json().catch(() => null);
+    if (!r.ok || !c || !Array.isArray(c.content)) throw new ErreurEcho(MESSAGES[c?.erreur] ?? MESSAGES.service);
+    return c as Tour;
+  };
 }

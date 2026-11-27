@@ -1,0 +1,105 @@
+import { db } from "../../data/db";
+import { auJour, nouvelId, z } from "../dates";
+import { MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
+import { genreFinal, type Action, type ContexteEcho, type Executant } from "./outils";
+
+// La boucle d'Echo. La phrase part au serveur (qui garde la clé et parle à Claude). Claude répond par du texte,
+// ou demande des outils : l'app les exécute ici, sur ses données, et renvoie le résultat. Jusqu'à MAX_TOURS fois.
+// Les actions qui changent quelque chose sont gardées de côté et montrées à la personne à la fin (« Oui » / « Non »),
+// sauf les petites choses quand le réglage « Petites choses sans demander » est allumé.
+
+// La forme des messages échangés avec le serveur (celle de l'API de Claude, réduite à ce qu'on utilise).
+export type Bloc =
+  | { type: "text"; text: string }
+  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
+  | { type: string; [k: string]: unknown }; // la réflexion de Claude, renvoyée telle quelle
+export interface ResultatOutil { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }
+export type Message = { role: "user"; content: string | ResultatOutil[] } | { role: "assistant"; content: Bloc[] };
+export interface Tour { content: Bloc[]; stop_reason: string }
+export type Appeler = (corps: { mode: "agent"; situation: string; messages: Message[] }) => Promise<Tour>;
+
+export interface Faite { action: Action; annuler: () => Promise<unknown>; ligne: string }
+export interface ResultatEcho {
+  reponse: string;
+  aConfirmer: Action[];
+  faites: Faite[]; // déjà faites (petites choses sans demander)
+}
+
+// Ce qu'Echo sait de la situation : la date, l'heure, qui écrit. Une fois par phrase (la conversation reste en cache).
+export function situation(ctx: ContexteEcho) {
+  const today = auJour(0, ctx.now);
+  const jour = ctx.now.toLocaleDateString("fr-FR", { weekday: "long" });
+  const { moi, elle } = ctx.noms;
+  return [
+    `Aujourd'hui : ${jour} ${today}, il est ${z(ctx.now.getHours())}:${z(ctx.now.getMinutes())}.`,
+    `Places du foyer : "moi" = ${moi}, "elle" = ${elle}. La personne qui écrit est ${ctx.noms[ctx.proprio]} (place "${ctx.proprio}").`,
+  ].join("\n");
+}
+
+const texteDe = (blocs: Bloc[]) =>
+  blocs.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join(" ").replace(/\s+/g, " ").trim();
+const estOutil = (b: Bloc): b is Extract<Bloc, { type: "tool_use" }> =>
+  b.type === "tool_use" && typeof b.id === "string" && typeof b.name === "string" && !!b.input && typeof b.input === "object";
+
+export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
+  appeler: Appeler; outils: Record<string, Executant>; seul: boolean;
+  // Une action faite sans demander : notée au journal tout de suite.
+  noter?: (a: Action, phrase: string, ctx: ContexteEcho) => Promise<Faite>;
+}): Promise<ResultatEcho> {
+  const messages: Message[] = [{ role: "user", content: phrase }];
+  const sit = situation(ctx);
+  const aConfirmer: Action[] = [];
+  const faites: Faite[] = [];
+  let dernierTexte = "";
+
+  for (let tour = 0; tour < MAX_TOURS; tour++) {
+    const r = await o.appeler({ mode: "agent", situation: sit, messages });
+    const blocs = Array.isArray(r.content) ? r.content : [];
+    messages.push({ role: "assistant", content: blocs });
+    dernierTexte = texteDe(blocs) || dernierTexte;
+    const demandes = blocs.filter(estOutil);
+    if (r.stop_reason !== "tool_use" || !demandes.length) return { reponse: dernierTexte, aConfirmer, faites };
+
+    // Tous les résultats d'un tour partent ensemble, dans un seul message.
+    const resultats: ResultatOutil[] = [];
+    for (const d of demandes) {
+      const ex = o.outils[d.name];
+      const res = (content: unknown, erreur = false): ResultatOutil =>
+        ({ type: "tool_result", tool_use_id: d.id, content: typeof content === "string" ? content : JSON.stringify(content), ...(erreur ? { is_error: true } : {}) });
+      try {
+        if (ex?.lire) { resultats.push(res(await ex.lire(d.input, ctx))); continue; }
+        if (!ex?.preparer) { resultats.push(res("Outil inconnu.", true)); continue; }
+        const a = await ex.preparer(d.input, ctx);
+        if (typeof a === "string") { resultats.push(res(a, true)); continue; }
+        a.genre = genreFinal(a);
+        if (o.seul && a.genre === "petit" && o.noter) {
+          const f = await o.noter(a, phrase, ctx);
+          faites.push(f);
+          resultats.push(res(`Fait : ${a.libelle}${a.details.length ? ` (${a.details.join(", ")})` : ""}.`));
+          continue;
+        }
+        // Une 2e action sur la même tâche remplace la 1re.
+        const i = a.cible ? aConfirmer.findIndex((x) => x.cible === a.cible) : -1;
+        if (i >= 0) aConfirmer.splice(i, 1, a); else aConfirmer.push(a);
+        resultats.push(res(`Proposé à ${ctx.noms[ctx.proprio]} : ${a.libelle}${a.details.length ? ` (${a.details.join(", ")})` : ""}. Ce sera fait s'il ou elle dit oui.`));
+      } catch {
+        resultats.push(res("L'app n'a pas pu faire cette action.", true));
+      }
+    }
+    messages.push({ role: "user", content: resultats });
+  }
+  // Le serveur force une réponse au dernier tour ; si elle manque, on le dit simplement.
+  return { reponse: dernierTexte || "J'ai dû m'arrêter là. Voici ce que j'ai préparé.", aConfirmer, faites };
+}
+
+// Faire une action et la noter au journal. Annuler défait l'action et marque la ligne comme annulée.
+export async function executer(a: Action, phrase: string, ctx: ContexteEcho): Promise<Faite> {
+  const defaire = await a.faire();
+  const id = nouvelId();
+  const ligne = [a.libelle, ...a.details].join(" · ");
+  await db.echo_journal.add({ id, quand: Date.now(), par: ctx.noms[ctx.proprio], demande: phrase.slice(0, 1000), action: ligne.slice(0, 200), outil: a.outil });
+  return {
+    action: a, ligne,
+    annuler: async () => { await defaire(); await db.echo_journal.update(id, { annule: Date.now() }); },
+  };
+}

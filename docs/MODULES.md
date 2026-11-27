@@ -71,3 +71,17 @@ Page à trois parties : Semaine, Courses, Stock (elle s'ouvre sur Courses le ven
 - **Semaine** et **Stock** : formes simples, à la main, en attendant les lots suivants.
 - **Synchro** : les tables `cuisine_*` partent au foyer par `src/sync/genres.ts` (genres `course`, `habitude`, `repas`, `stock`, `gout` de la table `elements`). La migration `20261127090000_cuisine.sql` doit être appliquée au projet « echo » avant la mise en ligne.
 - Pas encore construits (donc absents de l'écran) : code-barres, photo du ticket, plusieurs magasins, repas proposés par Echo, batch cooking.
+
+## Echo qui agit (lot 1 du moteur, 2026-11-27)
+
+L'assistant Echo n'est plus seulement un lecteur de phrases : il travaille en boucle (au plus 6 tours) avec une **liste fermée d'outils**.
+
+- La liste : `supabase/functions/_shared/echo-outils.ts` (nom, description, schéma, genre `lire` / `petit` / `gros`, la consigne, et `demandeTour`, la demande envoyée à Claude). Lue par le serveur et par l'app.
+- Le serveur (`supabase/functions/echo`, mode `agent`) : garde la clé, vérifie le foyer, compte la dépense du jour (`prive.depenses_echo`, plafond `ECHO_BUDGET_JOUR`, 0,50 $ sinon) et passe la conversation à Claude Haiku 5.5. Il ne touche à aucune donnée du foyer.
+- L'app (`src/lib/echo/`) : `boucle.ts` fait les tours, `outils.ts` exécute les outils de la base (tâches, agenda, horaires). Un outil qui change quelque chose prépare une action, montrée à la fin avec « Oui / Non ». Réglage « Petites choses sans demander » (`echoSeul`, éteint par défaut) : les actions `petit` sont faites tout de suite, avec Annuler. Effacer, et toucher aux choses de l'autre, restent toujours demandés.
+- Le journal (`echo_journal`, genre de synchro `journal`) : une ligne par action faite, visible dans Réglages → Echo.
+
+Donner des outils à un module :
+1. Décrire l'outil dans `OUTILS_ECHO` (supabase/functions/_shared/echo-outils.ts), avec son genre.
+2. Fournir son exécutant dans le champ `outils` du module (`lire` ou `preparer`, voir `Executant` dans src/lib/echo/outils.ts).
+3. Ajouter un cas aux phrases d'essai (`essais/echo.essais.ts`) et lancer `ANTHROPIC_API_KEY=… npm run essais` avant la mise en ligne.
