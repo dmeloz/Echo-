@@ -22,6 +22,7 @@ import { demarrerIcloud } from "./sync/icloud";
 import { useLiveQuery } from "dexie-react-hooks";
 import { autre } from "./lib/types";
 import { Aujourdhui } from "./pages/Aujourdhui";
+import { auJour } from "./lib/dates";
 import { tachesDuJour } from "./lib/journee";
 import { Bientot } from "./pages/Bientot";
 import { useModulesActifs } from "./modules/registre";
@@ -165,7 +166,7 @@ export default function App() {
             {!baseOk ? <BaseFermee /> : taches === undefined ? <Squelette />
               : module ? (module.Page && module.etat === "construit" ? <Suspense fallback={<Squelette />}><module.Page noms={noms} proprio={proprio} now={now} aller={aller} ouvrir={(t) => ouvrir(t)} creer={(p) => ouvrir(null, { titre: "", jour: p.jour, heure: p.heure ?? "", qui: proprio, repete: "", niveau: null })} /></Suspense> : <Bientot module={module} onAller={aller} />)
               : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} proprio={proprio} onGuide={() => setGuideFerme(false)} onRelier={() => setRelier(true)} />
-              : <Aujourdhui taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} />}
+              : <Aujourdhui taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} onCreer={() => ouvrir(null, { titre: "", jour: auJour(0, now), heure: "", qui: proprio, repete: "", niveau: null })} />}
           </div>
           </Secours>}
         </div>
