@@ -38,6 +38,7 @@ interface Cas {
   phrase: string;
   taches?: Tache[];
   horaires?: Horaire[];
+  corvees?: string[];
   verifier: (r: ResultatEcho, a: Action[]) => void;
 }
 
@@ -94,6 +95,14 @@ const CAS: Record<string, Cas> = {
     taches: [t("p1", "Pharmacie")],
     verifier: (_r, a) => expect(a.map((x) => [x.outil, x.cible])).toEqual([["cocher_tache", "p1"]]),
   },
+  "une corvée faite n'est pas une tâche": {
+    phrase: "j'ai fini de nettoyer la salle de bain tout à l'heure",
+    corvees: ["Nettoyer la salle de bain", "Passer l'aspirateur"],
+    verifier: (_r, a) => {
+      expect(a).toHaveLength(1);
+      expect(a[0]).toMatchObject({ outil: "corvee_faite", libelle: "Fait : Nettoyer la salle de bain" });
+    },
+  },
   "donner à l'autre": {
     phrase: "donne les courses à Sarah",
     taches: [t("c1", "Faire les courses")],
@@ -134,7 +143,7 @@ const CAS: Record<string, Cas> = {
 };
 
 beforeEach(async () => {
-  await db.taches.clear(); await db.horaires.clear(); await db.echo_journal.clear();
+  await db.taches.clear(); await db.horaires.clear(); await db.echo_journal.clear(); await db.maison_corvees.clear(); await db.maison_faits.clear();
 });
 afterAll(() => { if (cle) console.log(`Coût des essais : environ ${(micro / 1e6).toFixed(3)} $`); });
 
@@ -143,6 +152,7 @@ describe.skipIf(!cle)("phrases d'essai d'Echo (vrai modèle)", () => {
     it(nom, async () => {
       if (c.taches) await db.taches.bulkAdd(c.taches);
       if (c.horaires) await db.horaires.bulkAdd(c.horaires);
+      if (c.corvees) await db.maison_corvees.bulkAdd(c.corvees.map((nom, i) => ({ id: "cv" + i, nom, piece: "", tous: 7, taille: 2 as const, qui: "tour" as const, fait: null, cree: 0 })));
       const r = await lancerEcho(c.phrase, ctx, { appeler, outils: OUTILS_BASE, seul: false });
       c.verifier(r, r.aConfirmer);
       // Rien ne doit avoir changé sans le oui de la personne.

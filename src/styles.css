@@ -1039,6 +1039,29 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .echo-anciennes span { font-size: 13px; color: var(--discret); }
 .echo-reprendre { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; }
 .barre-bas .ajout { position: relative; z-index: 1; } /* la barre reste au-dessus du voile de la discussion */
+/* ===== Maison : les corvées ===== */
+.corvees { display: flex; flex-direction: column; }
+.corvees > .lab { padding: 8px 0 2px; }
+.corvee { display: flex; align-items: center; gap: var(--e5); }
+.corvee .stock-ligne, .corvees-autres { min-height: 54px; }
+.corvees .stock-ligne b { display: flex; flex-direction: column; line-height: 1.25; }
+.corvees .stock-ligne b small { font-size: var(--t-petit); font-weight: 500; color: var(--discret); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.corvees-autres .tuile-icone { margin: 0; background: rgb(18 40 58 / .06); color: var(--encre); width: 36px; height: 36px; border-radius: 12px; flex: none; }
+.corvees-autres + ul { border-top: 1px solid var(--trait); }
+.corvee-plus { padding-left: 40px; }
+.corvee-plus .lab { margin-top: var(--e3); }
+.corvee-gestes { gap: 0 var(--e3); margin-left: -8px; }
+/* La jauge d'une corvée se remplit avec le temps ; elle ne passe au rouge que si la corvée attend depuis longtemps. */
+.jauge.besoin.n1 i:first-child { background: var(--turquoise); }
+.jauge.besoin.deborde i { background: var(--urgent); }
+.equilibre { display: flex; flex-direction: column; gap: var(--e3); margin: var(--e2) var(--e2) 0; }
+.equilibre > div:first-child { display: flex; justify-content: space-between; font-size: var(--t-petit); color: var(--discret); }
+.equilibre b { color: var(--encre); font-weight: 700; }
+.equilibre-barre { display: flex; gap: 3px; height: 8px; }
+.equilibre-barre i { flex: 0 1 0; border-radius: 4px; background: var(--encre); transition: flex-grow var(--m-barre) var(--douce); }
+.equilibre-barre i + i { background: var(--turquoise); }
+.maison-depart .puce { min-height: 40px; }
+.maison-depart .gouts-pied { flex-direction: row-reverse; }
 
 /* Agenda : le petit lien vers la sous-page « Mes horaires », et le retour. */
 .lien-horaires, .retour-agenda { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 0; background: rgb(255 255 255 / .7); border-radius: 999px; padding: 7px 12px; font-size: 14px; font-weight: 700; color: var(--bleu); }

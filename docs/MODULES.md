@@ -32,7 +32,8 @@ Règles :
 | --- | --- |
 | Agenda (id planning) | construit : aujourd'hui et les six jours suivants, vue Jour et vue Semaine, idée pour alléger le jour le plus chargé. Il lit les tâches de la base (pas de table à lui). |
 | Cuisine | lots 1 (courses) et 2 (semaine proposée par Echo) construits, plus la photo du ticket de caisse : voir « Cuisine » plus bas. Batch du dimanche, stock décompté et livre de recettes construits (2026-11-27). |
-| Maison, Budget | pas encore construits |
+| Maison | lot 1 (corvées) construit : voir « Maison » plus bas. Entretien et papiers : lots suivants. |
+| Budget | pas encore construit |
 
 ## Ajouter un module
 
@@ -127,3 +128,16 @@ Donner des outils à un module :
 - **Code-barres** (`Scanner.tsx`, `codeBarres.ts`) : Stock → « Scanner un code-barres ». La caméra lit le code (lecteur du téléphone s'il existe, sinon la bibliothèque `barcode-detector`, chargée seulement ici, avec son fichier `.wasm` servi par l'app). Le nom vient d'Open Food Facts : seul le numéro du code part sur internet. Un code inconnu se nomme à la main et reste dans `cuisine_codes` (table gardée sur le téléphone, pas envoyée au foyer). Le même produit scanné deux fois compte pour deux.
 - **Plusieurs magasins** : en rangeant un ticket, Echo note l'enseigne de chaque produit dans son habitude (`Habitude.ou`, `nomMagasin()` = premier mot du magasin). Dès que deux enseignes sont connues, le mode « Au magasin » propose de dire où l'on est : ce qui s'achète d'habitude ailleurs passe en bas, sous « D'habitude ailleurs ».
 - Rien à changer côté serveur pour ce lot.
+## Maison · lot 1, les corvées (2026-11-27)
+
+Plan et maquette : voir le fil « Construire le module Maison ». Trois parties prévues (Corvées, Entretien, Papiers) ; seules les corvées sont construites, donc seules à l'écran.
+
+- **Une corvée** (`maison_corvees`) revient « tous les N jours » à partir de la dernière fois où elle a été faite (`jourDu` dans `donnees.ts`), pas à date fixe. Jamais faite : elle arrive à mi-chemin de son rythme, pour que tout ne tombe pas le premier jour.
+- **La jauge** à trois traits se remplit avec le temps (`besoin`) : peut attendre, bientôt, à faire. Pas de liste « en retard » ; elle ne passe au rouge que si la corvée attend depuis plus de la moitié de son rythme (`deborde`).
+- **Qui** : une personne, « chacun son tour » (l'autre que la dernière fois) ou « Echo choisit » (celui qui a le moins de minutes sur 4 semaines), calculé par `pour()`.
+- **L'équilibre** : chaque corvée faite laisse une ligne dans `maison_faits` (qui, quand, minutes selon la taille : 5, 15 ou 40), gardée 60 jours. La barre montre la part de chacun sur 4 semaines. Pas de points ni de classement (choix du plan). Réglage « Montrer l'équilibre » dans Réglages → Maison.
+- **La page** : « Pour toi », « Pour l'autre », puis « N autres peuvent attendre ». Toucher le rond = c'est fait (avec Annuler) ; toucher le nom ouvre le rythme, la taille, qui, « l'autre l'a fait », « Pas cette fois » (repousse d'un quart du rythme, sans compter pour personne) et « Retirer ».
+- **Le premier jour** : une liste toute prête à toucher (`DEPART`). Ensuite on ajoute en une phrase : « litière tous les 2 jours » (`lireCorvee`).
+- **Barre d'Echo** : « j'ai passé l'aspi » coche la corvée sans passer par l'assistant (`ditFait` + `trouverCorvees`) ; « corvée : … » en ajoute une.
+- **Outils d'Echo** : `voir_maison` (lire), `corvee_faite` et `ajouter_corvee` (petites choses ; cocher pour l'autre est toujours demandé).
+- **Synchro** : genres `corvee` et `corvee_faite`. Avant la mise en ligne : migration `20261127220000_maison_corvees.sql`, puis redéployer la fonction `echo` (sa liste d'outils a grandi).
