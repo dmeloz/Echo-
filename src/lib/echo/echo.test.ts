@@ -7,7 +7,7 @@ vi.stubGlobal("navigator", {});
 import { db } from "../../data/db";
 import { plusJours } from "../dates";
 import type { Tache } from "../types";
-import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, OUTILS_ECHO, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, MODELE_ECHO, MODELE_PLAN, OUTILS_ECHO, demandeTour, estPlan, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
 import { executer, lancerEcho, type Appeler, type Bloc, type Message, type Tour } from "./boucle";
 import { OUTILS_BASE, type ContexteEcho } from "./outils";
 import { nettoyerJournal } from "./journal";
@@ -46,6 +46,27 @@ describe("la liste fermée des outils", () => {
       expect(o.strict).toBe(true);
       expect([...o.input_schema.required].sort()).toEqual(Object.keys(o.input_schema.properties).sort());
     }
+  });
+});
+
+describe("le choix du modèle", () => {
+  it("Sonnet pour organiser, Haiku pour une petite chose", () => {
+    expect(estPlan("Ok demain je dois fair les comision aller a landi aller chez fileman Sarah est occuper de 10h- 11h")).toBe(true);
+    expect(estPlan("cette semaine garage, banque et ménage")).toBe(true);
+    expect(estPlan("dentiste jeudi 15h pour Sarah")).toBe(false);
+    expect(estPlan("plus de lait")).toBe(false);
+  });
+  it("toute la phrase garde le même modèle, et la note de l'app ne compte pas", () => {
+    const m = (p: string) => demandeTour("Aujourd'hui : x", [{ role: "user", content: p }]).model;
+    expect(m("demain je dois aller à Landi, chez Fileman et faire les commissions")).toBe(MODELE_PLAN);
+    expect(m("[Note de l'app : Dany a dit oui. Fait : Ajouter : Landi, Fileman, commissions, garage, banque, ménage.]\noui merci")).toBe(MODELE_ECHO);
+    const suite = demandeTour("Aujourd'hui : x", [
+      { role: "user", content: "demain je dois aller à Landi et chez Fileman" },
+      { role: "assistant", content: [{ type: "tool_use", id: "a", name: "voir_jours", input: {} }] },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "{}" }] },
+    ]);
+    expect(suite.model).toBe(MODELE_PLAN);
+    expect(suite).toMatchObject({ fallbacks: "default" });
   });
 });
 

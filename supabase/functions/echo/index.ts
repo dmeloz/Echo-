@@ -3,12 +3,12 @@
 //    par du texte ou par des demandes d'outils (liste fermée : ../_shared/echo-outils.ts). C'est l'app qui exécute les outils
 //    sur ses données et qui demande l'accord de la personne : ici on ne touche à aucune donnée du foyer.
 // 2. L'ancienne façon (une phrase → des tâches proposées), gardée pour les téléphones qui n'ont pas encore la mise à jour.
-// Modèle : Claude Haiku 5.5 (rapide et peu cher). La clé reste ici (secret ANTHROPIC_API_KEY), jamais dans l'app.
+// Modèle : Claude Haiku 5.5 (rapide et peu cher), Claude Sonnet 5.5 pour organiser une journée ou une semaine (mode agent). La clé reste ici (secret ANTHROPIC_API_KEY), jamais dans l'app.
 // Qui peut l'appeler : un membre connecté d'un foyer, ou le code secret du foyer (voir ../_shared/garde.ts). Appels comptés.
 import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { garder } from "../_shared/garde.ts";
-import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SITUATION, OUTILS_ECHO, demandeTour } from "../_shared/echo-outils.ts";
+import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SITUATION, OUTILS_ECHO, PRIX, demandeTour } from "../_shared/echo-outils.ts";
 
 const ORIGINES = ["https://dmeloz.github.io", "http://localhost:5173", "http://localhost:4173"];
 const MAX_TEXTE = 1000;
@@ -163,18 +163,20 @@ Deno.serve(async (req) => {
 
 interface DemandeAgent { mode?: unknown; situation?: unknown; messages?: unknown; outils?: unknown }
 
-// Le budget du jour, en dollars (secret ECHO_BUDGET_JOUR, 0,50 $ sinon). Au-delà, Echo s'arrête jusqu'à minuit (heure de Zurich).
+// Le budget du jour, en dollars (secret ECHO_BUDGET_JOUR, 1 $ sinon). Au-delà, Echo s'arrête jusqu'à minuit (heure de Zurich).
 // Deux budgets séparés : les membres du foyer ont le budget entier ; le code partagé, un cinquième à part.
 // Un code qui a fuité ne peut donc pas bloquer les membres.
 const budgetJour = (source: "membre" | "code") => {
   const b = Number(Deno.env.get("ECHO_BUDGET_JOUR") ?? "");
-  const total = Number.isFinite(b) && b > 0 ? b : 0.5;
+  const total = Number.isFinite(b) && b > 0 ? b : 1;
   return source === "code" ? total / 5 : total;
 };
-// Prix de Claude Haiku 5.5 en micro-dollars par jeton : 0,10 $ et 0,50 $ le million (lus, écrits).
-// Les jetons lus en cache sont comptés plein tarif : le budget est un plafond, mieux vaut le surestimer.
-const coutMicro = (u: Anthropic.Usage) =>
-  Math.ceil(((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)) * 0.1 + (u.output_tokens ?? 0) * 0.5);
+// Le coût d'un tour en micro-dollars, selon le modèle (PRIX, en dollars le million = micro-dollars le jeton).
+// Cache écrit 1,25 fois l'entrée, cache lu un dixième. Un modèle inconnu (repli après un refus) est compté au prix de Sonnet.
+const coutMicro = (modele: string, u: Anthropic.Beta.BetaUsage) => {
+  const p = PRIX[modele] ?? PRIX["claude-sonnet-5-5"];
+  return Math.ceil(((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) * 1.25 + (u.cache_read_input_tokens ?? 0) * 0.1) * p.entree + (u.output_tokens ?? 0) * p.sortie);
+};
 
 
 function base() {
@@ -185,7 +187,7 @@ function base() {
 // La personne : des phrases (texte court) ou des résultats d'outils. Claude : texte, réflexion, outils de la liste.
 // Ce n'est donc pas un accès libre à Claude avec la clé du foyer.
 const NOMS_OUTILS = new Set(OUTILS_ECHO.map((o) => o.name));
-const BLOCS_CLAUDE = new Set(["text", "thinking", "redacted_thinking", "tool_use"]);
+const BLOCS_CLAUDE = new Set(["text", "thinking", "redacted_thinking", "tool_use", "fallback"]); // fallback : un refus repris par un autre modèle
 // deno-lint-ignore no-explicit-any
 const blocClaudeValide = (b: any) => b && BLOCS_CLAUDE.has(b.type) && (b.type !== "tool_use" || (typeof b.id === "string" && NOMS_OUTILS.has(b.name)));
 // deno-lint-ignore no-explicit-any
@@ -193,7 +195,7 @@ const resultatValide = (b: any) => b && b.type === "tool_result" && typeof b.too
 // deno-lint-ignore no-explicit-any
 const phraseValide = (c: any) => typeof c === "string" && !!c.trim() && c.length <= MAX_PHRASE;
 // deno-lint-ignore no-explicit-any
-function conversationValide(m: any): m is Anthropic.MessageParam[] {
+function conversationValide(m: any): m is Anthropic.Beta.BetaMessageParam[] {
   if (!Array.isArray(m) || m.length < 1 || m.length > MAX_MESSAGES || m.length % 2 === 0) return false;
   if (JSON.stringify(m).length > MAX_CONVERSATION) return false;
   if (m[0]?.role !== "user" || !phraseValide(m[0].content)) return false;
@@ -216,8 +218,9 @@ async function tourAgent(d: DemandeAgent, source: "membre" | "code", origine: st
 
   const client = new Anthropic();
   try {
-    const r = await client.messages.create({ ...demandeTour(situation, messages, outils), messages });
-    const { error: errNote } = await db.rpc("noter_depense_echo", { p_source: source, p_micro: coutMicro(r.usage) });
+    const demande = demandeTour(situation, messages, outils);
+    const r = await client.beta.messages.create({ ...demande, messages: messages as Anthropic.Beta.BetaMessageParam[] });
+    const { error: errNote } = await db.rpc("noter_depense_echo", { p_source: source, p_micro: coutMicro(r.model ?? demande.model, r.usage) });
     if (errNote) console.error("[echo] noter_depense", errNote.message);
     if (r.stop_reason === "refusal") return repondre({ erreur: "refus" }, 422, origine);
     if (r.stop_reason === "max_tokens") return repondre({ erreur: "lecture" }, 502, origine);

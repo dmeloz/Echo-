@@ -186,7 +186,31 @@ export const genreDe = (nom: string): GenreOutil | undefined => OUTILS_ECHO.find
 
 // La demande envoyée à Claude pour un tour de la boucle. Le serveur et les phrases d'essai (essais/) l'utilisent tous les deux :
 // ce qui est testé est exactement ce qui tourne en ligne.
+// Deux modèles (choix de Dany, 2026-11-27) : Haiku 5.5 au quotidien, Sonnet 5.5 quand il faut organiser (une journée, une semaine,
+// une liste de choses à faire). Toute une phrase garde le même modèle, d'un tour à l'autre.
 export const MODELE_ECHO = "claude-haiku-5-5";
+export const MODELE_PLAN = "claude-sonnet-5-5";
+// Prix en dollars par million de jetons (entrée, sortie). Le cache lu coûte un dixième de l'entrée, le cache écrit 1,25 fois.
+export const PRIX: Record<string, { entree: number; sortie: number }> = {
+  [MODELE_ECHO]: { entree: 0.1, sortie: 0.5 },
+  [MODELE_PLAN]: { entree: 2, sortie: 10 },
+};
+
+// La dernière phrase de la personne, sans les notes de l'app.
+function dernierePhrase(messages: unknown[]) {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as { role?: string; content?: unknown };
+    if (m.role === "user" && typeof m.content === "string") return m.content.replace(/\[Note de l'app :[^\]]*\]\n?/g, "").trim();
+  }
+  return "";
+}
+// Une demande à organiser : plusieurs choses, une journée, une semaine.
+const MOTS_PLAN = /\b(demain|semaine|week-end|weekend|journ[ée]e|planifi|organis|programme|plan|je dois|j'ai [àa] faire|tout ce que|cale|place[rz]?|range[rz]?)\b/i;
+export function estPlan(phrase: string) {
+  const t = phrase.toLowerCase();
+  const choses = (t.match(/,| et | puis | aussi /g) ?? []).length;
+  return t.length >= 160 || (MOTS_PLAN.test(t) && (choses >= 1 || t.length >= 60));
+}
 // Les tours déjà faits pour la dernière phrase (depuis le dernier message texte de la personne).
 export function toursDepuisPhrase(messages: unknown[]) {
   let n = 0;
@@ -199,10 +223,13 @@ export function toursDepuisPhrase(messages: unknown[]) {
 }
 export function demandeTour(situation: string, messages: unknown[], outils?: string[]) {
   const tours = toursDepuisPhrase(messages);
+  const plan = estPlan(dernierePhrase(messages));
   return {
-    model: MODELE_ECHO,
-    max_tokens: 8000,
+    model: plan ? MODELE_PLAN : MODELE_ECHO,
+    max_tokens: plan ? 16000 : 8000,
     output_config: { effort: "medium" as const }, // il réfléchit vraiment (plan de la semaine), sans traîner
+    // Sonnet : si une réponse est refusée par prudence, l'API la refait elle-même sur un autre modèle.
+    ...(plan ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
     // La consigne et les outils ne changent jamais : mis en cache d'une phrase à l'autre. La conversation aussi, d'un tour à l'autre.
     cache_control: { type: "ephemeral" as const },
     system: [{ type: "text" as const, text: CONSIGNE_AGENT, cache_control: { type: "ephemeral" as const } }, { type: "text" as const, text: situation }],
