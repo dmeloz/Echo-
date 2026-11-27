@@ -74,3 +74,6 @@ p { text-wrap: pretty; }
 
 /* 7. La barre d'écriture et son aperçu : assez opaques pour qu'on ne lise pas la page à travers. */
 .ajout, .apercu { background: rgb(255 255 255 / .93); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); }
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .ajout, .apercu { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
