@@ -2,8 +2,8 @@ import Dexie, { type EntityTable } from "dexie";
 import type { Noms, Tache } from "../lib/types";
 import type { Horaire } from "../lib/horaires";
 import type { Article, Gouts, Habitude, Batch, Produit, Recette, Repas, Ticket, CodeConnu } from "../modules/cuisine/donnees";
-import type { Appareil, Contact, Corvee, Fait, Reparation } from "../modules/maison/donnees";
 import type { APayer, Categorie, Depense, Poste, Solde } from "../modules/budget/donnees";
+import type { Appareil, Contact, Corvee, Fait, Papier, Reparation } from "../modules/maison/donnees";
 import type { LigneJournal } from "../lib/echo/journal";
 import type { Souvenir } from "../lib/echo/memoire";
 
@@ -41,6 +41,7 @@ export const db = new Dexie("echo") as Dexie & {
   budget_categories: EntityTable<Categorie, "id">;
   budget_soldes: EntityTable<Solde, "id">;
   budget_apayer: EntityTable<APayer, "id">;
+  maison_papiers: EntityTable<Papier, "id">;
   // Le journal d'Echo : ce que l'assistant a fait, partagé au foyer.
   echo_journal: EntityTable<LigneJournal, "id">;
   echo_memoire: EntityTable<Souvenir, "id">;
@@ -57,7 +58,9 @@ db.version(9).stores({ cuisine_batch: "semaine", cuisine_recettes: "cle" }); // 
 db.version(10).stores({ cuisine_codes: "code" }); // les codes-barres déjà scannés (gardés sur ce téléphone)
 db.version(11).stores({ maison_corvees: "id", maison_faits: "id, quand" }); // les corvées, et une ligne par corvée faite
 db.version(12).stores({ maison_reparations: "id", maison_appareils: "id", maison_contacts: "id" }); // l'entretien : ce qui est cassé, les appareils, les contacts
-db.version(13).stores({ budget_postes: "id", budget_depenses: "id, jour", budget_categories: "id", budget_soldes: "id", budget_apayer: "id" }); // le budget partagé
+
+db.version(13).stores({ maison_papiers: "id" }); // l'administration du foyer : les papiers et leurs échéances
+db.version(14).stores({ budget_postes: "id", budget_depenses: "id, jour", budget_categories: "id", budget_soldes: "id", budget_apayer: "id" }); // le budget partagé
 
 export const NOMS_DEFAUT: Noms = { moi: "Dany", elle: "Sarah" };
 

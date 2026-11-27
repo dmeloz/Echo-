@@ -32,8 +32,8 @@ Règles :
 | --- | --- |
 | Agenda (id planning) | construit : aujourd'hui et les six jours suivants, vue Jour et vue Semaine, idée pour alléger le jour le plus chargé. Il lit les tâches de la base (pas de table à lui). |
 | Cuisine | lots 1 (courses) et 2 (semaine proposée par Echo) construits, plus la photo du ticket de caisse : voir « Cuisine » plus bas. Batch du dimanche, stock décompté et livre de recettes construits (2026-11-27). |
-| Maison | lot 1 (corvées) construit : voir « Maison » plus bas. Entretien et papiers : lots suivants. |
 | Budget | lot 1 construit (2026-11-27) : voir « Budget » plus bas. Entre nous, liens Cuisine et Agenda, Echo : lots suivants. |
+| Maison | corvées, entretien et papiers construits : voir « Maison » plus bas. |
 
 ## Ajouter un module
 
@@ -163,3 +163,7 @@ Deux règles tiennent le module (`donnees.ts`) :
 - **Pour le module Maison (Papiers)** : `ajouterAPayer(ligne)` (le même id deux fois ne double rien et ne défait pas un paiement), `marquerPaye`, `estPaye(id)` dans `actions.ts`, table `budget_apayer`.
 - **Synchro** : genres `budget_poste`, `budget_depense`, `budget_categorie`, `budget_solde`, `budget_apayer`. La migration `20261128090000_budget.sql` doit être appliquée au projet « echo » avant la mise en ligne.
 - Pas encore construits (donc absents de l'écran) : Entre nous (qui a avancé quoi), tickets de Cuisine vers l'enveloppe Courses, lien avec l'Agenda, outils d'Echo et point du mois, relevé bancaire.
+- **Papiers** (lot 3, `Papiers.tsx`, 2026-11-27) : l'administration du foyer. Un papier (`maison_papiers`) a un dossier (Impôts, Logement, Assurances, Santé, Véhicule, Abonnements, Identité, Garanties, Autre ; deviné depuis le titre par `devinerDossier`, sans IA), parfois une chose à faire (`quoi` : payer, renouveler, résilier, répondre) avec une échéance, un montant en centimes de franc et une répétition (mois, trimestre, an). La page montre « Bientôt » (30 jours, et ce qui est passé) puis les dossiers ; la barre du haut ajoute (« facture Swisscom 89.90 le 15.12 », lu par `lirePapier`) ou cherche, et son bouton photo crée un papier depuis une photo. Cocher = fait ; une chose qui revient repart à la prochaine échéance (`apresFait`).
+- **Photos des papiers** (`photosPapiers.ts`) : gardées sur le téléphone (table `photos`, clé `papier:<id>`) et sur le serveur du foyer, seau privé `papiers`, dossier `<id du foyer>/` (choix de Dany : sur le serveur, à sécuriser ou migrer plus tard). Seuls les membres du foyer y ont accès (règles dans la migration). Le papier ne porte que les noms des photos.
+- **Lien avec Budget** : Maison garde le papier, Budget s'occupera de l'argent. `aPayer(papier)` rend la ligne convenue avec le fil Budget (id `papier:<id>`, titre, émetteur, montant, échéance, répétition, dossier, payé). Tant que Budget n'existe pas, rien n'est envoyé.
+- Outils d'Echo en plus : `voir_papiers` (lire), `ranger_papier` (petite chose). Phrase directe : « facture : … », « papier : … », « à payer : … ». Synchro : genre `papier`. Avant la mise en ligne : migration `20261127240000_maison_papiers.sql` (genre + seau de photos), puis redéployer `echo`.

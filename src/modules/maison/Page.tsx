@@ -10,6 +10,7 @@ import type { ContexteModule } from "../contrat";
 import { ajouterCorvees, ajouterModeles, rangerFaits, rangerReparations } from "./actions";
 import { LigneCorvee } from "./Corvee";
 import { Entretien } from "./Entretien";
+import { Papiers } from "./Papiers";
 import { DEPART, aFaire, depuis, equilibre, jourDu, lireCorvee, minutesDe, parts, pour, pourMoi, type Corvee, type Modele } from "./donnees";
 
 // Le premier jour : on touche ce qui existe chez soi, au lieu d'écrire une liste.
@@ -36,11 +37,13 @@ function Depart({ onFini }: { onFini: () => void }) {
   );
 }
 
-// La page Maison : les corvées et l'entretien (les papiers arrivent avec le lot suivant).
+const PARTIES = [["corvees", "Corvées"], ["entretien", "Entretien"], ["papiers", "Papiers"]] as const;
+
+// La page Maison : les corvées, l'entretien et les papiers.
 export function PageMaison(ctx: ContexteModule) {
   const { noms, proprio, now } = ctx;
   const toutes = useLiveQuery(() => db.maison_corvees.toArray(), [], undefined);
-  const partie = useReglage<"corvees" | "entretien">("maisonPartie", "corvees");
+  const partie = useReglage<"corvees" | "entretien" | "papiers">("maisonPartie", "corvees");
   const faits = useLiveQuery(() => db.maison_faits.toArray(), [], []);
   const departVu = useReglage("maisonDepartVu", false);
   const montrerEquilibre = useReglage("maisonEquilibre", true);
@@ -56,13 +59,14 @@ export function PageMaison(ctx: ContexteModule) {
   // Les parties : les mots posés sur la page, une goutte de verre glisse sous le mot choisi (comme l'Agenda).
   const choix = (
     <div className="agenda-barre">
-      <div className="vues" role="tablist" aria-label="Partie de la maison" style={{ "--i": partie === "entretien" ? 1 : 0, "--n": 2 } as React.CSSProperties}>
+      <div className="vues" role="tablist" aria-label="Partie de la maison" style={{ "--i": PARTIES.findIndex(([id]) => id === partie), "--n": PARTIES.length } as React.CSSProperties}>
         <span className="vues-goutte" aria-hidden="true" />
-        {([["corvees", "Corvées"], ["entretien", "Entretien"]] as const).map(([id, nom]) => <button key={id} type="button" role="tab" aria-selected={partie === id} onClick={() => { vibrer(4); poserReglage("maisonPartie", id); }}>{nom}</button>)}
+        {PARTIES.map(([id, nom]) => <button key={id} type="button" role="tab" aria-selected={partie === id} onClick={() => { vibrer(4); poserReglage("maisonPartie", id); }}>{nom}</button>)}
       </div>
     </div>
   );
   if (partie === "entretien") return <Entretien {...ctx} corvees={toutes} choix={choix} />;
+  if (partie === "papiers") return <Papiers {...ctx} choix={choix} />;
   if (choisir || (!corvees.length && !departVu)) return <Depart onFini={() => { poserReglage("maisonDepartVu", true); setChoisir(false); }} />;
 
   const e = equilibre(faits, now.getTime());

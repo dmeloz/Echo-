@@ -3,8 +3,8 @@ import { liveQuery } from "dexie";
 import { db } from "../../data/db";
 import type { Personne } from "../../lib/types";
 import type { Module } from "../contrat";
-import { ajouterCorvees, ajouterReparation, cocherCorvees } from "./actions";
-import { ditFait, lireCorvee, trouverCorvees, type Corvee } from "./donnees";
+import { ajouterCorvees, ajouterPapier, ajouterReparation, cocherCorvees } from "./actions";
+import { ditFait, lireCorvee, lirePapier, nomDossier, trouverCorvees, type Corvee } from "./donnees";
 import { ReglagesMaison } from "./ReglagesMaison";
 import { TuileMaison } from "./Tuile";
 import { JourneeMaison } from "./Journee";
@@ -25,13 +25,16 @@ export const maison: Module = {
   Journee: JourneeMaison,
   Reglages: ReglagesMaison,
   outils: OUTILS_MAISON,
-  // « j'ai passé l'aspirateur » coche la corvée ; « corvée : litière tous les 2 jours » en ajoute une ; « à réparer : le robinet » note une réparation.
+  // « j'ai passé l'aspirateur » coche la corvée ; « corvée : litière tous les 2 jours » en ajoute une ; « à réparer : le robinet » note une réparation ; « facture : Swisscom 89.90 le 15.12 » range un papier.
   comprendre: (texte) => {
     const nouvelle = /^\s*(?:nouvelle\s+)?corv[ée]e\s*:?\s+(.+)$/i.exec(texte);
     const lu = nouvelle && lireCorvee(nouvelle[1]);
     if (lu) return { titre: lu.nom, ou: "Maison", faire: () => ajouterCorvees([lu]) };
     const casse = /^\s*[àa]\s+r[ée]parer\s*:?\s+(.+)$/i.exec(texte);
     if (casse) return { titre: casse[1].trim(), ou: "Maison, à réparer", faire: () => ajouterReparation(casse[1]) };
+    const papier = /^\s*(?:papier|facture|[àa]\s+payer)\s*:\s*(.+)$/i.exec(texte);
+    const lp = papier && lirePapier(/^\s*facture/i.test(texte) ? `Facture ${papier[1]}` : papier[1]);
+    if (lp) return { titre: lp.titre, ou: `Papiers, ${nomDossier(lp.dossier)}`, faire: async () => { await ajouterPapier(lp); } };
     const faites = ditFait(texte) ? trouverCorvees(texte, connues) : [];
     if (!faites.length) return null;
     return { titre: `${faites.map((c) => c.nom).join(", ")} : fait`, ou: "Maison", faire: async () => {

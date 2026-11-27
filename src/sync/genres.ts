@@ -1,8 +1,8 @@
 import type { Table } from "dexie";
 import { db } from "../data/db";
 import { nettoyerJournal } from "../lib/echo/journal";
-import { nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation } from "../modules/maison/donnees";
 import { nettoyerAPayer, nettoyerCategorie, nettoyerDepense, nettoyerPoste, nettoyerSolde, posteRempli, type Poste } from "../modules/budget/donnees";
+import { nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerPapier, nettoyerReparation } from "../modules/maison/donnees";
 import { nettoyerSouvenir } from "../lib/echo/memoire";
 import { nettoyerArticle, nettoyerGouts, nettoyerHabitude, nettoyerBatch, nettoyerProduit, nettoyerRecette, nettoyerRepas, nettoyerTicket } from "../modules/cuisine/donnees";
 
@@ -33,6 +33,7 @@ export const GENRES: Record<string, Genre> = {
   budget_categorie: { table: db.budget_categories, cle: "id", nettoyer: nettoyerCategorie, naturelle: true },
   budget_solde: { table: db.budget_soldes, cle: "id", nettoyer: nettoyerSolde },
   budget_apayer: { table: db.budget_apayer, cle: "id", nettoyer: nettoyerAPayer },
+  papier: { table: db.maison_papiers, cle: "id", nettoyer: nettoyerPapier },
   journal: { table: db.echo_journal, cle: "id", nettoyer: nettoyerJournal },
   memoire: { table: db.echo_memoire, cle: "id", nettoyer: nettoyerSouvenir },
 };
