@@ -4,7 +4,7 @@ import { auJour, nouvelId, plusJours } from "../../lib/dates";
 import { preparerPhoto } from "../../lib/lecture";
 import type { Personne } from "../../lib/types";
 import { entetesIA } from "../../sync/client";
-import { cleDe, nettoyerLecture, type Article, type LectureTicket, type LigneTicket, type Produit, type Ticket } from "./donnees";
+import { cleDe, lireQuantite, nettoyerLecture, type Article, type LectureTicket, type LigneTicket, type Produit, type Ticket } from "./donnees";
 
 // Le ticket de caisse en photo : la photo part vers la fonction « lire-ticket » du projet Supabase, qui la fait lire
 // par Claude (la photo n'est pas gardée). On vérifie la lecture à l'écran, puis « Ranger » remplit le stock,
@@ -73,9 +73,20 @@ export async function rangerTicket(lu: LectureTicket, gardees: LigneTicket[], no
       // La date estimée ne vaut que pour le frigo : rangé ailleurs d'un toucher, le produit n'en a plus.
       const avant = l.jours && l.lieu === "frigo" ? plusJours(jour, l.jours) : undefined;
       const present = [...stock, ...neufs].find((p) => p.lieu === l.lieu && cleDe(p.nom) === cleDe(l.nom));
-      if (!present) neufs.push({ id: nouvelId(), nom: l.nom, lieu: l.lieu, ...(avant ? { avant } : {}), cree: quand + i });
+      const q = lireQuantite(l.qte);
+      if (!present) neufs.push({ id: nouvelId(), nom: l.nom, lieu: l.lieu, ...(avant ? { avant } : {}), ...q, cree: quand + i });
       // Déjà là : c'est du neuf, il est de nouveau plein et l'ancienne date ne vaut plus (remplacée par l'estimation, ou retirée).
-      else if (!neufs.includes(present) && (present.avant !== avant || present.reste)) { anciens.push({ ...present }); await db.cuisine_stock.update(present.id, { avant, reste: undefined }); }
+      // Un produit qui se compte gagne les unités achetées.
+      // (Deux lignes du même produit sur un ticket : la seconde part de ce que la première a laissé.)
+      else {
+        const nb = present.nb || q.nb ? Math.min(99, (present.nb ?? 1) + (q.nb ?? 1)) : undefined;
+        if (neufs.includes(present)) { if (nb) present.nb = nb; continue; }
+        if (present.avant === avant && !present.reste && present.nb === nb) continue;
+        if (!anciens.some((a) => a.id === present.id)) anciens.push({ ...present });
+        const qte = present.qte ?? q.qte;
+        await db.cuisine_stock.update(present.id, { avant, reste: undefined, nb, ...(qte ? { qte } : {}) });
+        Object.assign(present, { avant, reste: undefined, nb, qte });
+      }
     }
     await db.cuisine_stock.bulkAdd(neufs);
     const noms = new Set(gardees.map((l) => l.course).filter(Boolean));

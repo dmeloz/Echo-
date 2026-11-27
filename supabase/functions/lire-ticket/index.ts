@@ -46,7 +46,7 @@ Donne une ligne par produit acheté, dans l'ordre du ticket.
 
 Pour chaque ligne :
 - nom : le produit en clair, en français courant, sans marque ni code (« M-CLAS LAIT DR 1L » devient « Lait demi-écrémé »). Première lettre en majuscule, 40 caractères au plus.
-- qte : la quantité si elle est écrite (« 2 », « 500 g », « 1 L »), sinon vide.
+- qte : la quantité si elle est écrite (« 2 », « 500 g », « 1 L »), sinon vide. Pour un lot ou plusieurs fois le même produit, écris le nombre d'unités puis la taille d'une unité : « 6 x 25 cl », « 4 x 125 g ».
 - prix : le prix payé pour la ligne, rabais de la ligne déduit. 0 si illisible.
 - lieu : où ça se range à la maison : frigo, congelateur, placard (épicerie, boissons, pain), maison (ménage, hygiène), ou aucun pour ce qui ne se stocke pas (sac, consigne, journal, plat mangé tout de suite, carte cadeau).
 - jours : pour un produit frais du frigo, le nombre de jours pendant lesquels il se garde en général (viande et poisson crus 2, salade en sachet 4, yaourts 14…). 0 pour tout le reste ou si tu ne sais pas.

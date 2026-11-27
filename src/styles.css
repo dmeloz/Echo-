@@ -894,6 +894,13 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .jauge i { width: 6px; height: 16px; border-radius: 3px; background: rgb(18 40 58 / .12); }
 .jauge.n3 i, .jauge.n2 i:nth-child(-n+2) { background: var(--turquoise); }
 .jauge.n1 i:first-child { background: var(--urgent); }
+.stock-ligne b i { font-style: normal; font-weight: 500; color: var(--discret); }
+.liste-stock .compte { flex: none; min-width: 34px; padding: 3px 8px; border-radius: 999px; background: rgb(18 40 58 / .07); color: var(--encre); font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
+.liste-stock .compte.dernier { background: transparent; color: var(--urgent); }
+.compteur { display: inline-flex; align-items: center; gap: var(--e3); border: 1px solid var(--trait); border-radius: 999px; background: #fff; padding: 2px; }
+.compteur button { width: 40px; height: 40px; border: 0; border-radius: 50%; background: rgb(18 40 58 / .07); color: var(--encre); display: grid; place-items: center; }
+.compteur button:active { scale: .92; }
+.compteur output { min-width: 32px; text-align: center; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
 .stock-plus { display: flex; flex-direction: column; align-items: flex-start; gap: var(--e3); padding: 2px 0 12px; }
 .stock-restes { display: flex; flex-wrap: wrap; gap: var(--e3); }
 .stock-restes .puce { min-height: 40px; }
