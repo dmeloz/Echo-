@@ -25,7 +25,8 @@ export type Auteur = Personne | "echo"; // « echo » = un achat habituel remis 
 // pour = les jours des repas pour lesquels Echo a mis cet article (il repart avec eux si le repas change).
 export interface Article { id: string; nom: string; qte: string; rayon: Rayon; par: Auteur; fait: number | null; faitPar?: Personne; cree: number; pour?: string[] }
 // Ce qu'Echo retient d'un produit : son rayon, et quand on l'a acheté (pour le remettre tout seul).
-export interface Habitude { cle: string; nom: string; qte: string; rayon: Rayon; achats: number[]; refus: number; pause?: number }
+// ou : dans quel magasin on l'achète, d'après les tickets (le nom de l'enseigne, et combien de fois).
+export interface Habitude { cle: string; nom: string; qte: string; rayon: Rayon; achats: number[]; refus: number; pause?: number; ou?: Record<string, number> }
 // Le repas du soir d'un jour. Quand Echo le propose : ses ingrédients, s'il vient du congélateur, la gamelle du midi.
 // propose = pas encore validé (la barre « Proposition d'Echo »).
 export interface Repas { jour: string; plat: string; ingredients?: Lu[]; duStock?: string[]; congele?: boolean; gamelle?: string; propose?: boolean }
@@ -165,7 +166,7 @@ export function habituelsDus(habitudes: Habitude[], courses: Article[], now: num
 // Après un achat : Echo s'en souvient (les huit derniers suffisent).
 export function apresAchat(h: Habitude | undefined, a: Article): Habitude {
   const achats = [...new Set([...(h?.achats ?? []), a.fait ?? Date.now()])].sort((x, y) => x - y).slice(-8);
-  return { cle: cleDe(a.nom), nom: a.nom, qte: a.qte, rayon: a.rayon, achats, refus: 0 };
+  return { cle: cleDe(a.nom), nom: a.nom, qte: a.qte, rayon: a.rayon, achats, refus: 0, ...(h?.ou ? { ou: h.ou } : {}) };
 }
 // On retire un produit qu'Echo avait remis : il attend un tour de plus, et arrête au troisième refus.
 export function apresRefus(h: Habitude, now: number): Habitude {
@@ -248,7 +249,11 @@ export function nettoyerHabitude(x: unknown): Habitude | null {
   if (!cle || !nom) return null;
   const achats = (Array.isArray(o.achats) ? o.achats : []).filter((n): n is number => nb(n) !== null).slice(-8);
   const pause = nb(o.pause);
-  return { cle, nom, qte: txt(o.qte, 20), rayon: estRayon(o.rayon) ? o.rayon : "autre", achats, refus: Math.max(0, Math.min(9, nb(o.refus) ?? 0)), ...(pause ? { pause } : {}) };
+  const ou = Object.fromEntries(Object.entries(obj(o.ou)).slice(0, 6).flatMap(([m, n]): Array<[string, number]> => {
+    const nom = nomMagasin(m), fois = nb(n);
+    return nom && fois !== null && fois >= 1 ? [[nom, Math.min(999, Math.round(fois))]] : [];
+  }));
+  return { cle, nom, qte: txt(o.qte, 20), rayon: estRayon(o.rayon) ? o.rayon : "autre", achats, refus: Math.max(0, Math.min(9, nb(o.refus) ?? 0)), ...(pause ? { pause } : {}), ...(Object.keys(ou).length ? { ou } : {}) };
 }
 export function nettoyerRepas(x: unknown): Repas | null {
   const o = obj(x), jour = txt(o.jour, 10), plat = txt(o.plat, 80).trim(), gamelle = txt(o.gamelle, 80).trim();
@@ -315,6 +320,42 @@ export function nettoyerTicket(x: unknown): Ticket | null {
 }
 
 export const montant = (n: number, m: "CHF" | "EUR") => (m === "EUR" ? `${n.toFixed(2).replace(".", ",")} €` : `${n.toFixed(2)} CHF`);
+
+/* ---------- Plusieurs magasins ---------- */
+
+// L'enseigne d'un ticket : son premier mot (« MIGROS NYON » et « Migros Gland » sont le même magasin pour la liste).
+export function nomMagasin(brut: string) {
+  // Sans l'article ni la lettre seule du début (« E.Leclerc », « La Vie Claire ») ; deux mots quand le premier ne dit rien (« Super U »).
+  const mots = brut.replace(/[^\p{L}\p{N}' -]/gu, " ").trim().split(/\s+/).filter(Boolean);
+  while (mots.length > 1 && (mots[0].length < 2 || /^(le|la|les|the)$/i.test(mots[0]))) mots.shift();
+  const m = (/^(super|hyper|march[ée]|magasin|boucherie|boulangerie)$/i.test(mots[0] ?? "") ? mots.slice(0, 2) : mots.slice(0, 1)).join(" ");
+  return m.length < 2 ? "" : (m.charAt(0).toUpperCase() + m.slice(1).toLowerCase()).slice(0, 20);
+}
+// Où un produit s'achète d'habitude : le magasin qui revient le plus souvent sur les tickets.
+export const magasinHabituel = (h: Habitude | undefined) => Object.entries(h?.ou ?? {}).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]?.[0];
+// Les magasins connus, du plus fréquenté au moins fréquenté.
+export function magasinsConnus(habitudes: Habitude[]) {
+  const total = new Map<string, number>();
+  for (const h of habitudes) for (const [m, n] of Object.entries(h.ou ?? {})) total.set(m, (total.get(m) ?? 0) + n);
+  return [...total].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([m]) => m);
+}
+
+/* ---------- Le code-barres ---------- */
+
+// Un code-barres déjà vu : son nom et sa taille, pour ne pas les redemander.
+export interface CodeConnu { code: string; nom: string; qte: string }
+// Un code de produit : 8, 12 ou 13 chiffres, avec le bon chiffre de contrôle (une mauvaise lecture ne passe pas).
+export function codeValide(code: string) {
+  if (!/^(\d{8}|\d{12,13})$/.test(code)) return false;
+  const c = [...code].map(Number), dernier = c.pop()!;
+  const somme = c.reverse().reduce((t, n, i) => t + n * (i % 2 ? 1 : 3), 0);
+  return (10 - (somme % 10)) % 10 === dernier;
+}
+// Où ranger un produit d'après son nom : le frais au frigo, les surgelés au congélateur, l'entretien à la maison.
+export function lieuProbable(nom: string, habitudes: Habitude[] = []): Lieu {
+  const r = devinerRayon(nom, habitudes);
+  return r === "frais" || r === "boucherie" || r === "fruits" ? "frigo" : r === "surgeles" ? "congelateur" : r === "maison" || r === "hygiene" ? "maison" : "placard";
+}
 
 /* ---------- Le batch du dimanche ---------- */
 
