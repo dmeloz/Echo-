@@ -10,6 +10,7 @@ import { CodeInvitation } from "../components/Connexion";
 import { SectionIcloud } from "../components/Icloud";
 import { SectionTrajets } from "../components/Trajets";
 import { annulables, annulerDuJournal } from "../lib/echo/retour";
+import { NOUVEAUTES } from "../lib/echo/nouveautes";
 import { estConnecte, inviter, type Foyer, type Membre } from "../sync/moteur";
 import { MODULES, basculerModule } from "../modules/registre";
 import { exporter, importer } from "../data/sauvegarde";
@@ -331,6 +332,7 @@ function SectionEcho({ autre: nomAutre }: { autre: string }) {
     <MemoireEcho />
     <JournalEcho />
     <ManquesEcho />
+    <NouveautesEcho />
   </>);
 }
 
@@ -389,6 +391,24 @@ function ManquesEcho() {
       </ul>
       <p className="aide-champ">Dis-le à Claude pour qu'il ajoute ces outils à Echo.</p>
       <button type="button" className="bouton-texte" onClick={() => poserReglage("echoManques", [])}>Vider la liste</button>
+    </section>
+  );
+}
+
+// Les mises à jour d'Echo : ce qui a changé, à lire seulement (src/lib/echo/nouveautes.ts). Les trois dernières, puis tout.
+function NouveautesEcho() {
+  const [tout, setTout] = useState(false);
+  const liste = tout ? NOUVEAUTES : NOUVEAUTES.slice(0, 3);
+  const jour = (j: string) => new Date(`${j}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+  return (
+    <section className="g reglages">
+      <span className="lab">Mises à jour d'Echo</span>
+      <ul className="corbeille nouveautes">
+        {liste.map((n) => (
+          <li key={n.titre}><span><b>{n.titre}</b><small>{jour(n.jour)}</small>{n.points.map((p) => <span key={p} className="nouveaute-point">{p}</span>)}</span></li>
+        ))}
+      </ul>
+      {NOUVEAUTES.length > 3 && <button type="button" className="bouton-texte" aria-expanded={tout} onClick={() => setTout(!tout)}>{tout ? "Voir moins" : `Voir tout (${NOUVEAUTES.length})`}</button>}
     </section>
   );
 }
