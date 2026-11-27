@@ -12,6 +12,7 @@ import { REPETES, type Noms, type Personne } from "../lib/types";
 import { ajouter } from "../data/actions";
 import { nomDe, useReglage } from "../data/hooks";
 import { outilsEcho, useModulesActifs } from "../modules/registre";
+import { MAX_PHRASE } from "../../supabase/functions/_shared/echo-outils";
 
 interface Props {
   noms: Noms; proprio: Personne; ouverte: boolean; ecoute: boolean; texte: string; saisie: RefObject<HTMLInputElement | null>;
@@ -26,6 +27,8 @@ interface Fil { suite: Message[]; echanges: { moi: string; echo: string }[]; qua
 const REPRISE = 15 * 60_000;
 let filGarde: Fil | null = null;
 const filActuel = () => (filGarde && Date.now() - filGarde.quand < REPRISE ? filGarde : null);
+// Un « Oui » en cours d'exécution : la phrase suivante l'attend, pour que la note (ce qui a été fait) parte avec elle.
+let confirmation: Promise<unknown> = Promise.resolve();
 
 // La barre d'écriture : rangée derrière l'étoile Echo, elle s'ouvre au toucher et se range après l'envoi.
 // On tape (ou on dit) une phrase. Avec le code Echo et internet, l'assistant Echo regarde, prépare les actions, et on confirme
@@ -40,9 +43,14 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const [echo, setEcho] = useState<EtatEcho>(null);
   const [tache, setTache] = useState(false); // « Plutôt une tâche » : la phrase n'est pas pour un module
   const [simple, setSimple] = useState(false); // Echo n'a pas répondu : on reste en mode simple pour cette phrase
-  const [fil, setFilEtat] = useState<Fil | null>(filActuel);
+  const [filEtat, setFilEtat] = useState<Fil | null>(filActuel);
+  const fil = filEtat && Date.now() - filEtat.quand < REPRISE ? filEtat : null; // passé 15 minutes, la discussion repart à neuf
   const setFil = (f: Fil | null) => { filGarde = f; setFilEtat(f); };
-  const noter = (note: string) => { const f = filActuel(); if (f) setFil({ ...f, note }); };
+  // Une note pour Echo, ajoutée à celles qui attendent la phrase suivante.
+  const noter = (note: string) => {
+    const f = filActuel();
+    setFil({ suite: f?.suite ?? [], echanges: f?.echanges ?? [], quand: Date.now(), note: [f?.note, note].filter(Boolean).join(" ") });
+  };
   const nouvelleDiscussion = () => { demande.current++; setFil(null); setEcho(null); };
   const demande = useRef(0);
   const v = texte.trim();
@@ -50,8 +58,11 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const n = r ? (r.niveau ?? niveauPropose(r)) : 1;
   // Une phrase pour un module (« plus de lait » → les courses) ne devient pas une tâche et ne part pas à l'assistant.
   const { actifs } = useModulesActifs();
-  const pour = v && !tache && !echo ? actifs.map((m) => (m.etat === "construit" ? m.comprendre?.(v) ?? null : null)).find((x) => x) ?? null : null;
+  const versEcho = actif && (!!code || relie) && !simple && navigator.onLine;
+  // Pendant une discussion avec Echo, tout lui est envoyé (« plus de lait » aussi : il a les courses).
+  const pour = v && !tache && !(echo && versEcho) ? actifs.map((m) => (m.etat === "construit" ? m.comprendre?.(v) ?? null : null)).find((x) => x) ?? null : null;
   const parEcho = actif && (!!code || relie) && !simple && !pour;
+  const tropLong = parEcho && v.length > MAX_PHRASE;
 
   // Écrire pendant qu'Echo réfléchit l'interrompt ; sa réponse, elle, reste affichée : on peut lui répondre dessous.
   const setTexte = (t: string) => { onTexte(t); if (echo?.etat === "pense") { demande.current++; setEcho(null); } setSimple(false); setTache(false); };
@@ -59,8 +70,11 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const dire = (qui: string, quoi: string) => `${qui} ${quoi}`;
   const refuser = (r: ResultatEcho) => { if (r.aConfirmer.length) noter(dire(noms[proprio], "a dit non : rien de ta proposition n'a été fait.")); annulerEcho(); };
   const fermer = () => { annulerEcho(); onTexte(""); onRanger(); };
+  // Echo s'est arrêté en route après avoir fait des choses : il le saura à la phrase suivante.
+  const noterFaites = (faites: Faite[]) => noter(`ta réponse précédente a été interrompue, mais ceci a déjà été fait : ${faites.map((f) => f.ligne).join(" ; ")}.`);
 
   const enregistrer = (faire: () => Promise<unknown>, garde: string) => {
+    annulerEcho();
     setTexte("");
     onRanger();
     // Si l'enregistrement rate : la barre tremble, la phrase revient, et on dit quoi faire.
@@ -79,8 +93,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   });
 
   const confirmer = (r: ResultatEcho, phrase: string) => {
-    annulerEcho();
-    enregistrer(async () => {
+    const enCours = (async () => {
       const faites: Faite[] = [];
       const fait = () => noter(dire(noms[proprio], `a dit oui. Fait : ${faites.map((f) => f.ligne).join(" ; ")}.${faites.length < r.aConfirmer.length ? " Le reste n'a pas pu être fait." : ""}`));
       try {
@@ -94,7 +107,9 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
       }
       fait();
       proposerAnnuler(faites, faites.length > 1 ? `${faites.length} choses faites` : "C'est fait");
-    }, texte);
+    })();
+    confirmation = enCours.catch(() => {});
+    enregistrer(() => enCours, texte);
   };
 
   const demanderA = async () => {
@@ -102,15 +117,20 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
     if (echo?.etat === "propose" && echo.r.aConfirmer.length) noter(dire(noms[proprio], "n'a pas répondu à ta proposition : rien n'en a été fait."));
     const num = ++demande.current;
     const phrase = v;
-    const avant = filActuel();
     setEcho({ etat: "pense" });
+    await confirmation;
+    if (num !== demande.current) return;
+    const avant = filActuel();
     const dejaFaites: Faite[] = [];
     try {
       const r = await lancerEcho(phrase, ctx(), {
         appeler: appelerServeur(code), outils: outilsEcho(actifs), seul, noter: executer, faites: dejaFaites,
         discussion: avant?.suite, note: avant?.note,
       });
-      if (num !== demande.current) { if (r.faites.length) proposerAnnuler(r.faites, "Echo a fait des choses pendant ce temps"); return; }
+      if (num !== demande.current) {
+        if (r.faites.length) { proposerAnnuler(r.faites, "Echo a fait des choses pendant ce temps"); noterFaites(r.faites); }
+        return;
+      }
       if (r.faites.length) proposerAnnuler(r.faites, r.faites.length > 1 ? `Echo a fait ${r.faites.length} choses` : "Echo l'a fait");
       // La discussion continue (ou repart à neuf si Echo s'est arrêté en route). On garde les derniers échanges pour les montrer.
       const echanges = [...(avant?.echanges ?? []), { moi: phrase, echo: r.reponse }].slice(-6);
@@ -121,6 +141,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
     } catch (e) {
       // Echo a fait des petites choses avant de s'arrêter : on le dit, avec Annuler, et on ne repasse pas en mode simple (doublons).
       if (dejaFaites.length) {
+        noterFaites(dejaFaites);
         proposerAnnuler(dejaFaites, `Echo s'est arrêté en route après ${dejaFaites.length} chose${dejaFaites.length > 1 ? "s" : ""} faite${dejaFaites.length > 1 ? "s" : ""}`);
         if (num === demande.current) fermer();
         return;
@@ -137,7 +158,10 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
       if (!r) return;
       if (echo?.etat === "pense") return;
       if (pour) { enregistrer(pour.faire, texte); return; }
-      if (parEcho && navigator.onLine) { demanderA(); return; }
+      if (parEcho && navigator.onLine) {
+        if (tropLong) { trembler(boite.current); toast(`C'est trop long pour Echo (${v.length} signes, ${MAX_PHRASE} au plus) : coupe en deux messages.`, { duration: 6000 }); return; }
+        demanderA(); return;
+      }
       enregistrer(() => ajouter({ ...r, note: "" }), texte);
     }}>
       {ouverte && !ecoute && echo?.etat === "pense" && (

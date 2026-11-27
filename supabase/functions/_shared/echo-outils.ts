@@ -27,6 +27,8 @@ export const MAX_MESSAGES = 60;
 export const MAX_PHRASE = 3000;
 // La taille d'un résultat d'outil renvoyé à Claude (en caractères). Au-delà, le serveur refuse la demande.
 export const MAX_RESULTAT = 20_000;
+// La taille de toute la conversation envoyée (en caractères). L'app repart à neuf bien avant, et s'arrête si une phrase la remplit.
+export const MAX_CONVERSATION = 300_000;
 
 const JOUR = { type: "string", description: "AAAA-MM-JJ" };
 const HEURE = { type: "string", description: "HH:MM sur 24 h, ou \"\" si aucune heure" };
@@ -107,7 +109,7 @@ export const OUTILS_ECHO: OutilEcho[] = [
   {
     name: "signaler_manque",
     genre: "lire",
-    description: "Quand on te demande une chose que tes outils ne permettent pas (envoyer un message, réserver, noter une dépense…), note-la ici : Dany verra ce qu'il te manque et pourra te le faire ajouter. Ensuite, dis-le simplement à la personne.",
+    description: "Quand on te demande une chose que tes outils ne permettent pas (envoyer un message, réserver, noter une dépense…), note-la ici : la demande s'affiche dans Réglages → Echo, pour qu'on te fasse ajouter cet outil. Ensuite, dis-le simplement à la personne.",
     input_schema: { type: "object", additionalProperties: false, required: ["besoin"], properties: { besoin: { type: "string", description: "ce qu'il faudrait savoir faire, en une phrase" } } },
   },
   {
@@ -127,7 +129,7 @@ Comment travailler :
   1. regarde les 7 prochains jours avec voir_jours ;
   2. range chaque chose : l'urgent et ce qui a une échéance d'abord, puis le reste ;
   3. place chaque chose sur un jour réaliste : pas pendant les heures de travail, de préférence les jours de repos ou après le travail, pas plus de 3 ou 4 choses par jour, et regroupe ce qui va ensemble (deux courses dans le même quartier, deux appels) ;
-  4. ce qui s'achète va dans les courses (ajouter_courses), pas en tâches ;
+  4. ce qui s'achète va dans les courses (ajouter_courses, si tu as cet outil), pas en tâches ;
   5. propose tout d'un coup avec tes outils.
 - Les actions sont montrées à la personne, qui dit oui ou non. Ne refais pas une action déjà proposée dans le même tour.
 - Les lignes « [Note de l'app : …] » viennent de l'app : elles disent ce qui a été fait (oui) ou pas (non) après tes propositions. Tiens-en compte.
@@ -145,8 +147,9 @@ Règles pour les tâches :
 Ta réponse : courte, chaleureuse, en tutoyant, comme un message. Pour un plan, dis en 2 à 4 phrases ta logique (« J'ai mis le garage samedi, ton jour de repos, et regroupé la pharmacie avec les courses mardi après ton travail. »). Pas de titre, pas de tableau, jamais d'id.
 Si la demande n'est pas pour toi, réponds gentiment en une phrase ce que tu sais faire.`;
 
-// Les outils tels que Claude les reçoit (sans le genre, qui ne regarde que l'app).
-export const outilsPourClaude = () => OUTILS_ECHO.map(({ genre: _genre, ...o }) => ({ ...o, strict: true }));
+// Les outils tels que Claude les reçoit (sans le genre, qui ne regarde que l'app). Seulement ceux que l'app a (modules allumés).
+export const outilsPourClaude = (noms?: string[]) =>
+  OUTILS_ECHO.filter((o) => !noms || noms.includes(o.name)).map(({ genre: _genre, ...o }) => ({ ...o, strict: true }));
 export const genreDe = (nom: string): GenreOutil | undefined => OUTILS_ECHO.find((o) => o.name === nom)?.genre;
 
 // La demande envoyée à Claude pour un tour de la boucle. Le serveur et les phrases d'essai (essais/) l'utilisent tous les deux :
@@ -162,7 +165,7 @@ export function toursDepuisPhrase(messages: unknown[]) {
   }
   return n;
 }
-export function demandeTour(situation: string, messages: unknown[]) {
+export function demandeTour(situation: string, messages: unknown[], outils?: string[]) {
   const tours = toursDepuisPhrase(messages);
   return {
     model: MODELE_ECHO,
@@ -171,7 +174,7 @@ export function demandeTour(situation: string, messages: unknown[]) {
     // La consigne et les outils ne changent jamais : mis en cache d'une phrase à l'autre. La conversation aussi, d'un tour à l'autre.
     cache_control: { type: "ephemeral" as const },
     system: [{ type: "text" as const, text: CONSIGNE_AGENT, cache_control: { type: "ephemeral" as const } }, { type: "text" as const, text: situation }],
-    tools: outilsPourClaude(),
+    tools: outilsPourClaude(outils),
     // Dernier tour permis : Echo doit répondre avec ce qu'il a, sans nouvel outil.
     tool_choice: { type: tours >= MAX_TOURS - 1 ? "none" as const : "auto" as const },
     messages,

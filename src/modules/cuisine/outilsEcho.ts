@@ -1,7 +1,7 @@
 import { db } from "../../data/db";
 import type { Executant } from "../../lib/echo/outils";
 import { ajouterArticles } from "./actions";
-import { nomRayon, type Lu } from "./donnees";
+import { cleDe, nomRayon, type Lu } from "./donnees";
 
 // Ce que l'assistant Echo peut faire dans la Cuisine (décrit dans supabase/functions/_shared/echo-outils.ts).
 const court = (s: unknown, n: number) => (typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, n) : "");
@@ -23,8 +23,15 @@ export const OUTILS_CUISINE: Record<string, Executant> = {
         outil: "ajouter_courses", genre: "petit", libelle: lus.length > 1 ? `Courses : ${lus.length} articles` : `Courses : ${lus[0].nom}`,
         details: lus.length > 1 ? lus.map((l) => (l.qte ? `${l.nom} (${l.qte})` : l.nom)) : lus[0].qte ? [lus[0].qte] : [],
         faire: async () => {
+          // Un article déjà là peut revenir dans la liste (décoché) ou changer de quantité : on garde son état d'avant.
+          const cles = new Set(lus.map((l) => cleDe(l.nom)));
+          const avant = (await db.cuisine_courses.toArray()).filter((a) => cles.has(cleDe(a.nom)))
+            .map((a) => ({ id: a.id, fait: a.fait, faitPar: a.faitPar, qte: a.qte }));
           const ajoutes = await ajouterArticles(lus, true);
-          return () => db.cuisine_courses.bulkDelete(ajoutes.map((a) => a.id));
+          return () => db.transaction("rw", db.cuisine_courses, async () => {
+            await db.cuisine_courses.bulkDelete(ajoutes.map((a) => a.id));
+            for (const { id, ...x } of avant) await db.cuisine_courses.update(id, x);
+          });
         },
       };
     },

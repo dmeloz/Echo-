@@ -8,7 +8,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { garder } from "../_shared/garde.ts";
-import { MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, OUTILS_ECHO, demandeTour } from "../_shared/echo-outils.ts";
+import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, OUTILS_ECHO, demandeTour } from "../_shared/echo-outils.ts";
 
 const ORIGINES = ["https://dmeloz.github.io", "http://localhost:5173", "http://localhost:4173"];
 const MAX_TEXTE = 1000;
@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
 
 // ---------- Le mode agent : un tour de la boucle ----------
 
-interface DemandeAgent { mode?: unknown; situation?: unknown; messages?: unknown }
+interface DemandeAgent { mode?: unknown; situation?: unknown; messages?: unknown; outils?: unknown }
 
 // Le budget du jour, en dollars (secret ECHO_BUDGET_JOUR, 0,50 $ sinon). Au-delà, Echo s'arrête jusqu'à minuit (heure de Zurich).
 // Deux budgets séparés : les membres du foyer ont le budget entier ; le code partagé, un cinquième à part.
@@ -177,7 +177,6 @@ const coutMicro = (u: Anthropic.Usage) =>
   Math.ceil(((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)) * 0.1 + (u.output_tokens ?? 0) * 0.5);
 
 const MAX_SITUATION = 600; // la date, l'heure, les prénoms : rien de plus
-const MAX_CONVERSATION = 200_000; // caractères de la conversation envoyée (les résultats d'outils comptent)
 
 function base() {
   return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
@@ -208,6 +207,8 @@ async function tourAgent(d: DemandeAgent, source: "membre" | "code", origine: st
   const situation = typeof d.situation === "string" && d.situation.length <= MAX_SITUATION && d.situation.startsWith("Aujourd'hui :") ? d.situation : "";
   if (!situation || !conversationValide(d.messages)) return repondre({ erreur: "requete" }, 400, origine);
   const messages = d.messages;
+  // Les outils que l'app sait faire (selon ses modules allumés) : des noms de la liste, sinon tous.
+  const outils = Array.isArray(d.outils) && d.outils.length && d.outils.every((n) => typeof n === "string" && NOMS_OUTILS.has(n)) ? d.outils as string[] : undefined;
 
   const db = base();
   const { data: depense, error: errDepense } = await db.rpc("depense_echo_du_jour", { p_source: source });
@@ -216,7 +217,7 @@ async function tourAgent(d: DemandeAgent, source: "membre" | "code", origine: st
 
   const client = new Anthropic();
   try {
-    const r = await client.messages.create({ ...demandeTour(situation, messages), messages });
+    const r = await client.messages.create({ ...demandeTour(situation, messages, outils), messages });
     const { error: errNote } = await db.rpc("noter_depense_echo", { p_source: source, p_micro: coutMicro(r.usage) });
     if (errNote) console.error("[echo] noter_depense", errNote.message);
     if (r.stop_reason === "refusal") return repondre({ erreur: "refus" }, 422, origine);

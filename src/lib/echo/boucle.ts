@@ -1,6 +1,6 @@
 import { db } from "../../data/db";
 import { auJour, nouvelId, z } from "../dates";
-import { MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
 import { genreFinal, type Action, type ContexteEcho, type Executant } from "./outils";
 
 // La boucle d'Echo. La phrase part au serveur (qui garde la clé et parle à Claude). Claude répond par du texte,
@@ -16,7 +16,7 @@ export type Bloc =
 export interface ResultatOutil { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }
 export type Message = { role: "user"; content: string | ResultatOutil[] } | { role: "assistant"; content: Bloc[] };
 export interface Tour { content: Bloc[]; stop_reason: string }
-export type Appeler = (corps: { mode: "agent"; situation: string; messages: Message[] }) => Promise<Tour>;
+export type Appeler = (corps: { mode: "agent"; situation: string; messages: Message[]; outils: string[] }) => Promise<Tour>;
 
 export interface Faite { action: Action; annuler: () => Promise<unknown>; ligne: string }
 export interface ResultatEcho {
@@ -28,13 +28,20 @@ export interface ResultatEcho {
 }
 
 // Une discussion trop longue repart à neuf, avec un court rappel de la dernière réponse d'Echo.
-const TAILLE_MAX = 150_000;
-function reprendre(avant: Message[], phrase: string): Message[] {
+// Bien en dessous de MAX_CONVERSATION : la phrase qui vient ajoutera ses propres résultats d'outils.
+const TAILLE_MAX = 60_000;
+// La phrase passe toujours entière (jusqu'à MAX_PHRASE) ; ce sont les notes de l'app qui sont raccourcies s'il le faut.
+function avecNotes(notes: string[], phrase: string) {
+  const p = phrase.slice(0, MAX_PHRASE);
+  const avant = notes.filter(Boolean).map((n) => `[Note de l'app : ${n}]\n`).join("").slice(0, MAX_PHRASE - p.length);
+  return avant + p;
+}
+function reprendre(avant: Message[], phrase: string, note: string): Message[] {
   const place = avant.length + 1 + 2 * MAX_TOURS <= MAX_MESSAGES && JSON.stringify(avant).length < TAILLE_MAX;
-  if (!avant.length || place) return [...avant, { role: "user", content: phrase }];
+  if (!avant.length || place) return [...avant, { role: "user", content: avecNotes([note], phrase) }];
   const dernier = [...avant].reverse().find((m) => m.role === "assistant");
   const rappel = dernier ? texteDe(dernier.content as Bloc[]).slice(0, 600) : "";
-  return [{ role: "user", content: `${rappel ? `[Note de l'app : la discussion a été raccourcie. Ta dernière réponse : « ${rappel} »]\n` : ""}${phrase}`.slice(0, MAX_PHRASE) }];
+  return [{ role: "user", content: avecNotes([rappel && `la discussion a été raccourcie. Ta dernière réponse : « ${rappel} »`, note], phrase) }];
 }
 
 // Ce qu'Echo sait de la situation : la date, l'heure, qui écrit. Une fois par phrase (la conversation reste en cache).
@@ -63,21 +70,24 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
   discussion?: Message[];
   note?: string;
 }): Promise<ResultatEcho> {
-  const texte = (o.note ? `[Note de l'app : ${o.note}]\n` : "") + phrase;
-  const messages: Message[] = reprendre(o.discussion ?? [], texte.slice(0, MAX_PHRASE));
+  const messages: Message[] = reprendre(o.discussion ?? [], phrase, o.note ?? "");
+  const outils = Object.keys(o.outils);
   const sit = situation(ctx);
   const aConfirmer: Action[] = [];
   const faites: Faite[] = o.faites ?? [];
   let dernierTexte = "";
 
   for (let tour = 0; tour < MAX_TOURS; tour++) {
-    const r = await o.appeler({ mode: "agent", situation: sit, messages });
+    // Les résultats d'outils ont trop rempli la conversation : on s'arrête avec ce qu'on a (le serveur la refuserait).
+    if (JSON.stringify(messages).length > MAX_CONVERSATION - 10_000) break;
+    const r = await o.appeler({ mode: "agent", situation: sit, messages, outils });
     const blocs = Array.isArray(r.content) ? r.content : [];
     messages.push({ role: "assistant", content: blocs });
     // La réponse est le texte du dernier tour seulement (« Je regarde. » d'un tour précédent n'est pas une réponse).
     dernierTexte = texteDe(blocs);
     const demandes = blocs.filter(estOutil);
-    if (r.stop_reason !== "tool_use" || !demandes.length) return { reponse: dernierTexte, aConfirmer, faites, suite: messages };
+    // La discussion ne se garde que si elle finit par une vraie réponse (le serveur refuse une réponse vide ou un outil sans résultat).
+    if (r.stop_reason !== "tool_use" || !demandes.length) return { reponse: dernierTexte, aConfirmer, faites, suite: blocs.length && !demandes.length ? messages : null };
 
     // Tous les résultats d'un tour partent ensemble, dans un seul message.
     const resultats: ResultatOutil[] = [];

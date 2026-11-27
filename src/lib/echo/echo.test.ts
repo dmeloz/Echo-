@@ -203,6 +203,46 @@ describe("la boucle d'Echo", () => {
     expect(vu.articles.map((x) => x.nom).sort()).toEqual(["Lait", "Pain"]);
   });
 
+  it("une réponse vide ne se garde pas comme discussion (le serveur la refuserait)", async () => {
+    const s = scenario([{ content: [], stop_reason: "end_turn" }]);
+    const r = await lancerEcho("salut", ctx, { appeler: s.appeler, outils: TOUS, seul: false });
+    expect(r.suite).toBeNull();
+  });
+
+  it("Echo ne reçoit que les outils que l'app a (modules allumés)", async () => {
+    const noms: string[][] = [];
+    const appeler: Appeler = async (c) => { noms.push(c.outils); return texte("ok"); };
+    await lancerEcho("salut", ctx, { appeler, outils: OUTILS_BASE, seul: false });
+    expect(noms[0]).not.toContain("ajouter_courses");
+    expect(noms[0]).toContain("voir_jours");
+  });
+
+  it("une longue phrase passe entière : c'est la note de l'app qui est raccourcie", async () => {
+    const s = scenario([texte("ok")]);
+    const phrase = "x".repeat(2990) + " FIN";
+    await lancerEcho(phrase, ctx, { appeler: s.appeler, outils: TOUS, seul: false, note: "n".repeat(500) });
+    const c = s.recus[0][0].content as string;
+    expect(c.endsWith(" FIN")).toBe(true);
+    expect(c.length).toBeLessThanOrEqual(3000);
+  });
+
+  it("Annuler des courses remet un article déjà là comme avant", async () => {
+    await db.cuisine_courses.clear();
+    const a0 = await TOUS.ajouter_courses.preparer!({ articles: [{ nom: "Lait", qte: "1" }] }, ctx);
+    if (typeof a0 === "string") throw new Error(a0);
+    await a0.faire();
+    const lait = (await db.cuisine_courses.toArray())[0];
+    await db.cuisine_courses.update(lait.id, { fait: 5 });
+    const a = await TOUS.ajouter_courses.preparer!({ articles: [{ nom: "Lait", qte: "2" }, { nom: "Pain", qte: "" }] }, ctx);
+    if (typeof a === "string") throw new Error(a);
+    const defaire = await a.faire();
+    expect((await db.cuisine_courses.get(lait.id))!.fait).toBeNull();
+    await defaire();
+    const apres = await db.cuisine_courses.toArray();
+    expect(apres).toHaveLength(1);
+    expect(apres[0]).toMatchObject({ fait: 5, qte: "1" });
+  });
+
   it("ce qu'Echo ne sait pas faire est noté pour plus tard", async () => {
     await TOUS.signaler_manque.lire!({ besoin: "Envoyer un SMS à Sarah" }, ctx);
     const r = await db.reglages.get("echoManques");
