@@ -7,15 +7,10 @@ import { libelleJour } from "../../lib/dates";
 import { vibrer } from "../../lib/gestes";
 import { autre, type Personne } from "../../lib/types";
 import type { ContexteModule } from "../contrat";
-import { ajouterCorvees, ajouterModeles, changerCorvee, cocherCorvee, rangerFaits, reporterCorvee, retirerCorvee } from "./actions";
-import { DEPART, RYTHMES, TAILLES, aFaire, besoin, deborde, depuis, equilibre, jourDu, lireCorvee, minutesDe, nomRythme, parts, pour, type Corvee, type Modele, type QuiCorvee } from "./donnees";
-
-const ETATS = ["", "Peut attendre", "Bientôt", "À faire"];
-// La petite jauge d'une corvée : elle se remplit avec le temps. Rouge seulement quand elle attend depuis longtemps.
-function Jauge({ c, now }: { c: Corvee; now: Date }) {
-  const n = besoin(c, now), trop = deborde(c, now);
-  return <i className={`jauge besoin n${n}${trop ? " deborde" : ""}`} role="img" aria-label={trop ? "Attend depuis longtemps" : ETATS[n]}><i /><i /><i /></i>;
-}
+import { ajouterCorvees, ajouterModeles, rangerFaits, rangerReparations } from "./actions";
+import { LigneCorvee } from "./Corvee";
+import { Entretien } from "./Entretien";
+import { DEPART, aFaire, depuis, equilibre, jourDu, lireCorvee, minutesDe, parts, pour, type Corvee, type Modele } from "./donnees";
 
 // Le premier jour : on touche ce qui existe chez soi, au lieu d'écrire une liste.
 function Depart({ onFini }: { onFini: () => void }) {
@@ -41,40 +36,11 @@ function Depart({ onFini }: { onFini: () => void }) {
   );
 }
 
-// Les réglages d'une corvée, sous sa ligne : son rythme, sa taille, qui s'en occupe.
-function Detail({ c, noms, proprio, now, onFermer }: Pick<ContexteModule, "noms" | "proprio" | "now"> & { c: Corvee; onFermer: () => void }) {
-  const l_autre = autre(proprio);
-  const rythmes = RYTHMES.some((r) => r.jours === c.tous) ? RYTHMES : [...RYTHMES, { jours: c.tous, nom: nomRythme(c.tous) }].sort((a, b) => a.jours - b.jours);
-  const quis: Array<[QuiCorvee, string]> = [[proprio, noms[proprio]], [l_autre, noms[l_autre]], ["tour", "Chacun son tour"], ["echo", "Echo choisit"]];
-  const aide = c.qui === "tour" ? (c.par ? `Chacun son tour : après ${c.par === proprio ? "toi" : noms[c.par]}, c'est à ${c.par === proprio ? noms[l_autre] : "toi"}.` : "Chacun son tour : celui qui la fait passe la main à l'autre.")
-    : c.qui === "echo" ? "Echo la donne à celui qui en a le moins fait ces 4 dernières semaines." : "";
-  return (
-    <div className="stock-plus corvee-plus">
-      <span className="lab">Ça revient</span>
-      <div className="stock-restes" role="group" aria-label={`Le rythme de ${c.nom}`}>
-        {rythmes.map((r) => <button key={r.jours} type="button" className="puce" aria-pressed={c.tous === r.jours} onClick={() => { vibrer(); changerCorvee(c.id, { tous: r.jours }); }}>{r.nom}</button>)}
-      </div>
-      <span className="lab">C'est…</span>
-      <div className="stock-restes" role="group" aria-label={`La taille de ${c.nom}`}>
-        {TAILLES.map((t) => <button key={t.id} type="button" className="puce" aria-pressed={c.taille === t.id} onClick={() => { vibrer(); changerCorvee(c.id, { taille: t.id }); }}>{t.nom}</button>)}
-      </div>
-      <span className="lab">Qui s'en occupe</span>
-      <div className="stock-restes" role="group" aria-label={`Qui s'occupe de ${c.nom}`}>
-        {quis.map(([q, nom]) => <button key={q} type="button" className="puce" aria-pressed={c.qui === q} onClick={() => { vibrer(); changerCorvee(c.id, { qui: q }); }}>{nom}</button>)}
-      </div>
-      {aide && <p className="aide-champ">{aide}</p>}
-      <div className="rangee corvee-gestes">
-        <button type="button" className="bouton-texte" onClick={() => { onFermer(); cocherCorvee(c, l_autre, noms[l_autre]); }}>{noms[l_autre]} l'a fait</button>
-        {aFaire(c, now) && <button type="button" className="bouton-texte" onClick={() => { onFermer(); reporterCorvee(c, now); }}>Pas cette fois</button>}
-        <button type="button" className="bouton-texte danger" onClick={() => { onFermer(); retirerCorvee(c); }}>Retirer</button>
-      </div>
-    </div>
-  );
-}
-
-// La page Maison. Pour l'instant : les corvées (l'entretien et les papiers arrivent avec les lots suivants).
-export function PageMaison({ noms, proprio, now }: ContexteModule) {
-  const corvees = useLiveQuery(() => db.maison_corvees.toArray(), [], undefined);
+// La page Maison : les corvées et l'entretien (les papiers arrivent avec le lot suivant).
+export function PageMaison(ctx: ContexteModule) {
+  const { noms, proprio, now } = ctx;
+  const toutes = useLiveQuery(() => db.maison_corvees.toArray(), [], undefined);
+  const partie = useReglage<"corvees" | "entretien">("maisonPartie", "corvees");
   const faits = useLiveQuery(() => db.maison_faits.toArray(), [], []);
   const departVu = useReglage("maisonDepartVu", false);
   const montrerEquilibre = useReglage("maisonEquilibre", true);
@@ -82,9 +48,17 @@ export function PageMaison({ noms, proprio, now }: ContexteModule) {
   const [ouvert, setOuvert] = useState<string | null>(null);
   const [voirAutres, setVoirAutres] = useState(false);
   const [texte, setTexte] = useState("");
-  useEffect(() => { rangerFaits().catch(() => {}); }, []);
+  useEffect(() => { rangerFaits().then(() => rangerReparations()).catch(() => {}); }, []);
+  useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie]);
 
-  if (corvees === undefined) return null;
+  if (toutes === undefined) return null;
+  const corvees = toutes.filter((c) => !c.entretien);
+  const choix = (
+    <div className="vue-choix" role="group" aria-label="Partie de la maison">
+      {([["corvees", "Corvées"], ["entretien", "Entretien"]] as const).map(([id, nom]) => <button key={id} type="button" aria-pressed={partie === id} onClick={() => poserReglage("maisonPartie", id)}>{nom}</button>)}
+    </div>
+  );
+  if (partie === "entretien") return <Entretien {...ctx} corvees={toutes} choix={choix} />;
   if (choisir || (!corvees.length && !departVu)) return <Depart onFini={() => { poserReglage("maisonDepartVu", true); setChoisir(false); }} />;
 
   const e = equilibre(faits, now.getTime());
@@ -96,23 +70,13 @@ export function PageMaison({ noms, proprio, now }: ContexteModule) {
   const min = miennes.reduce((s, c) => s + minutesDe(c.taille), 0);
   const p = parts(e);
 
-  const ligne = (c: Corvee, sous: string) => (
-    <li key={c.id} className={ouvert === c.id ? "ouvert" : ""}>
-      <div className="corvee">
-        <button type="button" className="coche" aria-label={`${c.nom} : c'est fait`} onClick={() => { vibrer(12); setOuvert(null); cocherCorvee(c, proprio); }} />
-        <button type="button" className="stock-ligne" aria-expanded={ouvert === c.id} onClick={() => setOuvert(ouvert === c.id ? null : c.id)}>
-          <b>{c.nom}{sous && <small>{sous}</small>}</b>
-          <Jauge c={c} now={now} />
-        </button>
-      </div>
-      {ouvert === c.id && <Detail c={c} noms={noms} proprio={proprio} now={now} onFermer={() => setOuvert(null)} />}
-    </li>
-  );
+  const ligne = (c: Corvee, sous: string) => <LigneCorvee key={c.id} c={c} sous={sous} ouvert={ouvert === c.id} onOuvrir={setOuvert} noms={noms} proprio={proprio} now={now} />;
   const sousDue = (c: Corvee) => [c.piece, depuis(c, now)].filter(Boolean).join(" · ");
   const ajouter = () => { const lu = lireCorvee(texte); if (!lu) return; ajouterCorvees([lu]); setTexte(""); };
 
   return (
     <>
+      {choix}
       {corvees.length === 0 ? (
         <section className="g vide">
           <p>Aucune corvée pour l'instant.</p>

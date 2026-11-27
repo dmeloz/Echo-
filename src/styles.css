@@ -1060,6 +1060,15 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .equilibre-barre { display: flex; gap: 3px; height: 8px; }
 .equilibre-barre i { flex: 0 1 0; border-radius: 4px; background: var(--encre); transition: flex-grow var(--m-barre) var(--douce); }
 .equilibre-barre i + i { background: var(--turquoise); }
+/* Entretien : la barre d'ajout au pied d'une liste, l'état d'une réparation, les champs d'une fiche. */
+.ajout-dans { padding: 0; margin: 0 -10px 0 0; border-radius: 0; border-top: 1px solid var(--trait); }
+.liste-stock ul:empty + .ajout-dans { border-top: 0; }
+.ajout-dans input { font-size: 15px; }
+.liste-stock .compte.en-cours { background: rgb(47 107 255 / .12); color: var(--bleu); }
+.corvees .stock-plus { align-self: stretch; }
+.corvees .stock-plus > input { align-self: stretch; height: 44px; border: 1px solid var(--trait); border-radius: 12px; background: #fff; padding: 0 12px; font-size: 16px; }
+.corvees .stock-plus .aide-champ b { color: var(--encre); }
+.corvee a.rond-champ { background: rgb(18 40 58 / .06); color: var(--bleu); width: 40px; height: 40px; }
 .maison-depart .puce { min-height: 40px; }
 .maison-depart .gouts-pied { flex-direction: row-reverse; }
 

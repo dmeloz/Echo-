@@ -10,8 +10,8 @@ vi.stubGlobal("localStorage", { getItem: (k: string) => stock.get(k) ?? null, se
 import { db } from "../../data/db";
 import { lireFile } from "../../sync/file";
 import { appliquer } from "../../sync/moteur";
-import { ajouterCorvees, cocherCorvee, faireCorvee, rangerFaits, reporterCorvee, retirerCorvee } from "./actions";
-import { aFaire, besoin, deborde, ditFait, equilibre, jourDu, lireCorvee, nettoyerCorvee, nettoyerFait, parts, pour, trouverCorvees, type Corvee } from "./donnees";
+import { ajouterAppareil, ajouterContact, ajouterCorvees, ajouterReparation, cocherCorvee, etatReparation, faireCorvee, rangerFaits, rangerReparations, reporterCorvee, retirerCorvee } from "./actions";
+import { aFaire, besoin, deborde, ditFait, equilibre, gestesPour, jourDu, lireContact, lireCorvee, nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation, nomRythme, parts, pour, texteGarantie, trouverCorvees, type Corvee } from "./donnees";
 import { maison } from "./index";
 import { OUTILS_MAISON } from "./outilsEcho";
 
@@ -23,7 +23,7 @@ const ctx = { noms: { moi: "Dany", elle: "Sarah" }, proprio: "moi" as const, now
 const annuler = () => (toast.mock.calls.at(-1)![1] as { action: { onClick: () => Promise<unknown> } }).action.onClick();
 
 beforeEach(async () => {
-  await Promise.all([db.maison_corvees.clear(), db.maison_faits.clear(), db.reglages.clear()]);
+  await Promise.all([db.maison_corvees.clear(), db.maison_faits.clear(), db.maison_reparations.clear(), db.maison_appareils.clear(), db.maison_contacts.clear(), db.reglages.clear()]);
   stock.clear(); toast.mockClear();
 });
 
@@ -208,5 +208,82 @@ describe("le foyer", () => {
     await appliquer([ligne("corvee", "c9", corvee({ id: "c9", nom: "Draps" })), ligne("corvee_faite", "f9", { id: "f9", corvee: "c9", nom: "Draps", par: "elle", quand: 5, min: 15 })], false, "moi");
     expect((await db.maison_corvees.get("c9"))!.nom).toBe("Draps");
     expect((await db.maison_faits.get("f9"))!.par).toBe("elle");
+  });
+});
+
+describe("l'entretien", () => {
+  it("la garantie se lit en clair", () => {
+    const a = { id: "a", nom: "Lave-linge", piece: "", achat: "2025-03-12", garantie: 24, cree: 0 };
+    expect(texteGarantie(a, NOW)).toBe("Sous garantie jusqu'au 12 mars 2027");
+    expect(texteGarantie({ ...a, garantie: 12 }, NOW)).toBe("Garantie finie le 12 mars 2026");
+    expect(texteGarantie({ ...a, achat: undefined }, NOW)).toBe("");
+    expect(texteGarantie({ ...a, garantie: 0 }, NOW)).toBe("");
+  });
+  it("propose les gestes habituels d'un appareil", () => {
+    expect(gestesPour("Lave-linge Bosch").map((g) => g.nom)).toEqual(["Lavage à vide à 90°", "Nettoyer le filtre du lave-linge"]);
+    expect(gestesPour("Machine à café")[0]).toMatchObject({ nom: "Détartrer la machine à café", tous: 60 });
+    expect(gestesPour("Fourgon")).toEqual([]);
+    expect(gestesPour("Télé")).toEqual([]);
+    expect(nomRythme(60)).toBe("Tous les 2 mois");
+    expect(lireCorvee("détartrer la bouilloire", 90)).toEqual({ nom: "Détartrer la bouilloire", tous: 90 });
+    expect(lireCorvee("détartrer la bouilloire tous les 2 mois", 90)!.tous).toBe(60);
+  });
+  it("lit un contact écrit en une ligne", () => {
+    expect(lireContact("plombier Martin 079 123 45 67")).toEqual({ nom: "Plombier Martin", role: "Plombier", tel: "079 123 45 67" });
+    expect(lireContact("Régie du Lac : +41 21 555 00 11")).toEqual({ nom: "Régie du Lac", role: "Régie", tel: "+41 21 555 00 11" });
+    expect(lireContact("Jean Dupont")).toEqual({ nom: "Jean Dupont", role: "", tel: "" });
+    expect(lireContact("  ")).toBeNull();
+  });
+  it("une réparation se note, avance, puis quitte la liste avec Annuler", async () => {
+    const r = (await ajouterReparation("le robinet goutte"))!;
+    expect(r).toMatchObject({ nom: "Le robinet goutte", etat: 1 });
+    expect(await ajouterReparation("Le robinet goutte")).toBeNull();
+    await etatReparation(r, 3);
+    expect((await db.maison_reparations.get(r.id))!).toMatchObject({ etat: 3, fini: expect.any(Number) });
+    expect(await ajouterReparation("le robinet goutte", {}, true)).not.toBeNull(); // réparée : la même panne peut revenir
+    await annuler();
+    expect((await db.maison_reparations.get(r.id))!.etat).toBe(1);
+  });
+  it("les réparations finies depuis plus d'un an sont rangées", async () => {
+    await db.maison_reparations.bulkAdd([
+      { id: "v", nom: "Vieille", etat: 3, note: "", cree: 0, fini: NOW.getTime() - 400 * J },
+      { id: "r", nom: "Récente", etat: 3, note: "", cree: 0, fini: NOW.getTime() - 30 * J },
+      { id: "o", nom: "Ouverte", etat: 1, note: "", cree: 0 },
+    ]);
+    await rangerReparations(NOW.getTime());
+    expect((await db.maison_reparations.toArray()).map((r) => r.id).sort()).toEqual(["o", "r"]);
+  });
+  it("un appareil ou un contact n'est pas doublé", async () => {
+    expect(await ajouterAppareil("lave-linge")).toMatchObject({ nom: "Lave-linge", garantie: 0 });
+    expect(await ajouterAppareil("Lave-Linge")).toBeNull();
+    expect(await ajouterContact({ nom: "Plombier Martin", role: "Plombier", tel: "0791234567" })).not.toBeNull();
+    expect(await ajouterContact({ nom: "plombier martin", role: "", tel: "" })).toBeNull();
+  });
+  it("un geste d'entretien est une corvée rangée à part", async () => {
+    const [c] = await ajouterCorvees([{ nom: "Détartrer la machine à café", tous: 60, entretien: true, appareil: "a1" }], true);
+    expect(c).toMatchObject({ entretien: true, appareil: "a1", tous: 60 });
+    expect(nettoyerCorvee(c)).toEqual(c);
+  });
+  it("Echo note une réparation et la voit", async () => {
+    expect(maison.comprendre!("à réparer : la poignée de la porte")).toMatchObject({ titre: "la poignée de la porte", ou: "Maison, à réparer" });
+    const a = await OUTILS_MAISON.noter_reparation.preparer!({ nom: "Robinet qui goutte", note: "régie prévenue" }, ctx);
+    if (typeof a === "string") throw new Error(a);
+    expect(a).toMatchObject({ genre: "petit", libelle: "À réparer : Robinet qui goutte", details: ["régie prévenue"] });
+    const defaire = await a.faire();
+    expect(await OUTILS_MAISON.voir_maison.lire!({}, ctx)).toMatchObject({ aReparer: [{ nom: "Robinet qui goutte", etat: "à faire", note: "régie prévenue" }] });
+    expect(await OUTILS_MAISON.noter_reparation.preparer!({ nom: "robinet qui goutte", note: "" }, ctx)).toMatch(/déjà noté/);
+    await (defaire as () => Promise<void>)();
+    expect(await db.maison_reparations.count()).toBe(0);
+  });
+  it("ne garde que les formes attendues, et tout part au foyer", async () => {
+    expect(nettoyerReparation({ id: "r", nom: "Robinet", etat: 7, note: 3, fini: 9, cree: 1 })).toEqual({ id: "r", nom: "Robinet", etat: 1, note: "", cree: 1 });
+    expect(nettoyerReparation({ id: "r", nom: "Robinet", etat: 3, note: "ok", fini: 9, cree: 1 })).toEqual({ id: "r", nom: "Robinet", etat: 3, note: "ok", cree: 1, fini: 9 });
+    expect(nettoyerAppareil({ id: "a", nom: "Four", achat: "hier", garantie: 2.5, cree: 1 })).toEqual({ id: "a", nom: "Four", piece: "", garantie: 0, cree: 1 });
+    expect(nettoyerContact({ id: "c", nom: "Régie", tel: "<021> 555", cree: 1 })).toEqual({ id: "c", nom: "Régie", role: "", tel: "021 555", cree: 1 });
+    expect(nettoyerContact({ id: "c" })).toBeNull();
+    await ajouterReparation("Ampoule du couloir", {}, true);
+    await ajouterAppareil("Four");
+    await ajouterContact({ nom: "Régie", role: "Régie", tel: "" });
+    expect(Object.keys(lireFile())).toEqual(expect.arrayContaining([expect.stringMatching(/^reparation:/), expect.stringMatching(/^appareil:/), expect.stringMatching(/^contact:/)]));
   });
 });
