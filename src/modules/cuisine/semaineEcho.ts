@@ -5,7 +5,7 @@ import { CODES, type Horaire } from "../../lib/horaires";
 import type { Noms, Personne } from "../../lib/types";
 import { entetesIA } from "../../sync/client";
 import { retirerCoursesDe } from "./actions";
-import { besoins, cleDe, manquants, nettoyerRepas, nouvelArticle, type Article, type Besoin, type Repas, type Travail } from "./donnees";
+import { besoins, boites, cleDe, manquants, nettoyerBatch, nettoyerRepas, nouvelArticle, type Article, type Batch, type Besoin, type Recette, type Repas, type Travail } from "./donnees";
 
 // La semaine proposée par Echo : la demande part vers la fonction « cuisine » du projet Supabase (Claude Haiku 5.5).
 // Echo propose, on change un plat ou on valide : rien ne va aux courses avant « Valider ».
@@ -29,7 +29,7 @@ export const versTravail = (horaires: Horaire[]): Travail[] =>
 // Ce qu'on envoie à Echo : les jours à prévoir, les goûts, le stock, et ce qu'il ne faut pas reproposer.
 const ORDRE = ["frigo", "congelateur", "placard"];
 export async function preparerDemande(aPrevoir: Besoin[], noms: Noms, semaine: string[], eviter: string[] = [], now = new Date()) {
-  const [gouts, stock, repas] = await Promise.all([db.cuisine_gouts.toArray(), db.cuisine_stock.toArray(), db.cuisine_repas.toArray()]);
+  const [gouts, stock, repas, livre] = await Promise.all([db.cuisine_gouts.toArray(), db.cuisine_stock.toArray(), db.cuisine_repas.toArray(), db.cuisine_recettes.toArray()]);
   const demandes = new Set(aPrevoir.map((b) => b.jour));
   const valides = repas.filter((r) => !r.propose || !demandes.has(r.jour));
   const mangeur = aPrevoir.find((b) => b.gamelle)?.gamelle;
@@ -38,7 +38,7 @@ export async function preparerDemande(aPrevoir: Besoin[], noms: Noms, semaine: s
     gamellePour: mangeur ? noms[mangeur] : "",
     gouts: gouts.map((g) => ({ prenom: noms[g.qui], aime: g.aime, evite: g.evite, rechauffe: g.rechauffe })),
     // Ce qu'il y a à manger à la maison, le frigo d'abord (ce qui presse en tête) : Echo part de là.
-    stock: stock.filter((p) => p.lieu !== "maison" && p.reste !== "peu")
+    stock: stock.filter((p) => p.lieu !== "maison" && p.reste !== "peu" && !p.repas)
       .sort((a, b) => ORDRE.indexOf(a.lieu) - ORDRE.indexOf(b.lieu) || (a.avant ?? "9").localeCompare(b.avant ?? "9"))
       .slice(0, 60).map((p) => ({ nom: p.nom.replace(/\s+/g, " ").trim(), avant: p.avant ?? "", lieu: p.lieu, moitie: p.reste === "moitie" })),
     aujourdhui: auJour(0, now),
@@ -46,12 +46,15 @@ export async function preparerDemande(aPrevoir: Besoin[], noms: Noms, semaine: s
     cuisine: plusJours(semaine[0], -1) > auJour(0, now) ? plusJours(semaine[0], -1) : auJour(0, now),
     gardes: valides.filter((r) => semaine.includes(r.jour) && !demandes.has(r.jour)).map((r) => ({ jour: r.jour, plat: r.plat })),
     recents: valides.filter((r) => r.jour >= plusJours(semaine[0], -14) && r.jour < semaine[0]).map((r) => r.plat).slice(-20),
-    eviter,
+    // Le livre de recettes : ce qu'on a aimé (les plus récents d'abord), et ce qu'on ne veut plus voir.
+    aimes: livre.filter((x) => x.avis === 1).sort((a, b) => b.maj - a.maj).slice(0, 20).map((x) => x.plat),
+    eviter: [...new Set([...eviter, ...livre.filter((x) => x.avis === -1).sort((a, b) => b.maj - a.maj).map((x) => x.plat)])].slice(0, 20),
   };
 }
 
-async function demander(corps: unknown): Promise<{ repas: Repas[]; reponse: string }> {
-  if (!navigator.onLine) throw new ErreurSemaine("Pas de connexion internet. Echo a besoin du réseau pour proposer les repas.");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function appeler(corps: unknown): Promise<any> {
+  if (!navigator.onLine) throw new ErreurSemaine("Pas de connexion internet. Echo a besoin du réseau.");
   const code = String((await db.reglages.get("codeEcho"))?.valeur ?? "").trim();
   let r: Response;
   try {
@@ -60,7 +63,12 @@ async function demander(corps: unknown): Promise<{ repas: Repas[]; reponse: stri
     throw new ErreurSemaine("Pas de connexion avec Echo.");
   }
   const lu = await r.json().catch(() => null);
-  if (!r.ok || !lu || !Array.isArray(lu.repas)) throw new ErreurSemaine(MESSAGES[lu?.erreur] ?? MESSAGES.service);
+  if (!r.ok || !lu) throw new ErreurSemaine(MESSAGES[lu?.erreur] ?? MESSAGES.service);
+  return lu;
+}
+async function demander(corps: unknown): Promise<{ repas: Repas[]; reponse: string }> {
+  const lu = await appeler(corps);
+  if (!Array.isArray(lu.repas)) throw new ErreurSemaine(MESSAGES.service);
   const repas = (lu.repas as unknown[]).map((x) => nettoyerRepas(x)).filter((x): x is Repas => !!x);
   if (!repas.length) throw new ErreurSemaine(MESSAGES.lecture);
   return { repas, reponse: typeof lu.reponse === "string" ? lu.reponse : "" };
@@ -79,7 +87,7 @@ export async function proposerSemaine(aPrevoir: Besoin[], noms: Noms, semaine: s
 
 // Mettre aux courses ce qu'il manque pour des repas. Un produit déjà dans la liste n'est pas touché (ni sa quantité, ni sa case).
 // Renvoie les articles créés, pour pouvoir annuler exactement ceux-là.
-async function versCourses(repas: Repas[]): Promise<Article[]> {
+export async function versCourses(repas: Repas[]): Promise<Article[]> {
   let crees: Article[] = [];
   await db.transaction("rw", db.cuisine_courses, db.cuisine_habitudes, db.cuisine_stock, db.reglages, async () => {
     const par = ((await db.reglages.get("proprio"))?.valeur as Personne | undefined) ?? "moi";
@@ -139,6 +147,46 @@ export async function refuserProposition(semaine: string[]) {
   if (!proposes.length) return;
   await db.cuisine_repas.bulkDelete(proposes.map((r) => r.jour));
   toast("Proposition retirée", { action: { label: "Annuler", onClick: () => db.cuisine_repas.bulkPut(proposes) } });
+}
+
+/* ---------- Le batch du dimanche ---------- */
+
+// Les repas d'une semaine qui se cuisinent d'avance : validés, et pas encore passés.
+export const repasDuBatch = (repas: Repas[], today: string) => repas.filter((r) => !r.propose && r.jour >= today);
+
+// « Faire le plan de cuisson » : Echo met les plats de la semaine dans l'ordre d'une mise en place. Refaire le plan remet les cases à zéro.
+export async function preparerBatch(semaine: string, repas: Repas[], tous: Besoin[]): Promise<Batch> {
+  const portions = new Map(boites(repas, tous).map((b) => [b.jour, b.portions]));
+  const plats = repas.filter((r) => portions.has(r.jour)).map((r) => ({ jour: r.jour, plat: r.plat, portions: portions.get(r.jour), congele: !!r.congele, ingredients: r.ingredients ?? [] }));
+  if (!plats.length) throw new ErreurSemaine("Rien à cuisiner cette semaine.");
+  const lu = await appeler({ mode: "batch", repas: plats });
+  const batch = nettoyerBatch({ semaine, etapes: lu.etapes, duree: lu.duree, astuce: lu.astuce, cree: Date.now() });
+  if (!batch?.etapes.length) throw new ErreurSemaine(MESSAGES.lecture);
+  // La réponse peut mettre une minute : si le batch a été rangé entre-temps, il reste rangé.
+  await db.transaction("rw", db.cuisine_batch, async () => {
+    const fini = (await db.cuisine_batch.get(semaine))?.fini;
+    await db.cuisine_batch.put({ ...batch, ...(fini ? { fini } : {}) });
+  });
+  return batch;
+}
+
+/* ---------- Le livre de recettes ---------- */
+
+// « Prévoir » une recette du livre : elle prend le premier soir libre où quelqu'un mange à la maison (d'aujourd'hui, avant 19 h,
+// à dans deux semaines), et ce qu'il manque part aux courses.
+export async function prevoirRecette(x: Recette, now = new Date()) {
+  const today = auJour(0, now), jours = Array.from({ length: 14 }, (_, i) => plusJours(today, i));
+  const pris = new Set((await db.cuisine_repas.where("jour").between(today, jours[13], true, true).toArray()).map((r) => r.jour));
+  const jour = besoins(jours, versTravail(await db.horaires.toArray())).find((b) => !pris.has(b.jour) && b.soir > 0 && (b.jour !== today || now.getHours() < 19))?.jour;
+  if (!jour) { toast("Pas de soir libre dans les deux semaines qui viennent."); return; }
+  const repas: Repas = { jour, plat: x.plat, ...(x.ingredients ? { ingredients: x.ingredients } : {}), ...(x.congele ? { congele: true } : {}) };
+  await db.cuisine_repas.put(repas);
+  const crees = await versCourses([repas]);
+  const quand = new Date(jour + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long" });
+  toast(`${x.plat} prévu ${jour === today ? "ce soir" : quand}${crees.length ? `. ${dire(crees.length)}.` : ""}`, { duration: 6000, action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_repas, db.cuisine_courses, async () => {
+    if ((await db.cuisine_repas.get(jour))?.plat === x.plat) await db.cuisine_repas.delete(jour);
+    await db.cuisine_courses.bulkDelete(crees.map((a) => a.id));
+  }) } });
 }
 
 export { besoins };

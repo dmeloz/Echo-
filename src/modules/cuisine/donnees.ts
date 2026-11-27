@@ -36,8 +36,9 @@ export const LIEUX: Array<{ id: Lieu; nom: string }> = [
 // reste : ce qu'il reste du produit. Absent = plein ; « peu » = presque fini (il est alors remis aux courses).
 export type Reste = "moitie" | "peu";
 export const RESTES: Array<{ id: Reste | "plein"; nom: string }> = [{ id: "plein", nom: "Plein" }, { id: "moitie", nom: "À moitié" }, { id: "peu", nom: "Presque fini" }];
+// repas : pour une boîte du batch, le jour où elle sera mangée.
 // nb : le nombre d'unités qu'il reste, quand le produit se compte (6 briques de crème). qte : la taille d'une unité (« 25 cl »).
-export interface Produit { id: string; nom: string; lieu: Lieu; avant?: string; reste?: Reste; nb?: number; qte?: string; cree: number }
+export interface Produit { id: string; nom: string; lieu: Lieu; avant?: string; reste?: Reste; nb?: number; qte?: string; repas?: string; cree: number }
 // « 6 x 25 cl » = 6 unités de 25 cl ; « 6 » = 6 unités ; « 500 g » = une quantité, pas un nombre. Une seule unité ne se compte pas.
 export function lireQuantite(texte: string): { nb?: number; qte?: string } {
   const t = texte.replace(/\s+/g, " ").trim().slice(0, 20);
@@ -261,9 +262,9 @@ export function nettoyerProduit(x: unknown): Produit | null {
   const o = obj(x), id = txt(o.id, 80), nom = txt(o.nom, 60).trim(), avant = txt(o.avant, 10);
   if (!id || !nom || !LIEUX.some((l) => l.id === o.lieu)) return null;
   const reste = (["moitie", "peu"] as const).find((r) => r === o.reste);
-  const n = nb(o.nb), qte = txt(o.qte, 20).trim();
+  const n = nb(o.nb), qte = txt(o.qte, 20).trim(), repas = txt(o.repas, 10);
   return { id, nom, lieu: o.lieu as Lieu, ...(JOUR_ISO.test(avant) ? { avant } : {}), ...(reste ? { reste } : {}),
-    ...(n !== null && Number.isInteger(n) && n >= 1 && n <= 99 ? { nb: n } : {}), ...(qte ? { qte } : {}), cree: nb(o.cree) ?? Date.now() };
+    ...(n !== null && Number.isInteger(n) && n >= 1 && n <= 99 ? { nb: n } : {}), ...(qte ? { qte } : {}), ...(JOUR_ISO.test(repas) ? { repas } : {}), cree: nb(o.cree) ?? Date.now() };
 }
 export function nettoyerGouts(x: unknown): Gouts | null {
   const o = obj(x);
@@ -314,3 +315,63 @@ export function nettoyerTicket(x: unknown): Ticket | null {
 }
 
 export const montant = (n: number, m: "CHF" | "EUR") => (m === "EUR" ? `${n.toFixed(2).replace(".", ",")} €` : `${n.toFixed(2)} CHF`);
+
+/* ---------- Le batch du dimanche ---------- */
+
+export interface Etape { texte: string; minutes: number; fait?: boolean }
+// Un plan de cuisson par semaine (clé : le lundi). fini = le moment où les boîtes ont été rangées.
+export interface Batch { semaine: string; etapes: Etape[]; duree: number; astuce?: string; fini?: number; cree: number }
+export interface Boite { jour: string; plat: string; portions: number; lieu: "frigo" | "congelateur" }
+
+// Les boîtes à remplir : une par repas cuisiné, avec les portions du soir, plus une si le lendemain quelqu'un emporte une gamelle.
+// tous = les besoins de la semaine ET du lundi suivant (pour la gamelle après le dimanche).
+export function boites(repas: Repas[], tous: Besoin[]): Boite[] {
+  return repas.filter((r) => !r.propose).sort((a, b) => a.jour.localeCompare(b.jour)).flatMap((r) => {
+    const i = tous.findIndex((b) => b.jour === r.jour);
+    if (i < 0) return [];
+    const portions = tous[i].soir + (tous[i + 1]?.gamelle ? 1 : 0);
+    return portions > 0 ? [{ jour: r.jour, plat: r.plat, portions, lieu: r.congele ? "congelateur" as const : "frigo" as const }] : [];
+  });
+}
+// Les produits du stock que ces repas utilisent (pour les décompter après le batch). Le nom du produit ou de l'ingrédient
+// peut être plus long que l'autre (« crème » et « crème entière ») ; les boîtes déjà rangées ne comptent pas.
+// sur = le produit porte le nom de l'ingrédient (« crème entière » pour « crème »). Dans l'autre sens (« lait » pour
+// « lait de coco »), c'est peut-être un autre produit : on le montre, mais sans rien décompter d'office.
+export interface Servi { produit: Produit; sur: boolean }
+export function utilises(repas: Repas[], stock: Produit[]): Servi[] {
+  const cles = repas.flatMap((r) => [...(r.ingredients ?? []).map((i) => i.nom), ...(r.duStock ?? [])]).map((n) => ` ${cleDe(n)} `).filter((c) => c.trim());
+  return stock.flatMap((p): Servi[] => {
+    const c = ` ${cleDe(p.nom)} `;
+    if (p.repas || p.lieu === "maison" || !c.trim()) return [];
+    if (cles.some((k) => c.includes(k))) return [{ produit: p, sur: true }];
+    return cles.some((k) => k.includes(c)) ? [{ produit: p, sur: false }] : [];
+  });
+}
+// Ce qu'on dit d'un produit utilisé : fini (il sort du stock, ou une unité de moins), il en reste, pas touché.
+export type Usage = "fini" | "reste" | "rien";
+export const usageProbable = ({ produit: p, sur }: Servi): Usage => (!sur ? "rien" : p.lieu === "frigo" || p.nb ? "fini" : "reste");
+export const duree = (min: number) => (min >= 60 ? `${Math.floor(min / 60)} h${min % 60 ? ` ${String(min % 60).padStart(2, "0")}` : ""}` : `${min} min`);
+
+export function nettoyerBatch(x: unknown): Batch | null {
+  const o = obj(x), semaine = txt(o.semaine, 10), astuce = txt(o.astuce, 200).trim(), fini = nb(o.fini);
+  if (!vraiJour(semaine)) return null;
+  const etapes = (Array.isArray(o.etapes) ? o.etapes : []).slice(0, 30).flatMap((e): Etape[] => {
+    const i = obj(e), texte = txt(i.texte, 240).trim(), m = nb(i.minutes);
+    return texte ? [{ texte, minutes: m !== null && m > 0 && m <= 240 ? Math.round(m) : 0, ...(i.fait === true ? { fait: true } : {}) }] : [];
+  });
+  if (!etapes.length && fini === null) return null; // sans plan d'Echo, il reste au moins « rangé »
+  const d = nb(o.duree);
+  return { semaine, etapes, duree: d !== null && d > 0 && d <= 600 ? Math.round(d) : etapes.reduce((s, e) => s + e.minutes, 0), ...(astuce ? { astuce } : {}), ...(fini !== null ? { fini } : {}), cree: nb(o.cree) ?? Date.now() };
+}
+
+/* ---------- Le livre de recettes ---------- */
+
+// Un plat noté après le repas (clé : son nom simplifié). dernier = le jour du dernier avis, precedent = celui d'avant (pour défaire). avis 1 = on a aimé (il entre dans le livre), -1 = Echo ne le repropose plus.
+export interface Recette { cle: string; plat: string; ingredients?: Lu[]; congele?: boolean; avis: 1 | -1; fois: number; dernier: string; precedent?: string; maj: number }
+export function nettoyerRecette(x: unknown): Recette | null {
+  const o = obj(x), plat = txt(o.plat, 80).trim(), cle = txt(o.cle, 80), dernier = txt(o.dernier, 10), precedent = txt(o.precedent, 10), f = nb(o.fois);
+  if (!plat || !cle || cle !== cleDe(plat) || (o.avis !== 1 && o.avis !== -1)) return null;
+  const ingredients = (Array.isArray(o.ingredients) ? o.ingredients : []).slice(0, 20)
+    .map((i) => ({ nom: txt(obj(i).nom, 60).trim(), qte: txt(obj(i).qte, 20).trim() })).filter((i) => i.nom);
+  return { cle, plat, ...(ingredients.length ? { ingredients } : {}), ...(o.congele === true ? { congele: true } : {}), avis: o.avis, fois: f !== null && f >= 1 ? Math.round(f) : 1, dernier: JOUR_ISO.test(dernier) ? dernier : "", ...(JOUR_ISO.test(precedent) ? { precedent } : {}), maj: nb(o.maj) ?? 0 };
+}

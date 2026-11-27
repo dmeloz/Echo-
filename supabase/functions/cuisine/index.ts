@@ -57,6 +57,30 @@ Un soir à 0 portion : personne ne mange à la maison, ne propose rien pour ce j
 
 reponse : une phrase courte et chaleureuse, en tutoyant, qui résume la semaine et dit ce qui est utilisé du stock (« Je pars de ton poulet et de tes courgettes, avec le curry jeudi au congélateur. »).`;
 
+// Le plan de cuisson du dimanche : les plats validés deviennent des étapes dans l'ordre d'une mise en place.
+const SCHEMA_BATCH = {
+  type: "object",
+  additionalProperties: false,
+  required: ["etapes", "duree", "astuce"],
+  properties: {
+    etapes: { type: "array", items: { type: "object", additionalProperties: false, required: ["texte", "minutes"], properties: { texte: { type: "string" }, minutes: { type: "integer" } } } },
+    duree: { type: "integer" },
+    astuce: { type: "string" },
+  },
+};
+const CONSIGNE_BATCH = `Tu es Echo. Le foyer cuisine tous ses repas de la semaine en une seule fois (batch cooking), dans une cuisine normale : un four, quatre feux. Une seule personne cuisine, et c'est un cuisinier de métier : sois direct, pas de leçon.
+On te donne les plats de la semaine, leurs ingrédients et leurs portions. Écris le plan de cuisson, dans l'ordre d'une mise en place :
+1. d'abord ce qui cuit longtemps (four, mijotés) ;
+2. pendant ce temps, les féculents et les légumineuses sur le feu ;
+3. puis les sauces, les cuissons rapides et les préparations à froid ;
+4. à la fin, refroidir, mettre en boîtes et étiqueter (frigo pour le début de semaine, congélateur pour les plats marqués congélateur).
+Regroupe ce qui se fait ensemble (une seule cuisson de riz pour deux plats, une seule plaque de légumes). Dis ce qui se fait « pendant que » autre chose cuit.
+
+etapes : entre 5 et 12 étapes. texte : une phrase ou deux, à l'impératif, en tutoyant, qui nomme les plats concernés (« Lance le riz pour le curry et le chili : 400 g, 12 minutes. »). minutes : le temps de travail actif de l'étape (pas l'attente de cuisson).
+duree : la durée totale du début à la fin, en minutes, cuissons en parallèle comprises.
+astuce : une phrase courte utile pour ce batch précis, ou vide.
+N'ajoute aucun plat ni ingrédient qui n'est pas dans la liste. Jamais de porc.`;
+
 function cors(origine: string | null) {
   return {
     "Access-Control-Allow-Origin": origine && ORIGINES.includes(origine) ? origine : ORIGINES[0],
@@ -108,6 +132,7 @@ Deno.serve(async (req) => {
   // deno-lint-ignore no-explicit-any
   let d: any;
   try { d = await req.json(); } catch { return repondre({ erreur: "requete" }, 400, origine); }
+  if (d?.mode === "batch") return await batch(d, origine);
   // deno-lint-ignore no-explicit-any
   const jours = liste(d?.jours, MAX_JOURS).filter((j: any) => typeof j?.jour === "string" && JOUR.test(j.jour)).map((j: any) => ({
     jour: j.jour as string, soir: Math.max(0, Math.min(4, Number(j.soir) || 0)), gamelle: j.gamelle === true,
@@ -131,6 +156,7 @@ Deno.serve(async (req) => {
   // deno-lint-ignore no-explicit-any
   const gardes = liste(d?.gardes, 7).map((r: any) => ({ jour: JOUR.test(r?.jour ?? "") ? r.jour : "", plat: court(r?.plat, 80) })).filter((r) => r.jour && r.plat);
   const mangeur = court(d?.gamellePour, 30);
+  const aimes = noms(d?.aimes, 20);
 
   const nomJour = (j: string) => new Date(`${j}T12:00:00Z`).toLocaleDateString("fr-FR", { weekday: "long", timeZone: "UTC" });
   const situation = [
@@ -142,6 +168,7 @@ Deno.serve(async (req) => {
       return ici.length ? `${nom} :\n${ici.map((p) => `- ${p.nom}${p.moitie ? " (entamé, il en reste la moitié)" : ""}${p.avant ? ` (à manger avant le ${p.avant})` : ""}`).join("\n")}` : "";
     }).filter(Boolean).join("\n")}` : "À la maison : rien de noté.",
     gardes.length ? `Déjà décidé cette semaine (ne change pas, sers-t'en pour varier et pour les gamelles) :\n${gardes.map((r) => `- ${nomJour(r.jour)} ${r.jour} : ${r.plat}`).join("\n")}` : "",
+    aimes.length ? `Plats que le foyer a aimés (tu peux en reprendre un ou deux, pas plus, s'ils vont avec le stock) : ${aimes.join(" ; ")}.` : "",
     recents.length ? `Plats récents, à ne pas reproposer : ${recents.join(" ; ")}.` : "",
     eviter.length ? `À éviter cette fois (la personne veut autre chose) : ${eviter.join(" ; ")}.` : "",
   ].filter(Boolean).join("\n\n");
@@ -168,3 +195,41 @@ Deno.serve(async (req) => {
     return repondre({ erreur: "service" }, 502, origine);
   }
 });
+
+// Le plan du batch : même garde, mêmes erreurs, une autre consigne.
+// deno-lint-ignore no-explicit-any
+async function batch(d: any, origine: string | null) {
+  // deno-lint-ignore no-explicit-any
+  const repas = liste(d?.repas, MAX_JOURS).map((r: any) => ({
+    jour: JOUR.test(r?.jour ?? "") ? r.jour as string : "", plat: court(r?.plat, 80), portions: Math.max(1, Math.min(8, Number(r?.portions) || 1)), congele: r?.congele === true,
+    // deno-lint-ignore no-explicit-any
+    ingredients: liste(r?.ingredients, 12).map((i: any) => ({ nom: court(i?.nom, 60), qte: court(i?.qte, 20) })).filter((i) => i.nom),
+  })).filter((r) => r.jour && r.plat && !aDuPorc(r.plat));
+  if (!repas.length) return repondre({ erreur: "requete" }, 400, origine);
+  const nomJour = (j: string) => new Date(`${j}T12:00:00Z`).toLocaleDateString("fr-FR", { weekday: "long", timeZone: "UTC" });
+  const situation = `Les plats à cuisiner :\n${repas.map((r) => `- ${r.plat} (pour ${nomJour(r.jour)}, ${r.portions} portion${r.portions > 1 ? "s" : ""}, ${r.congele ? "congélateur" : "frigo"})${r.ingredients.length ? ` : ${r.ingredients.map((i) => (i.qte ? `${i.nom} ${i.qte}` : i.nom)).join(", ")}` : ""}`).join("\n")}`;
+  const client = new Anthropic();
+  try {
+    const reponse = await client.messages.create({
+      model: "claude-haiku-5-5",
+      max_tokens: 5000,
+      output_config: { effort: "medium", format: { type: "json_schema", schema: SCHEMA_BATCH } },
+      system: CONSIGNE_BATCH,
+      messages: [{ role: "user", content: situation }],
+    });
+    if (reponse.stop_reason === "refusal") return repondre({ erreur: "refus" }, 422, origine);
+    if (reponse.stop_reason === "max_tokens") return repondre({ erreur: "lecture" }, 502, origine);
+    const lu = JSON.parse(reponse.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join(""));
+    // deno-lint-ignore no-explicit-any
+    const etapes = liste(lu?.etapes, 14).map((e: any) => ({ texte: court(e?.texte, 240), minutes: Math.max(0, Math.min(240, Math.round(Number(e?.minutes) || 0))) }))
+      .filter((e) => e.texte && !aDuPorc(e.texte));
+    if (!etapes.length) return repondre({ erreur: "lecture" }, 502, origine);
+    return repondre({ etapes, duree: Math.max(0, Math.min(600, Math.round(Number(lu?.duree) || 0))), astuce: court(lu?.astuce, 200) }, 200, origine);
+  } catch (e) {
+    if (e instanceof Anthropic.AuthenticationError) return repondre({ erreur: "cle" }, 503, origine);
+    if (e instanceof Anthropic.RateLimitError) return repondre({ erreur: "occupe" }, 429, origine);
+    if (e instanceof Anthropic.BadRequestError) return repondre({ erreur: "requete" }, 400, origine);
+    if (e instanceof SyntaxError) return repondre({ erreur: "lecture" }, 502, origine);
+    return repondre({ erreur: "service" }, 502, origine);
+  }
+}

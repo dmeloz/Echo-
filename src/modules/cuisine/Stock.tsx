@@ -27,6 +27,8 @@ export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: Lectu
   const today = auJour(0, now), limite = auJour(3, now);
   const vite = produits.filter((p) => p.avant && p.avant <= limite).sort((a, b) => a.avant!.localeCompare(b.avant!));
   const quand = (p: Produit) => (p.avant! < today ? "dépassé" : libelleJour(p.avant!, now).toLowerCase());
+  // Une boîte du batch dit pour quel repas elle est là (ce n'est pas une date limite).
+  const pour = (p: Produit) => (p.repas! < today ? "reste d'hier" : p.repas === today ? "pour ce soir" : `pour ${new Date(p.repas + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long" })}`);
   useEffect(() => {
     if (!lieu) return;
     const retour = () => setLieu(null);
@@ -35,7 +37,7 @@ export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: Lectu
   }, [lieu]);
 
   if (lieu) {
-    const ici = produits.filter((p) => p.lieu === lieu).sort((a, b) => (a.avant ?? "9").localeCompare(b.avant ?? "9") || a.nom.localeCompare(b.nom));
+    const ici = produits.filter((p) => p.lieu === lieu).sort((a, b) => (a.repas ?? a.avant ?? "9").localeCompare(b.repas ?? b.avant ?? "9") || a.nom.localeCompare(b.nom));
     return (
       <div className="reglage-page" key={lieu}>
         <button type="button" className="retour" onClick={() => setLieu(null)}><ChevronLeft size={20} strokeWidth={2.2} />Stock</button>
@@ -57,7 +59,7 @@ export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: Lectu
               <li key={p.id} className={ouvert === p.id ? "ouvert" : ""}>
                 <button type="button" className="stock-ligne" aria-expanded={ouvert === p.id} onClick={() => setOuvert(ouvert === p.id ? null : p.id)}>
                   <b>{p.nom}{p.qte && <i> {p.qte}</i>}</b>
-                  {p.avant && <span className={p.avant <= limite ? "vite" : ""}>{quand(p)}</span>}
+                  {p.repas ? <span>{pour(p)}</span> : p.avant && <span className={p.avant <= limite ? "vite" : ""}>{quand(p)}</span>}
                   {p.nb ? <span className={`compte${p.nb === 1 ? " dernier" : ""}`} aria-label={`Il en reste ${p.nb}`}>×{p.nb}</span> : <Jauge reste={p.reste} />}
                 </button>
                 {ouvert === p.id && (
@@ -74,13 +76,13 @@ export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: Lectu
                       </div>
                     ) : (
                       <div className="stock-restes" role="group" aria-label={`Ce qu'il reste de ${p.nom}`}>
-                        {RESTES.map((r) => <button key={r.id} type="button" className="puce" aria-pressed={(p.reste ?? "plein") === r.id} onClick={() => { vibrer(); noterReste(p.id, r.id); }}>{r.nom}</button>)}
+                        {!p.repas && RESTES.map((r) => <button key={r.id} type="button" className="puce" aria-pressed={(p.reste ?? "plein") === r.id} onClick={() => { vibrer(); noterReste(p.id, r.id); }}>{r.nom}</button>)}
                         <button type="button" className="puce" onClick={() => { vibrer(12); setOuvert(null); noterReste(p.id, "fini"); }}>Fini</button>
                       </div>
                     )}
-                    <p className="aide-champ">{p.nb ? "Au dernier, Echo le remet dans les courses." : "Presque fini ou fini : Echo le remet dans les courses."}</p>
-                    {!p.nb && <button type="button" className="bouton-texte" onClick={() => compterProduit(p.id, 1)}>J'en ai plusieurs</button>}
-                    <button type="button" className="bouton-texte danger" onClick={() => { setOuvert(null); retirerProduit(p.id); }}>Retirer sans racheter</button>
+                    <p className="aide-champ">{p.repas ? "Une boîte du batch : elle sort du stock toute seule après son repas." : p.nb ? "Au dernier, Echo le remet dans les courses." : "Presque fini ou fini : Echo le remet dans les courses."}</p>
+                    {!p.nb && !p.repas && <button type="button" className="bouton-texte" onClick={() => compterProduit(p.id, 1)}>J'en ai plusieurs</button>}
+                    {!p.repas && <button type="button" className="bouton-texte danger" onClick={() => { setOuvert(null); retirerProduit(p.id); }}>Retirer sans racheter</button>}
                   </div>
                 )}
               </li>

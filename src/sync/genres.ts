@@ -2,7 +2,7 @@ import type { Table } from "dexie";
 import { db } from "../data/db";
 import { nettoyerJournal } from "../lib/echo/journal";
 import { nettoyerSouvenir } from "../lib/echo/memoire";
-import { nettoyerArticle, nettoyerGouts, nettoyerHabitude, nettoyerProduit, nettoyerRepas, nettoyerTicket } from "../modules/cuisine/donnees";
+import { nettoyerArticle, nettoyerGouts, nettoyerHabitude, nettoyerBatch, nettoyerProduit, nettoyerRecette, nettoyerRepas, nettoyerTicket } from "../modules/cuisine/donnees";
 
 // Les données des modules qui partent au foyer : un « genre » par table, une ligne par clé.
 // Pour synchroniser une nouvelle table : l'ajouter ici, et son genre dans la règle de la table « elements » (migration).
@@ -14,6 +14,8 @@ export const GENRES: Record<string, Genre> = {
   repas: { table: db.cuisine_repas, cle: "jour", nettoyer: nettoyerRepas, naturelle: true },
   stock: { table: db.cuisine_stock, cle: "id", nettoyer: nettoyerProduit },
   ticket: { table: db.cuisine_tickets, cle: "id", nettoyer: nettoyerTicket },
+  batch: { table: db.cuisine_batch, cle: "semaine", nettoyer: nettoyerBatch, naturelle: true },
+  recette: { table: db.cuisine_recettes, cle: "cle", nettoyer: nettoyerRecette, naturelle: true },
   gout: { table: db.cuisine_gouts, cle: "qui", nettoyer: nettoyerGouts, naturelle: true },
   journal: { table: db.echo_journal, cle: "id", nettoyer: nettoyerJournal },
   memoire: { table: db.echo_memoire, cle: "id", nettoyer: nettoyerSouvenir },

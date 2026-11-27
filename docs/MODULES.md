@@ -31,7 +31,7 @@ Règles :
 | Module | État |
 | --- | --- |
 | Agenda (id planning) | construit : aujourd'hui et les six jours suivants, vue Jour et vue Semaine, idée pour alléger le jour le plus chargé. Il lit les tâches de la base (pas de table à lui). |
-| Cuisine | lots 1 (courses) et 2 (semaine proposée par Echo) construits, plus la photo du ticket de caisse : voir « Cuisine » plus bas. Le batch cooking vient ensuite. |
+| Cuisine | lots 1 (courses) et 2 (semaine proposée par Echo) construits, plus la photo du ticket de caisse : voir « Cuisine » plus bas. Batch du dimanche, stock décompté et livre de recettes construits (2026-11-27). |
 | Maison, Budget | pas encore construits |
 
 ## Ajouter un module
@@ -111,3 +111,12 @@ Donner des outils à un module :
 1. Décrire l'outil dans `OUTILS_ECHO` (supabase/functions/_shared/echo-outils.ts), avec son genre.
 2. Fournir son exécutant dans le champ `outils` du module (`lire` ou `preparer`, voir `Executant` dans src/lib/echo/outils.ts).
 3. Ajouter un cas aux phrases d'essai (`essais/echo.essais.ts`) et lancer `ANTHROPIC_API_KEY=… npm run essais` avant la mise en ligne.
+
+## Cuisine · batch du dimanche, stock à jour tout seul, livre de recettes (2026-11-27)
+
+- **Batch du dimanche** (`Batch.tsx`, table `cuisine_batch`, clé = le lundi de la semaine) : dès que deux repas validés restent à manger, la Semaine montre la ligne « Batch du dimanche ». La page calcule les boîtes (`boites()` : portions du soir, plus une si le lendemain il y a une gamelle) et demande le plan de cuisson à la fonction `cuisine` (`mode: "batch"`) : des étapes à cocher, l'écran reste allumé.
+- **Stock à jour tout seul** : « Batch terminé » (`finirBatch`) range une boîte par plat au stock (id `boite-<jour>`, champ `repas`) et décompte ce qui a servi (`utilises()`), selon ce qu'on confirme : fini, il en reste, pas touché. Une boîte sort du stock le surlendemain de son repas (`rangerBoites`). Les boîtes ne sont pas envoyées à Echo comme ingrédients.
+- **Livre de recettes** (`Livre.tsx`, table `cuisine_recettes`, clé = nom simplifié du plat) : pouce en haut ou en bas dans le détail d'un jour passé ou d'aujourd'hui. Les plats aimés partent dans `aimes`, les refusés dans `eviter` de la demande de semaine. « Prévoir » pose la recette au premier soir libre et met aux courses ce qu'il manque.
+- **Accueil** : à partir de 17 h, la tuile dit « À sortir du congélateur » si le plat de demain en vient.
+- Avant la mise en ligne : migration `20261127200000_cuisine_batch_recettes.sql` (genres `batch` et `recette`), puis redéployer la fonction `cuisine`.
+

@@ -3,7 +3,10 @@ import { useCallback, useEffect, useState } from "react";
 import { db } from "../../data/db";
 import { poserReglage } from "../../data/hooks";
 import type { ContexteModule } from "../contrat";
-import { rangerFaits, remettreHabituels } from "./actions";
+import { auJour } from "../../lib/dates";
+import { rangerBoites, rangerFaits, remettreHabituels } from "./actions";
+import { PageBatch } from "./Batch";
+import { Livre } from "./Livre";
 import { Courses } from "./Courses";
 import { PopupGouts } from "./Gouts";
 import { Magasin } from "./Magasin";
@@ -22,24 +25,34 @@ export function PageCuisine(ctx: ContexteModule) {
   const [magasin, setMagasin] = useState(false);
   const [ticket, setTicket] = useState<LectureTicket | null>(null);
   const fermerTicket = useCallback(() => setTicket(null), []);
+  const [batch, setBatch] = useState<string | null>(null); // le lundi de la semaine dont on cuisine le batch
+  const [livre, setLivre] = useState(false);
+  // Du vendredi au dimanche, on prépare la semaine qui vient : la Semaine s'ouvre dessus (et s'en souvient au retour du batch).
+  const [prochaine, setProchaine] = useState(() => [5, 6, 0].includes(now.getDay()));
+  const fermerBatch = useCallback(() => setBatch(null), []);
+  const fermerLivre = useCallback(() => setLivre(false), []);
   const courses = useLiveQuery(() => db.cuisine_courses.toArray(), [], undefined);
   // Le questionnaire des goûts : une fois par personne, tant qu'il n'a été ni rempli ni remis à plus tard.
   const aDemander = useLiveQuery(async () => !(await db.reglages.get("cuisineGoutsVu"))?.valeur && !(await db.cuisine_gouts.get(proprio)), [proprio], false);
 
   // À l'ouverture : ce qui a été acheté quitte la liste, puis Echo remet les achats habituels dont c'est le moment.
+  // Les boîtes du batch dont le repas est passé sortent du stock.
+  const hier = auJour(-1, now);
   useEffect(() => { rangerFaits().then(() => remettreHabituels()).catch(() => {}); }, []);
+  useEffect(() => { rangerBoites(hier).catch(() => {}); }, [hier]);
 
   if (ticket) return <ApercuTicket lu={ticket} now={now} onFini={fermerTicket} />;
+  if (batch) return <PageBatch {...ctx} semaine={batch} onQuitter={fermerBatch} />;
   if (magasin && courses) return <Magasin courses={courses} onQuitter={() => setMagasin(false)} />;
   return (
     <>
       <div className="vue-choix" role="group" aria-label="Parties de Cuisine">
         {(Object.keys(NOMS) as Partie[]).map((p) => (
-          <button key={p} type="button" aria-pressed={partie === p} onClick={() => setPartie(p)}>{NOMS[p]}</button>
+          <button key={p} type="button" aria-pressed={partie === p} onClick={() => { setPartie(p); setLivre(false); }}>{NOMS[p]}</button>
         ))}
       </div>
       {partie === "courses" && <Courses {...ctx} courses={courses} onMagasin={() => setMagasin(true)} onTicket={setTicket} />}
-      {partie === "semaine" && <Semaine {...ctx} />}
+      {partie === "semaine" && (livre ? <Livre {...ctx} onQuitter={fermerLivre} /> : <Semaine {...ctx} prochaine={prochaine} setProchaine={setProchaine} onBatch={setBatch} onLivre={() => setLivre(true)} />)}
       {partie === "stock" && <Stock {...ctx} onTicket={setTicket} />}
       {aDemander && <PopupGouts {...ctx} onFini={() => poserReglage("cuisineGoutsVu", true)} />}
     </>
