@@ -1102,3 +1102,10 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 /* « À manger vite » dans Ce soir : un lien vers le Stock, écrit comme les autres lignes de la carte. */
 .ce-soir .vite-lien { display: flex; align-items: flex-start; gap: var(--e3); min-height: 44px; padding: 0; border: 0; background: none; text-align: left; font-size: 15px; line-height: 1.35; color: var(--turquoise-texte); font-weight: 600; }
 .ce-soir .vite-lien svg { flex: none; margin-top: 2px; }
+/* La ligne du jour d'un module (« Maison · 2 corvées pour toi, 20 min ») : calme, sous la journée, elle ouvre le module. */
+.ligne-journee { display: flex; align-items: center; gap: var(--e5); min-height: 48px; padding: 8px 14px 8px 10px; border-radius: var(--r3); background: rgb(255 255 255 / .55); border: 1px solid var(--bord); font-size: 15px; color: var(--encre); }
+.ligne-journee > span:nth-child(2) { flex: 1; min-width: 0; }
+.ligne-journee b { font-weight: 700; }
+.ligne-journee svg:last-child { color: var(--discret); }
+.ligne-journee:active { scale: .98; }
+.planning-jour .ligne-journee { margin: var(--e4) 0; }
