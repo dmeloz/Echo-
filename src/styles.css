@@ -98,7 +98,7 @@ button { cursor: pointer; }
   transition: opacity .3s, color .3s, scale .35s var(--ressort, ease), translate .35s var(--ressort, ease); }
 .ligne[aria-current="page"] { opacity: 1; color: var(--bleu); }
 .ligne:active { opacity: 1; }
-.ligne .pastille { font: 700 11px/1 var(--police); letter-spacing: .02em; color: #fff; background: var(--bleu); border-radius: 999px; padding: 4px 7px; transform: translateY(-14px); }
+.ligne .pastille { font: 700 13px/1 var(--police); letter-spacing: .02em; color: #fff; background: var(--bleu); border-radius: 999px; padding: 3px 7px; transform: translateY(-14px); }
 .ligne .pastille.bientot { background: rgb(18 40 58 / .1); color: var(--discret); letter-spacing: .01em; font-size: 13px; }
 .liste.parcours .ligne { opacity: .22; }
 .liste.parcours .ligne.vise { opacity: 1; color: var(--bleu); scale: 1.1; translate: -8px 0; }

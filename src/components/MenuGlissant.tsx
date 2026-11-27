@@ -290,6 +290,8 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
         <button className="ombrage" aria-hidden="true" tabIndex={-1} />
       </div>
 
+      {/* Le givre autour de la capsule : ce qui défile dessous s'efface au lieu de passer sous les boutons. */}
+      <div className="halo-capsule" aria-hidden="true" />
       {/* La capsule du pouce : le menu en haut, Echo en bas, un seul objet en verre. */}
       <div className="capsule">
         <button className="bascule" ref={r.bascule} aria-label="Ouvrir le menu" aria-expanded="false">
