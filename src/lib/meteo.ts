@@ -17,14 +17,12 @@ const lire = <T>(cle: string): T | null => { try { return JSON.parse(localStorag
 const ecrire = (cle: string, v: unknown) => { try { localStorage.setItem(cle, JSON.stringify(v)); } catch { /* stockage plein : on relira */ } };
 const json = async (url: string) => { const r = await fetch(url, { signal: AbortSignal.timeout(8000) }); if (!r.ok) throw new Error(String(r.status)); return r.json(); };
 
-// Le mot à chercher : la ville écrite, sinon le code postal de l'adresse, sinon ce qui suit la dernière virgule.
+// Le mot à chercher : la ville écrite, sinon le code postal de l'adresse. Rien d'autre de l'adresse ne part (jamais la rue).
 export function lieuDe(ville: string, adresse: string): string {
   const v = ville.trim();
   if (v) return v.slice(0, 60);
   const cp = adresse.match(/\b(\d{4,5})\b(?!.*\b\d{4,5}\b)/);
-  if (cp) return cp[1];
-  const fin = adresse.split(",").at(-1)?.trim() ?? "";
-  return adresse.includes(",") && /^[\p{L}' -]{2,40}$/u.test(fin) ? fin : "";
+  return cp ? cp[1] : "";
 }
 export async function lieuMeteo(): Promise<string> {
   const t = ((await db.reglages.get("trajets"))?.valeur ?? {}) as { ville?: unknown; maison?: unknown };
@@ -61,19 +59,24 @@ export function meteo(now = Date.now()): Promise<Meteo | null> {
       try {
         let ou = lire<{ lieu: string; lat: number; lon: number }>(CLE_LIEU);
         if (ou?.lieu !== lieu || !Number.isFinite(ou.lat) || !Number.isFinite(ou.lon)) {
-          const g = await json(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(lieu)}&count=1&language=fr&countryCode=CH`);
-          const p = g?.results?.[0];
+          // En Suisse d'abord (un code postal seul existe dans plusieurs pays), puis partout.
+          const chercher = async (pays: string) => (await json(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(lieu)}&count=1&language=fr${pays}`))?.results?.[0];
+          const p = (await chercher("&countryCode=CH")) ?? (await chercher(""));
           if (typeof p?.latitude !== "number" || typeof p?.longitude !== "number") return null;
           ou = { lieu, lat: Math.round(p.latitude * 100) / 100, lon: Math.round(p.longitude * 100) / 100 };
           ecrire(CLE_LIEU, ou);
         }
-        const m = lireMeteo(await json(`https://api.open-meteo.com/v1/forecast?latitude=${ou.lat}&longitude=${ou.lon}&hourly=temperature_2m,precipitation,snowfall,weather_code&timezone=Europe%2FZurich&past_days=1&forecast_days=2`), lieu, now);
+        const m = lireMeteo(await json(`https://api.open-meteo.com/v1/forecast?latitude=${ou.lat}&longitude=${ou.lon}&hourly=temperature_2m,precipitation,snowfall,weather_code&timezone=auto&past_days=1&forecast_days=2`), lieu, now);
         if (m) ecrire(CLE, m);
         return m ?? (frais ? garde : null);
       } catch { return frais ? garde : null; } // pas de réseau : la dernière lue, si elle parle encore d'aujourd'hui
     } catch { return null; }
   })().finally(() => { enCours = null; }));
 }
+
+// La météo si elle arrive vite (déjà gardée, ou réseau rapide) ; sinon null tout de suite, et la lecture continue pour la fois suivante.
+export const meteoVite = (now = Date.now(), ms = 2500): Promise<Meteo | null> =>
+  Promise.race([meteo(now), new Promise<null>((ok) => setTimeout(() => ok(null), ms))]);
 
 // Le temps qu'il fait, en un ou deux mots, d'après le code météo (OMM) le plus marquant d'une plage d'heures.
 const NEIGE = (c: number) => (c >= 71 && c <= 77) || c === 85 || c === 86;
@@ -101,7 +104,7 @@ export function phraseMeteo(m: Meteo | null, jour: string, heure = 0): string {
 }
 
 // La route risque-t-elle de glisser autour de l'heure de départ (HH:MM) ? Neige dans les 3 heures avant ou l'heure après ;
-// gel : 0° ou moins au départ après de la pluie ou de la neige dans les 12 heures d'avant.
+// gel : 0° ou moins au départ après des précipitations dans les 12 heures d'avant (la neige fondue y est déjà comptée).
 export function routeGlissante(m: Meteo | null, jour: string, depart: string): Glisse | null {
   const l = m?.heures[jour];
   const h = Number(depart.slice(0, 2));
@@ -109,6 +112,6 @@ export function routeGlissante(m: Meteo | null, jour: string, depart: string): G
   const veille = m!.heures[auJour(-1, new Date(`${jour}T12:00:00`))] ?? [];
   const avant = (n: number) => [...veille, ...l].slice(veille.length + h - n < 0 ? 0 : veille.length + h - n, veille.length + h + 1);
   if ([...avant(3), ...l.slice(h + 1, h + 2)].some((x) => x.neige > 0 || NEIGE(x.code))) return "neige";
-  if (Math.min(l[h].t, l[Math.max(0, h - 1)].t) <= 0 && avant(12).reduce((n, x) => n + x.pluie + x.neige, 0) >= 0.5) return "gel";
+  if (Math.min(l[h].t, l[Math.max(0, h - 1)].t) <= 0 && avant(12).reduce((n, x) => n + x.pluie, 0) >= 0.5) return "gel";
   return null;
 }

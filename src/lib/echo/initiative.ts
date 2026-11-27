@@ -1,7 +1,7 @@
 import { db } from "../../data/db";
 import { MODULES, outilsEcho } from "../../modules/registre";
 import { auJour } from "../dates";
-import { meteo, phraseMeteo } from "../meteo";
+import { meteoVite, phraseMeteo } from "../meteo";
 import { genreDe } from "../../../supabase/functions/_shared/echo-outils";
 import { lancerEcho, type Appeler } from "./boucle";
 import type { ContexteEcho, Executant } from "./outils";
@@ -42,7 +42,7 @@ export const NOTE_BONJOUR = "c'est le matin, la personne vient d'ouvrir l'app et
 export async function motDuMatin(ctx: ContexteEcho, appeler: Appeler, outils: Record<string, Executant>): Promise<Mot | null> {
   const lecture = Object.fromEntries(Object.entries(outils).filter(([nom]) => genreDe(nom) === "lire"));
   // Le temps qu'il fait, si on l'a : Echo peut le dire en quelques mots.
-  const temps = phraseMeteo(await meteo(ctx.now.getTime()), auJour(0, ctx.now), ctx.now.getHours());
+  const temps = phraseMeteo(await meteoVite(ctx.now.getTime()), auJour(0, ctx.now), ctx.now.getHours());
   const r = await lancerEcho(PHRASE_BONJOUR, ctx, { appeler, outils: lecture, seul: false, note: NOTE_BONJOUR + (temps ? ` Le temps dehors aujourd'hui : ${temps} (dis-le en quelques mots).` : "") });
   const texte = r.reponse.trim();
   if (!texte) return null;

@@ -9,10 +9,10 @@ const m = (heures: Record<string, Heure[]>): Meteo => ({ quand: 0, lieu: "x", he
 const J = "2026-11-28", HIER = "2026-11-27";
 
 describe("le lieu de la météo", () => {
-  it("la ville écrite d'abord, sinon le code postal de l'adresse, sinon la fin après la virgule", () => {
+  it("la ville écrite d'abord, sinon le code postal de l'adresse, jamais un bout de rue", () => {
     expect(lieuDe("Morges", "rue du Lac 3, 1000 Lausanne")).toBe("Morges");
     expect(lieuDe("", "chemin des Fleurs 12 1000")).toBe("1000");
-    expect(lieuDe("", "rue du Lac 3, Lausanne")).toBe("Lausanne");
+    expect(lieuDe("", "Lausanne, rue du Lac")).toBe("");
     expect(lieuDe("", "rue du Lac 3")).toBe("");
     expect(lieuDe("", "")).toBe("");
   });
@@ -76,5 +76,12 @@ describe("la ligne « pars à »", () => {
     expect(phraseDepart(moto, hh)).toBe("pars à 7 h 30");
     expect(phraseDepart({ ...moto, glisse: "neige", autrement: { depart: "07:10", minutes: 40, mode: "transports" } }, hh)).toBe("neige : plutôt les transports, pars à 7 h 10 (à moto : 7 h 30)");
     expect(phraseDepart({ ...moto, glisse: "gel" }, hh)).toBe("route gelée : prudence à moto, pars à 7 h 30");
+  });
+  it("ne propose plus un départ passé", () => {
+    const d = { ...moto, glisse: "neige" as const, autrement: { depart: "07:10", minutes: 40, mode: "transports" as const } };
+    expect(phraseDepart(d, hh, "07:11")).toBe("neige : prudence à moto, pars à 7 h 30");
+    expect(phraseDepart({ ...d, autrement: { ...d.autrement, depart: "07:40" } }, hh, "07:31")).toBe("neige : plutôt les transports, pars à 7 h 40");
+    expect(phraseDepart(d, hh, "07:30")).toBe("");
+    expect(phraseDepart(moto, hh, "07:29")).toBe("pars à 7 h 30");
   });
 });
