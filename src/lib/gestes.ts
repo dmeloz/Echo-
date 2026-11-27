@@ -14,8 +14,11 @@ export function trembler(el: Element | null) {
 // La vibration vient sous le doigt, au moment du toucher.
 // Android vibre pour de bon. L'iPhone ne laisse pas vibrer une page : un interrupteur caché, basculé une fois,
 // fait le petit « tic » d'iOS (de 17.4 à 26.4 ; Apple l'a retiré ensuite, et ailleurs il ne se passe rien).
+// Jamais avec « Réduire les animations », et seulement sur un écran qu'on touche.
 export function vibrer(ms = 8) {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   if (navigator.vibrate) { navigator.vibrate(ms); return; }
+  if (!matchMedia("(pointer: coarse)").matches) return;
   try {
     const etiquette = document.createElement("label");
     etiquette.ariaHidden = "true";

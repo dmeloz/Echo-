@@ -41,6 +41,13 @@ export function PagePlanning({ noms, proprio, now, ouvrir, aller, creer }: Conte
   const travail = new Map(horaires.filter((h) => h.qui === proprio).map((h) => [h.jour, h.code]));
   const choisirJour = (j: string) => { setJour(j); poserReglage("planningVue", "jour"); };
 
+  // Glisser vers la droite (ou rechoisir Agenda dans le menu) referme « Mes horaires », comme le bouton retour.
+  useEffect(() => {
+    if (!sousPage) return;
+    const retour = () => setSousPage(false);
+    addEventListener("echo-retour", retour);
+    return () => removeEventListener("echo-retour", retour);
+  }, [sousPage]);
   if (sousPage) return (
     <>
       <button type="button" className="retour-agenda" onClick={() => setSousPage(false)}><ChevronLeft size={18} strokeWidth={2} animated={false} /> Agenda</button>

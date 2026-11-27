@@ -19,27 +19,27 @@
 .retour::after, .retour-agenda::after { content: ""; position: absolute; inset: -4px; }
 .retour:active, .retour-agenda:active { scale: .95; }
 
-/* 3. « Cette semaine / La prochaine » : plus de bande grise, la même goutte de verre que les onglets. */
-.vue-choix.petit { position: relative; grid-template-columns: 1fr 1fr; padding: 0; background: none; }
-.vue-choix.petit::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 50%; border-radius: 999px;
+/* 3. « Cette semaine / La prochaine » : plus de bande grise, la même goutte de verre que les onglets (choix à deux seulement). */
+.vue-choix.petit:not(:has(> :nth-child(3))) { position: relative; grid-template-columns: 1fr 1fr; padding: 0; background: none; }
+.vue-choix.petit:not(:has(> :nth-child(3)))::before { content: ""; position: absolute; top: 0; bottom: 0; left: 0; width: 50%; border-radius: 999px;
   background: linear-gradient(180deg, rgb(255 255 255 / .95), rgb(255 255 255 / .7)); border: 1px solid rgb(255 255 255 / .9);
   box-shadow: 0 4px 14px var(--ombre), inset 0 1px 0 #fff; transition: translate .55s cubic-bezier(.34, 1.45, .5, 1); }
-.vue-choix.petit:has(> :last-child[aria-pressed="true"])::before { translate: 100% 0; }
-.vue-choix.petit button, .vue-choix.petit button[aria-pressed="true"] { position: relative; min-height: 44px; padding: 0 10px; background: none; box-shadow: none; }
+.vue-choix.petit:not(:has(> :nth-child(3))):has(> :last-child[aria-pressed="true"])::before { translate: 100% 0; }
+.vue-choix.petit:not(:has(> :nth-child(3))) button, .vue-choix.petit:not(:has(> :nth-child(3))) button[aria-pressed="true"] { position: relative; min-height: 44px; padding: 0 10px; background: none; box-shadow: none; }
 .vue-choix.petit button:active { scale: .96; }
 
 /* 4. Le givre autour de la capsule : ce qui défile dessous s'efface au lieu de se glisser sous les boutons
    (l'effet de bord d'iOS 26, ramené au coin du pouce). */
 .halo-capsule { position: fixed; z-index: 3; right: 0; bottom: var(--clavier); width: calc(env(safe-area-inset-right, 0px) + 124px); height: calc(env(safe-area-inset-bottom, 0px) + 230px);
-  pointer-events: none; background: rgb(242 246 248 / .55); -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
+  pointer-events: none; background: color-mix(in srgb, var(--fond) 55%, transparent); -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
   -webkit-mask-image: radial-gradient(ellipse 100% 100% at 100% 100%, #000 50%, transparent 100%); mask-image: radial-gradient(ellipse 100% 100% at 100% 100%, #000 50%, transparent 100%);
   transition: opacity .25s; }
-.feuille-ouverte .halo-capsule, .menu-ouvert .halo-capsule { opacity: 0; }
+.feuille-ouverte .halo-capsule, .menu-ouvert .halo-capsule, .scene.en-carte ~ .halo-capsule { opacity: 0; transition-duration: .08s; }
 
 /* 5. Feuille d'une tâche : « Ajouter » et « Enregistrer » restent en bas de la feuille, sans défiler jusqu'au bout. */
-.feuille-defile:has(form > .actions) { padding-bottom: 0; }
+.feuille-defile:has(form > .actions) { padding-bottom: 0; scroll-padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 84px); }
 .feuille form > .actions { position: sticky; bottom: 0; z-index: 2; margin: 0 -18px; padding: 12px 18px calc(env(safe-area-inset-bottom, 0px) + 14px);
-  background: linear-gradient(to top, rgb(250 252 253) 74%, rgb(250 252 253 / 0)); }
+  background: linear-gradient(to top, rgb(250 252 253) calc(100% - 12px), rgb(250 252 253 / 0)); }
 
 /* 6. Lecture : rien sous 13 px, et des fins de paragraphe sans mot seul (Safari 26). */
 p { text-wrap: pretty; }
@@ -48,6 +48,6 @@ p { text-wrap: pretty; }
   .vue-choix.petit::before, .retour, .retour-agenda, .halo-capsule { transition: none; }
 }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-  .halo-capsule { -webkit-backdrop-filter: none; backdrop-filter: none; background: rgb(242 246 248 / .9); }
+  .halo-capsule { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--fond) 90%, transparent); }
   .retour, .retour-agenda { background: #fff; border-color: rgb(18 40 58 / .14); }
 }
