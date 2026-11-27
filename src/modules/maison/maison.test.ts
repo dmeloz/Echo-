@@ -11,7 +11,7 @@ import { db } from "../../data/db";
 import { lireFile } from "../../sync/file";
 import { appliquer } from "../../sync/moteur";
 import { ajouterAppareil, ajouterContact, ajouterCorvees, ajouterPapier, ajouterPhotosPapier, changerPapier, retirerPapierSansBruit, retirerPhotoPapier, ajouterReparation, papierFait, retirerPapier, cocherCorvee, etatReparation, faireCorvee, rangerFaits, rangerReparations, reporterCorvee, retirerCorvee } from "./actions";
-import { papiersDu, aPayer, apresFait, bientot, devinerDossier, lireMontant, lirePapier, nettoyerPapier, quandPapier, texteMontant, type Papier, aFaire, besoin, deborde, ditFait, equilibre, gestesPour, jourDu, lireContact, lireCorvee, nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation, nomRythme, parts, pour, pourMoi, texteGarantie, trouverCorvees, type Corvee } from "./donnees";
+import { matinPapiers, papiersDu, aPayer, apresFait, bientot, devinerDossier, lireMontant, lirePapier, nettoyerPapier, quandPapier, texteMontant, type Papier, aFaire, besoin, deborde, ditFait, equilibre, gestesPour, jourDu, lireContact, lireCorvee, nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation, nomRythme, parts, pour, pourMoi, texteGarantie, trouverCorvees, type Corvee } from "./donnees";
 import { maison } from "./index";
 import { OUTILS_MAISON } from "./outilsEcho";
 
@@ -486,5 +486,20 @@ describe("les papiers", () => {
     expect(nettoyerPapier({ id: "p", titre: "Loyer", echeance: "2026-02-31", repete: "mois", jour: 31, cree: 1 })).toEqual({ id: "p", titre: "Loyer", dossier: "autre", emetteur: "", note: "", quoi: "", repete: "mois", jour: 31, photos: [], cree: 1 });
     await ajouterPapier({ titre: "Bail" }, true);
     expect(Object.keys(lireFile())).toEqual(expect.arrayContaining([expect.stringMatching(/^papier:/)]));
+  });
+});
+
+describe("Maison : les papiers dans le résumé du matin", () => {
+  const p = (x: Partial<Papier>): Papier => ({ id: "p", titre: "Loyer", dossier: "logement", emetteur: "", note: "", quoi: "payer", echeance: "2026-11-28", montant: 185000, repete: "", photos: [], cree: 1, ...x });
+  it("dit ce qui tombe ce jour-là, avec le montant, puis ce qui est en retard", () => {
+    expect(matinPapiers([p({}), p({ id: "b", titre: "Passeport", quoi: "renouveler", montant: undefined, echeance: "2026-11-20" })], "2026-11-28"))
+      .toEqual(["Loyer : à payer aujourd'hui (1 850.00 CHF).".replace("1 850", (1850).toLocaleString("fr-CH")), "Passeport : à renouveler, en retard."]);
+  });
+  it("ne dit rien de ce qui est fait, sans échéance, ou plus tard", () => {
+    expect(matinPapiers([p({ fait: "2026-11-27" }), p({ id: "b", echeance: undefined }), p({ id: "c", echeance: "2026-12-05" }), p({ id: "d", quoi: "" })], "2026-11-28")).toEqual([]);
+  });
+  it("le soir, parle de demain et ne gronde pas pour ce qui reste", () => {
+    const l = [p({}), p({ id: "b", titre: "Swisscom" }), p({ id: "c", titre: "Serafe", echeance: "2026-11-27" })];
+    expect(matinPapiers(l, "2026-11-28", true)).toEqual(["2 papiers à régler demain : Loyer, Swisscom.", expect.stringContaining("Serafe : à payer, pas encore fait")]);
   });
 });

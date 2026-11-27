@@ -4,7 +4,7 @@ import { db } from "../../data/db";
 import type { Personne } from "../../lib/types";
 import type { Module } from "../contrat";
 import { ajouterCorvees, ajouterPapier, ajouterReparation, cocherCorvees } from "./actions";
-import { ditFait, lireCorvee, lirePapier, nomDossier, trouverCorvees, type Corvee } from "./donnees";
+import { ditFait, lireCorvee, lirePapier, matinPapiers, nomDossier, trouverCorvees, type Corvee } from "./donnees";
 import { ReglagesMaison } from "./ReglagesMaison";
 import { TuileMaison } from "./Tuile";
 import { JourneeMaison } from "./Journee";
@@ -29,6 +29,7 @@ export const maison: Module = {
   Journee: JourneeMaison,
   Reglages: ReglagesMaison,
   outils: OUTILS_MAISON,
+  matin: async ({ jour, demain }) => matinPapiers(await db.maison_papiers.toArray(), jour, demain),
   // « j'ai passé l'aspirateur » coche la corvée ; « corvée : litière tous les 2 jours » en ajoute une ; « à réparer : le robinet » note une réparation ; « facture : Swisscom 89.90 le 15.12 » range un papier.
   comprendre: (texte) => {
     const nouvelle = /^\s*(?:nouvelle\s+)?corv[ée]e\s*:?\s+(.+)$/i.exec(texte);
