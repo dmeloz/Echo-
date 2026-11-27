@@ -6,7 +6,7 @@ import { minutesDe, type Corvee, type Fait, type Modele, type QuiCorvee, type Ta
 
 // Les gestes du module Maison sur ses propres tables. Tout ce qui change montre « Annuler ».
 
-const memeNom = (a: string, b: string) => sansAccents(a).trim() === sansAccents(b).trim();
+export const memeNom = (a: string, b: string) => sansAccents(a).trim() === sansAccents(b).trim();
 const annuler = (onClick: () => unknown) => ({ action: { label: "Annuler", onClick } });
 
 export interface NouvelleCorvee { nom: string; tous: number; piece?: string; taille?: Taille; qui?: QuiCorvee }

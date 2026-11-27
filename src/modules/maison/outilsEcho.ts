@@ -1,7 +1,7 @@
 import { db } from "../../data/db";
 import type { Action, Executant } from "../../lib/echo/outils";
 import { autre, type Personne } from "../../lib/types";
-import { ajouterCorvees, faireCorvee } from "./actions";
+import { ajouterCorvees, faireCorvee, memeNom } from "./actions";
 import { besoin, depuis, equilibre, nomRythme, parts, pour, trouverCorvees, type Corvee, type QuiCorvee, type Taille } from "./donnees";
 
 // Ce que l'assistant Echo peut faire dans la Maison (décrit dans supabase/functions/_shared/echo-outils.ts).
@@ -53,12 +53,13 @@ export const OUTILS_MAISON: Record<string, Executant> = {
       const nom = court(e.nom, 80), tous = Number(e.tousLesJours);
       if (!nom) return "Donne le nom de la corvée.";
       if (!Number.isInteger(tous) || tous < 1 || tous > 365) return "tousLesJours : un nombre de jours entre 1 et 365.";
-      if (trouverCorvees(nom, await db.maison_corvees.toArray()).some((c) => c.nom.toLowerCase() === nom.toLowerCase())) return `« ${nom} » est déjà dans les corvées.`;
+      if ((await db.maison_corvees.toArray()).some((c) => memeNom(c.nom, nom))) return `« ${nom} » est déjà dans les corvées.`;
       const qui = QUIS.find((q) => q === e.qui) ?? "tour";
       return {
         outil: "ajouter_corvee", genre: "petit", libelle: `Corvée : ${nom}`, details: [nomRythme(tous).toLowerCase()],
         faire: async () => {
           const ajoutees = await ajouterCorvees([{ nom: nom[0].toUpperCase() + nom.slice(1), tous, taille: TAILLES[String(e.taille)] ?? 2, qui, piece: court(e.piece, 30) }], true);
+          if (!ajoutees.length) throw new Error("Corvée déjà dans la liste");
           return () => db.maison_corvees.bulkDelete(ajoutees.map((c) => c.id));
         },
       };

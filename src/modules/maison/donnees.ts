@@ -81,7 +81,7 @@ export type Equilibre = Record<Personne, number>; // minutes de corvées faites,
 export const QUATRE_SEMAINES = 28 * 86_400_000;
 export function equilibre(faits: Fait[], now = Date.now()): Equilibre {
   const e: Equilibre = { moi: 0, elle: 0 };
-  for (const f of faits) if (f.quand >= now - QUATRE_SEMAINES && f.quand <= now + 60_000) e[f.par] += f.min;
+  for (const f of faits) if (f.quand >= now - QUATRE_SEMAINES) e[f.par] += f.min;
   return e;
 }
 // Pour qui est la corvée aujourd'hui. Chacun son tour : l'autre que la dernière fois. Echo choisit : celui qui en a le moins fait.
@@ -129,7 +129,7 @@ export function trouverCorvees(texte: string, corvees: Corvee[]): Corvee[] {
   return corvees.filter((c) => { const m = mots(c.nom); return m.length > 0 && m.every((x) => dits.some((d) => proche(d, x))); });
 }
 // Une phrase qui dit qu'une chose est faite : « j'ai… », « … c'est fait », « on a… ».
-export const ditFait = (texte: string) => !/\b(demain|faut|dois|doit|devoir|a faire|pas encore|pas fait)\b/.test(sansAccents(texte)) && /^\s*(j['’ ]?ai|on a|c['’]est fait|fait\s*:)|\b(c['’]est fait|est faite?s?|sont faite?s?)\s*[.!]?\s*$/i.test(texte);
+export const ditFait = (texte: string) => !/\b(demain|faut|dois|doit|devoir|a faire|pas encore|pas fait)\b/.test(sansAccents(texte)) && /^\s*(j['’ ]?ai\b|on a\b|c['’]est fait|fait\s*:)|\b(c['’]est fait|est faite?s?|sont faite?s?)\s*[.!]?\s*$/i.test(texte);
 
 /* ---------- Ce qui arrive du foyer : on ne garde que les formes attendues ---------- */
 

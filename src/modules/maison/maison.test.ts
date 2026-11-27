@@ -93,6 +93,8 @@ describe("lire ce qu'on écrit", () => {
     expect(ditFait("passer l'aspirateur demain")).toBe(false);
     expect(ditFait("j'ai pas encore sorti les poubelles")).toBe(false);
     expect(ditFait("il faut passer l'aspirateur")).toBe(false);
+    expect(ditFait("j'aimerais que tu passes l'aspirateur")).toBe(false);
+    expect(ditFait("on attend pour la lessive")).toBe(false);
   });
 });
 
