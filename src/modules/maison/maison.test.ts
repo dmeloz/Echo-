@@ -10,8 +10,8 @@ vi.stubGlobal("localStorage", { getItem: (k: string) => stock.get(k) ?? null, se
 import { db } from "../../data/db";
 import { lireFile } from "../../sync/file";
 import { appliquer } from "../../sync/moteur";
-import { ajouterAppareil, ajouterContact, ajouterCorvees, ajouterReparation, cocherCorvee, etatReparation, faireCorvee, rangerFaits, rangerReparations, reporterCorvee, retirerCorvee } from "./actions";
-import { aFaire, besoin, deborde, ditFait, equilibre, gestesPour, jourDu, lireContact, lireCorvee, nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation, nomRythme, parts, pour, pourMoi, texteGarantie, trouverCorvees, type Corvee } from "./donnees";
+import { ajouterAppareil, ajouterContact, ajouterCorvees, ajouterPapier, ajouterPhotosPapier, retirerPhotoPapier, ajouterReparation, papierFait, retirerPapier, cocherCorvee, etatReparation, faireCorvee, rangerFaits, rangerReparations, reporterCorvee, retirerCorvee } from "./actions";
+import { aPayer, apresFait, bientot, devinerDossier, lireMontant, lirePapier, nettoyerPapier, quandPapier, texteMontant, type Papier, aFaire, besoin, deborde, ditFait, equilibre, gestesPour, jourDu, lireContact, lireCorvee, nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation, nomRythme, parts, pour, pourMoi, texteGarantie, trouverCorvees, type Corvee } from "./donnees";
 import { maison } from "./index";
 import { OUTILS_MAISON } from "./outilsEcho";
 
@@ -23,7 +23,7 @@ const ctx = { noms: { moi: "Dany", elle: "Sarah" }, proprio: "moi" as const, now
 const annuler = () => (toast.mock.calls.at(-1)![1] as { action: { onClick: () => Promise<unknown> } }).action.onClick();
 
 beforeEach(async () => {
-  await Promise.all([db.maison_corvees.clear(), db.maison_faits.clear(), db.maison_reparations.clear(), db.maison_appareils.clear(), db.maison_contacts.clear(), db.reglages.clear()]);
+  await Promise.all([db.maison_corvees.clear(), db.maison_faits.clear(), db.maison_reparations.clear(), db.maison_appareils.clear(), db.maison_contacts.clear(), db.maison_papiers.clear(), db.photos.clear(), db.reglages.clear()]);
   stock.clear(); toast.mockClear();
 });
 
@@ -285,5 +285,112 @@ describe("l'entretien", () => {
     await ajouterAppareil("Four");
     await ajouterContact({ nom: "Régie", role: "Régie", tel: "" });
     expect(Object.keys(lireFile())).toEqual(expect.arrayContaining([expect.stringMatching(/^reparation:/), expect.stringMatching(/^appareil:/), expect.stringMatching(/^contact:/)]));
+  });
+});
+
+describe("les papiers", () => {
+  const papier = (x: Partial<Papier> = {}): Papier => ({ id: "p1", titre: "Facture Swisscom", dossier: "abonnements", emetteur: "", note: "", quoi: "payer", echeance: "2026-12-15", montant: 8990, repete: "", photos: [], cree: 1, ...x });
+  it("lit un montant en francs", () => {
+    expect(lireMontant("89.90")).toBe(8990);
+    expect(lireMontant("89,9 CHF")).toBe(8990);
+    expect(lireMontant("1'250.-")).toBe(125000);
+    expect(lireMontant("rien")).toBeUndefined();
+    expect(texteMontant(125005)).toMatch(/^1.250\.05 CHF$/);
+  });
+  it("lit une ligne écrite : titre, dossier, montant, échéance", () => {
+    expect(lirePapier("facture Swisscom 89.90 le 15.12", NOW)).toEqual({ titre: "Facture Swisscom", dossier: "abonnements", quoi: "payer", echeance: "2026-12-15", montant: 8990 });
+    // Une date déjà passée cette année : c'est l'an prochain.
+    expect(lirePapier("Acompte impôts 450.- le 10.01", NOW)).toMatchObject({ dossier: "impots", quoi: "payer", echeance: "2027-01-10", montant: 45000 });
+    expect(lirePapier("Passeport de Sarah expire le 3 mars 2028", NOW)).toMatchObject({ dossier: "identite", quoi: "renouveler", echeance: "2028-03-03" });
+    expect(lirePapier("Bail de l'appartement", NOW)).toEqual({ titre: "Bail de l'appartement", dossier: "logement", quoi: "" });
+    expect(lirePapier("   ", NOW)).toBeNull();
+    // Le petit mot « le » ou « au » n'est jamais la fin d'un autre mot.
+    expect(lirePapier("Assurance Mobile le 15.12", NOW)).toMatchObject({ titre: "Assurance Mobile", echeance: "2026-12-15" });
+    expect(lirePapier("Facture eau 45.- 15.12", NOW)).toMatchObject({ titre: "Facture eau", echeance: "2026-12-15", montant: 4500 });
+    expect(lirePapier("Loyer bureau 3 mars", NOW)).toMatchObject({ titre: "Loyer bureau", echeance: "2027-03-03" });
+    // Un prix qui ressemble à un jour reste un prix ; une année ou « A4 » n'est pas un montant.
+    expect(lirePapier("facture Swisscom 29.05 le 15.12", NOW)).toEqual({ titre: "Facture Swisscom", dossier: "abonnements", quoi: "payer", echeance: "2026-12-15", montant: 2905 });
+    expect(lirePapier("Parking 12.05", NOW)).toEqual({ titre: "Parking", dossier: "autre", quoi: "payer", montant: 1205 });
+    expect(lirePapier("Déclaration d'impôts 2026", NOW)).toEqual({ titre: "Déclaration d'impôts 2026", dossier: "impots", quoi: "" });
+    expect(lirePapier("Facture A4 89.90 le 15.12", NOW)).toMatchObject({ titre: "Facture A4", montant: 8990, echeance: "2026-12-15" });
+    expect(lirePapier("Garage 450", NOW)).toMatchObject({ titre: "Garage", montant: 45000 });
+    expect(lirePapier("Vignette 15.12.2026", NOW)).toMatchObject({ titre: "Vignette", echeance: "2026-12-15" });
+    expect(devinerDossier("Prime caisse maladie")).toBe("sante");
+    expect(devinerDossier("Carnet du chat")).toBe("autre");
+  });
+  it("dit ce qui arrive bientôt", () => {
+    expect(bientot(papier(), NOW)).toBe(true);
+    expect(quandPapier(papier(), NOW)).toBe("dans 18 jours");
+    expect(quandPapier(papier({ echeance: "2026-11-25" }), NOW)).toBe("c'était il y a 2 jours");
+    expect(bientot(papier({ echeance: "2027-03-01" }), NOW)).toBe(false);
+    expect(bientot(papier({ fait: "2026-11-20" }), NOW)).toBe(false);
+    expect(bientot(papier({ quoi: "" }), NOW)).toBe(false);
+  });
+  it("une fois fait : fini, ou reparti à la prochaine échéance", () => {
+    expect(apresFait(papier(), NOW)).toMatchObject({ fait: "2026-11-27", echeance: "2026-12-15" });
+    expect(apresFait(papier({ repete: "mois" }), NOW)).toMatchObject({ echeance: "2027-01-15", fait: undefined });
+    expect(apresFait(papier({ repete: "an", echeance: "2024-12-31" }), NOW).echeance).toBe("2026-12-31");
+    // Fin de mois : le 31 janvier + 1 mois ne saute pas en mars.
+    const fev = apresFait(papier({ repete: "mois", echeance: "2027-01-31" }), NOW);
+    expect(fev).toMatchObject({ echeance: "2027-02-28", jour: 31 });
+    // … et revient au 31 dès que le mois le permet.
+    expect(apresFait(fev, midi("2027-02-20")).echeance).toBe("2027-03-31");
+    expect(apresFait(apresFait(fev, midi("2027-02-20")), midi("2027-03-20")).echeance).toBe("2027-04-30");
+  });
+  it("se range, se coche et se retire, avec Annuler", async () => {
+    const p = (await ajouterPapier({ titre: "loyer", quoi: "payer", echeance: "2026-12-01", montant: 185000, repete: "mois" }))!;
+    expect(p).toMatchObject({ titre: "Loyer", dossier: "logement", photos: [] });
+    expect(await ajouterPapier({ titre: "LOYER" })).toBeNull();
+    await papierFait(p, NOW);
+    expect(await db.maison_papiers.get(p.id)).toMatchObject({ echeance: "2027-01-01" });
+    await annuler();
+    expect(await db.maison_papiers.get(p.id)).toMatchObject({ echeance: "2026-12-01" });
+    const oublier = vi.fn(async () => {});
+    await retirerPapier(p, oublier);
+    expect(await db.maison_papiers.count()).toBe(0);
+    await annuler();
+    expect(await db.maison_papiers.count()).toBe(1);
+    expect(oublier).not.toHaveBeenCalled();
+  });
+  it("les photos : la liste ne perd rien, et le ménage retire celles que plus aucun papier ne porte", async () => {
+    const { envoyerEnAttente } = await import("./photosPapiers");
+    const p = (await ajouterPapier({ titre: "Bail" }, true))!;
+    await Promise.all([ajouterPhotosPapier(p.id, ["aaaa1111.jpg"]), ajouterPhotosPapier(p.id, ["bbbb2222.jpg"])]);
+    expect((await db.maison_papiers.get(p.id))!.photos.sort()).toEqual(["aaaa1111.jpg", "bbbb2222.jpg"]);
+    await retirerPhotoPapier(p.id, "aaaa1111.jpg");
+    expect((await db.maison_papiers.get(p.id))!.photos).toEqual(["bbbb2222.jpg"]);
+    const blob = new Blob(["x"]), t = NOW.getTime();
+    await db.photos.bulkPut([
+      { id: "aaaa1111.jpg", tacheId: `papier:${p.id}`, blob, cree: t - 2 * J }, { id: "bbbb2222.jpg", tacheId: `papier:${p.id}`, blob, cree: t - 2 * J },
+      { id: "cccc3333.jpg", tacheId: `papier:${p.id}`, blob, cree: t - 1000 }, { id: "photo-tache", tacheId: "t1", blob, cree: t - 9 * J },
+    ]);
+    await envoyerEnAttente(t);
+    expect((await db.photos.toArray()).map((x) => x.id).sort()).toEqual(["bbbb2222.jpg", "cccc3333.jpg", "photo-tache"]);
+  });
+  it("donne au Budget la ligne à payer convenue", () => {
+    expect(aPayer(papier({ emetteur: "Swisscom", repete: "mois" }))).toEqual({ id: "papier:p1", titre: "Facture Swisscom", emetteur: "Swisscom", montant: 8990, echeance: "2026-12-15", repete: "mois", dossier: "abonnements", papier: "p1", paye: false });
+    expect(aPayer(papier({ fait: "2026-11-27" }))).toMatchObject({ paye: "2026-11-27" });
+    expect(aPayer(papier({ quoi: "renouveler" }))).toBeNull();
+    expect(aPayer(papier({ montant: undefined }))).toBeNull();
+  });
+  it("Echo range un papier et le voit ; une phrase suffit aussi", async () => {
+    expect(maison.comprendre!("facture : Swisscom 89.90 le 15.12")).toMatchObject({ titre: "Facture Swisscom", ou: "Papiers, Abonnements" });
+    expect(await OUTILS_MAISON.ranger_papier.preparer!({ titre: "Prime ménage", aFaire: "payer", pourLe: "", montantFrancs: 300 }, ctx)).toMatch(/date/);
+    expect(await OUTILS_MAISON.ranger_papier.preparer!({ titre: "Prime ménage", aFaire: "payer", pourLe: "2026-02-31", montantFrancs: 300 }, ctx)).toMatch(/date/);
+    const a = await OUTILS_MAISON.ranger_papier.preparer!({ titre: "Prime assurance ménage", dossier: "assurances", aFaire: "payer", pourLe: "2026-12-31", montantFrancs: 312.5, revient: "an", deQui: "La Mobilière", note: "" }, ctx);
+    if (typeof a === "string") throw new Error(a);
+    expect(a).toMatchObject({ genre: "petit", libelle: "Papier : Prime assurance ménage" });
+    const defaire = await a.faire();
+    expect(await OUTILS_MAISON.voir_papiers.lire!({}, ctx)).toMatchObject({ papiers: [{ titre: "Prime assurance ménage", dossier: "Assurances", deQui: "La Mobilière", aFaire: "à payer", pourLe: "2026-12-31", revient: "chaque année" }] });
+    expect(await OUTILS_MAISON.ranger_papier.preparer!({ titre: "prime assurance ménage", aFaire: "", pourLe: "" }, ctx)).toMatch(/déjà rangé/);
+    await (defaire as () => Promise<void>)();
+    expect(await db.maison_papiers.count()).toBe(0);
+  });
+  it("ne garde que les formes attendues, et part au foyer", async () => {
+    expect(nettoyerPapier({ id: "p", titre: "Bail", dossier: "cave", quoi: "voler", repete: "jour", montant: -4, echeance: "demain", photos: ["../x.jpg", "abcd1234.jpg", 3], cree: 1 })).toEqual({ id: "p", titre: "Bail", dossier: "autre", emetteur: "", note: "", quoi: "", repete: "", photos: ["abcd1234.jpg"], cree: 1 });
+    expect(nettoyerPapier({ id: "p" })).toBeNull();
+    expect(nettoyerPapier({ id: "p", titre: "Loyer", echeance: "2026-02-31", repete: "mois", jour: 31, cree: 1 })).toEqual({ id: "p", titre: "Loyer", dossier: "autre", emetteur: "", note: "", quoi: "", repete: "mois", jour: 31, photos: [], cree: 1 });
+    await ajouterPapier({ titre: "Bail" }, true);
+    expect(Object.keys(lireFile())).toEqual(expect.arrayContaining([expect.stringMatching(/^papier:/)]));
   });
 });
