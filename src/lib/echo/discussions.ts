@@ -29,26 +29,47 @@ const ecrire = (cle: string, v: unknown) => {
   catch { /* stockage plein ou fermé : la discussion vit le temps de l'app */ }
 };
 
+// Ce qui est relu du stockage est vérifié : une entrée abîmée (ou d'une ancienne version) ne doit rien bloquer.
+const echangeOk = (e: unknown): e is Echange => !!e && typeof (e as Echange).moi === "string" && typeof (e as Echange).echo === "string"
+  && ((e as Echange).actions === undefined || (Array.isArray((e as Echange).actions) && (e as Echange).actions!.every((a) => a && typeof a.texte === "string" && typeof a.etat === "string")));
+const propre = <T extends { echanges: unknown; quand: unknown; id: unknown; debut: unknown }>(x: T | null | undefined): x is T & { echanges: Echange[]; quand: number; id: string; debut: number } =>
+  !!x && typeof x === "object" && Array.isArray(x.echanges) && x.echanges.every(echangeOk) && Number.isFinite(x.quand) && typeof x.id === "string" && Number.isFinite(x.debut);
+
 export const anciennes = (): Ancienne[] => {
   const l = lire<Ancienne[]>(CLE_ANCIENNES, []);
-  return Array.isArray(l) ? l.filter((a) => a && Array.isArray(a.echanges)) : [];
+  return Array.isArray(l) ? l.filter((a) => propre(a)) : [];
 };
+
+// Une proposition restée sans réponse (l'app fermée, la discussion rangée) : elle n'a pas été faite.
+export function clore(f: Fil): { fil: Fil; laissee: boolean } {
+  const der = f.echanges.at(-1);
+  if (!der?.actions?.some((a) => a.etat === "propose")) return { fil: f, laissee: false };
+  const actions = der.actions.map((a) => (a.etat === "propose" ? { ...a, etat: "non" as const } : a));
+  return { fil: { ...f, echanges: [...f.echanges.slice(0, -1), { ...der, actions }] }, laissee: true };
+}
 
 // Ranger une discussion parmi les anciennes (la plus récente d'abord). Une discussion vide ne se garde pas.
 export function archiver(f: Fil | null) {
   if (!f || !f.echanges.length) return;
-  const l = anciennes().filter((a) => a.id !== f.id);
+  f = clore(f).fil;
+  const l = anciennes().filter((a) => a.id !== f!.id);
   l.unshift({ id: f.id, debut: f.debut, quand: f.quand, echanges: f.echanges.slice(-MAX_ECHANGES) });
   ecrire(CLE_ANCIENNES, l.slice(0, MAX_ANCIENNES));
 }
 export function oublierAncienne(id: string) { ecrire(CLE_ANCIENNES, anciennes().filter((a) => a.id !== id)); }
 
 // La discussion en cours, relue au démarrage. Trop vieille : elle part chez les anciennes.
-export function chargerFil(now = Date.now()): Fil | null {
+// Une proposition qui attendait une réponse quand l'app s'est fermée n'a pas été faite : Echo le saura.
+export function chargerFil(now = Date.now(), qui = "La personne"): Fil | null {
   const f = lire<Fil | null>(CLE, null);
-  if (!f || typeof f !== "object" || !Array.isArray(f.echanges) || !Array.isArray(f.suite)) return null;
+  if (!propre(f) || !Array.isArray(f.suite)) { ecrire(CLE, null); return null; }
   if (now - f.quand >= REPRISE) { archiver(f); ecrire(CLE, null); return null; }
-  return f;
+  const { fil, laissee } = clore(f);
+  if (!laissee) return f;
+  const note = `${qui} n'a pas répondu à ta proposition : rien n'en a été fait.`;
+  const g = { ...fil, note: [fil.note, note].filter(Boolean).join(" ") };
+  ecrire(CLE, g);
+  return g;
 }
 export function garderFil(f: Fil | null) { ecrire(CLE, f); }
 export const nouveauFil = (now = Date.now()): Fil => ({ id: nouvelId(), debut: now, quand: now, suite: [], echanges: [] });

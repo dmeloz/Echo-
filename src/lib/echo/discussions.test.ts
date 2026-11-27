@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const stock = new Map<string, string>();
 vi.stubGlobal("localStorage", { getItem: (k: string) => stock.get(k) ?? null, setItem: (k: string, v: string) => stock.set(k, v), removeItem: (k: string) => stock.delete(k) });
-import { anciennes, archiver, chargerFil, garderFil, nouveauFil, oublierAncienne, rappelDe, REPRISE, RAPPEL, titreDe, MAX_ANCIENNES } from "./discussions";
+import { anciennes, archiver, chargerFil, clore, garderFil, nouveauFil, oublierAncienne, rappelDe, REPRISE, RAPPEL, titreDe, MAX_ANCIENNES } from "./discussions";
 
 const echange = (moi: string, echo = "ok") => ({ moi, echo });
 beforeEach(() => stock.clear());
@@ -55,5 +55,21 @@ describe("les discussions avec Echo", () => {
   it("le titre est la première phrase", () => {
     expect(titreDe({ echanges: [echange("Organise   ma journée")] })).toBe("Organise ma journée");
     expect(titreDe({ echanges: [] })).toBe("Discussion");
+  });
+  it("une proposition restée sans réponse passe à « pas fait », et Echo le saura", () => {
+    const f = { ...nouveauFil(1000), echanges: [{ moi: "rdv", echo: "je propose", actions: [{ texte: "a", etat: "fait" as const }, { texte: "b", etat: "propose" as const }] }] };
+    garderFil(f);
+    const g = chargerFil(2000, "Dany")!;
+    expect(g.echanges[0].actions!.map((a) => a.etat)).toEqual(["fait", "non"]);
+    expect(g.note).toContain("Dany n'a pas répondu");
+    expect(clore(g).laissee).toBe(false);
+    archiver(f);
+    expect(anciennes()[0].echanges[0].actions![1].etat).toBe("non");
+  });
+  it("une entrée d'une autre forme est écartée", () => {
+    stock.set("echo-discussion", JSON.stringify({ id: "a", debut: 1, quand: 1, suite: [], echanges: [{ moi: "x" }] }));
+    expect(chargerFil(2)).toBeNull();
+    stock.set("echo-discussions", JSON.stringify([{ id: "b", debut: 1, quand: "hier", echanges: [] }, { id: "c", debut: 1, quand: 1, echanges: [{ moi: "a", echo: "b" }] }]));
+    expect(anciennes().map((a) => a.id)).toEqual(["c"]);
   });
 });

@@ -1,5 +1,5 @@
 import { Check, Mic, Plus, X } from "pulsoicon-react";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { toast } from "sonner";
 import { trembler } from "../lib/gestes";
 import { comprendre, type Compris } from "../lib/comprendre";
@@ -26,8 +26,10 @@ type EtatEcho = null | { etat: "pense"; phrase: string } | { etat: "propose"; r:
 // Elle reste « en cours » 15 minutes après le dernier message ; ensuite elle part chez les anciennes, qu'on peut relire et reprendre.
 // note : ce que l'app dira à Echo avant la phrase suivante (oui / non à sa dernière proposition).
 let filGarde: Fil | null | undefined;
-const filActuel = () => {
-  if (filGarde === undefined) filGarde = chargerFil();
+// Après « Nouvelle », la phrase suivante part sans rappel de la discussion quittée.
+let sansRappel = false;
+const filActuel = (qui?: string) => {
+  if (filGarde === undefined) filGarde = chargerFil(Date.now(), qui);
   if (filGarde && Date.now() - filGarde.quand >= REPRISE) { archiver(filGarde); garderFil(null); filGarde = null; }
   return filGarde;
 };
@@ -48,32 +50,43 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const [echo, setEcho] = useState<EtatEcho>(null);
   const [tache, setTache] = useState(false); // « Plutôt une tâche » : la phrase n'est pas pour un module
   const [simple, setSimple] = useState(false); // Echo n'a pas répondu : on reste en mode simple pour cette phrase
-  const [filEtat, setFilEtat] = useState<Fil | null>(filActuel);
+  const [filEtat, setFilEtat] = useState<Fil | null>(() => filActuel(noms[proprio]));
   const fil = filEtat && Date.now() - filEtat.quand < REPRISE ? filEtat : null; // passé 15 minutes, la discussion repart à neuf
   const setFil = (f: Fil | null) => { filGarde = f; garderFil(f); setFilEtat(f); };
   // Les anciennes discussions : la liste, ou l'une d'elles ouverte pour la relire.
   const [vueAnciennes, setVueAnciennes] = useState<null | "liste" | Ancienne>(null);
+  // Relue seulement quand la discussion change ou qu'on ouvre la liste (pas à chaque lettre tapée).
+  const liste = useMemo(() => anciennes(), [fil?.id, vueAnciennes]); // eslint-disable-line react-hooks/exhaustive-deps
+  const texteRef = useRef(texte);
+  texteRef.current = texte;
   // Une note pour Echo, ajoutée à celles qui attendent la phrase suivante.
   const noter = (note: string) => {
     const f = filActuel() ?? nouveauFil();
     setFil({ ...f, quand: Date.now(), note: [f.note, note].filter(Boolean).join(" ") });
   };
-  // Ce qu'est devenue la proposition du dernier échange (oui, non…).
+  // Les lignes d'action d'un échange (repéré par la discussion et sa place), si la discussion est toujours là.
+  const poserActions = (id: string, i: number, actions: (a: NonNullable<Echange["actions"]>) => NonNullable<Echange["actions"]>) => {
+    const f = filActuel();
+    const x = f?.id === id ? f.echanges[i] : undefined;
+    if (!f || !x?.actions) return;
+    setFil({ ...f, echanges: f.echanges.map((e, j) => (j === i ? { ...x, actions: actions(x.actions!) } : e)) });
+  };
+  // Ce qu'est devenue la proposition du dernier échange (non, modifiée à la main…).
   const marquer = (etat: EtatAction) => {
     const f = filActuel();
-    const der = f?.echanges.at(-1);
-    if (!f || !der?.actions?.some((a) => a.etat === "propose")) return;
-    const actions = der.actions.map((a) => (a.etat === "propose" ? { ...a, etat } : a));
-    setFil({ ...f, echanges: [...f.echanges.slice(0, -1), { ...der, actions }] });
+    if (f?.echanges.length) poserActions(f.id, f.echanges.length - 1, (l) => l.map((a) => (a.etat === "propose" ? { ...a, etat } : a)));
   };
-  const nouvelleDiscussion = () => { demande.current++; archiver(filActuel()); setFil(null); setEcho(null); setVueAnciennes(null); };
+  const nouvelleDiscussion = () => { demande.current++; archiver(filActuel()); sansRappel = true; setFil(null); setEcho(null); setVueAnciennes(null); };
   const reprendreAncienne = (a: Ancienne) => {
-    demande.current++;
+    setVueAnciennes(null);
     const f = filActuel();
-    if (f?.id !== a.id) archiver(f);
+    if (f?.id === a.id) return; // c'est déjà la discussion en cours (plus récente que sa copie)
+    demande.current++;
+    archiver(f);
+    oublierAncienne(a.id); // elle redevient la discussion en cours ; elle sera rangée de nouveau ensuite
     // Echo reçoit un rappel de cette discussion avec la phrase suivante ; l'écran la remontre telle quelle.
     setFil({ ...nouveauFil(), id: a.id, debut: a.debut, echanges: a.echanges, note: rappelDe(a, Date.now(), 1500, true) });
-    setEcho(null); setVueAnciennes(null);
+    setEcho(null);
     saisie.current?.focus({ preventScroll: true });
   };
   const demande = useRef(0);
@@ -96,12 +109,11 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
     if (d && !vueAnciennes) d.scrollTop = d.scrollHeight;
   }, [nbEchanges, echo?.etat, vueAnciennes, ecran]);
 
-  // On peut écrire la phrase suivante pendant qu'Echo réfléchit ; elle partira quand il aura répondu.
+  // On peut préparer la phrase suivante pendant qu'Echo réfléchit ; on l'envoie quand il a répondu.
   const setTexte = (t: string) => { onTexte(t); setSimple(false); setTache(false); };
   const annulerEcho = () => { demande.current++; setEcho(null); };
   const dire = (qui: string, quoi: string) => `${qui} ${quoi}`;
   const refuser = (r: ResultatEcho) => { if (r.aConfirmer.length) { marquer("non"); noter(dire(noms[proprio], "a dit non : rien de ta proposition n'a été fait.")); } annulerEcho(); };
-  const fermer = () => { annulerEcho(); onTexte(""); onRanger(); };
   // Echo s'est arrêté en route après avoir fait des choses : il le saura à la phrase suivante.
   const noterFaites = (faites: Faite[]) => noter(`ta réponse précédente a été interrompue, mais ceci a déjà été fait : ${faites.map((f) => f.ligne).join(" ; ")}.`);
 
@@ -125,14 +137,31 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   });
 
   const confirmer = (r: ResultatEcho, phrase: string) => {
+    // L'échange de cette proposition (le dernier), pour y écrire ce qui a vraiment été fait.
+    const f = filActuel();
+    const id = f?.id ?? "", i = (f?.echanges.length ?? 0) - 1;
+    const avant = f?.echanges[i]?.actions;
+    // Les propositions passent à « fait » tout de suite ; s'il en manque, la suite passe à « pas fait ».
+    const resultat = (n: number) => poserActions(id, i, (l) => { let k = 0; return l.map((a) => (a.etat === "propose" ? { ...a, etat: k++ < n ? "oui" as const : "non" as const } : a)); });
+    resultat(r.aConfirmer.length);
+    annulerEcho();
+    const num = demande.current;
     const enCours = (async () => {
       const faites: Faite[] = [];
       const fait = () => noter(dire(noms[proprio], `a dit oui. Fait : ${faites.map((f) => f.ligne).join(" ; ")}.${faites.length < r.aConfirmer.length ? " Le reste n'a pas pu être fait." : ""}`));
       try {
         for (const a of r.aConfirmer) faites.push(await executer(a, phrase, ctx()));
-      } catch (e) {
-        // Rien de fait : la phrase revient (enregistrer). Une partie faite : on ne la refait pas, on propose de l'annuler.
-        if (!faites.length) { noter(dire(noms[proprio], "a dit oui, mais l'app n'a rien pu faire.")); throw e; }
+      } catch {
+        if (!faites.length) {
+          // Rien de fait : la proposition revient telle quelle, avec ses boutons, pour réessayer.
+          if (avant) poserActions(id, i, () => avant);
+          if (num === demande.current) setEcho({ etat: "propose", r, phrase });
+          trembler(boite.current);
+          toast("Pas enregistré. Le téléphone manque peut-être de place : libère un peu de stockage, puis réessaie.", { duration: 7000 });
+          return;
+        }
+        // Une partie faite : on ne la refait pas, on propose de l'annuler.
+        resultat(faites.length);
         fait();
         proposerAnnuler(faites, `${faites.length} sur ${r.aConfirmer.length} fait${faites.length > 1 ? "s" : ""}, la suite n'a pas marché`);
         return;
@@ -141,14 +170,6 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
       proposerAnnuler(faites, faites.length > 1 ? `${faites.length} choses faites` : "C'est fait");
     })();
     confirmation = enCours.catch(() => {});
-    // On reste dans la discussion : la proposition passe à « fait » (ou revient si rien n'a pu être fait).
-    marquer("oui");
-    annulerEcho();
-    enCours.catch(() => {
-      marquer("propose");
-      trembler(boite.current);
-      toast("Pas enregistré. Le téléphone manque peut-être de place : libère un peu de stockage, puis réessaie.", { duration: 7000 });
-    });
   };
 
   const demanderA = async () => {
@@ -162,8 +183,10 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
     await confirmation;
     if (num !== demande.current) return;
     const avant = filActuel();
-    // Une nouvelle discussion peu après la précédente : Echo en reçoit un court rappel (« et pour demain soir ? »).
-    const rappel = avant ? "" : rappelDe(anciennes()[0]);
+    // Une nouvelle discussion peu après la précédente : Echo en reçoit un court rappel (« et pour demain soir ? »),
+    // sauf si on vient de toucher « Nouvelle » pour changer de sujet.
+    const rappel = avant?.echanges.length || sansRappel ? "" : rappelDe(anciennes()[0]);
+    sansRappel = false;
     const dejaFaites: Faite[] = [];
     try {
       const r = await lancerEcho(phrase, ctx(), {
@@ -188,12 +211,12 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
       if (dejaFaites.length) {
         noterFaites(dejaFaites);
         proposerAnnuler(dejaFaites, `Echo s'est arrêté en route après ${dejaFaites.length} chose${dejaFaites.length > 1 ? "s" : ""} faite${dejaFaites.length > 1 ? "s" : ""}`);
-        if (num === demande.current) fermer();
+        if (num === demande.current) annulerEcho();
         return;
       }
       if (num !== demande.current) return;
       setEcho(null); setSimple(true);
-      onTexte(phrase);
+      if (!texteRef.current.trim()) onTexte(phrase); // la phrase revient, sans écraser ce qui a été tapé depuis
       toast(`${e instanceof ErreurEcho ? e.message : "Echo ne répond pas."} Je reprends la version simple : touche ✓ pour ajouter.`, { duration: 6000 });
     }
   };
@@ -202,7 +225,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
     <form id="barre-ecriture" className={`barre-bas${ouverte ? "" : " ferme"}`} inert={!ouverte} autoComplete="off" onSubmit={(e) => {
       e.preventDefault();
       if (!r) return;
-      if (echo?.etat === "pense") return;
+      if (echo?.etat === "pense") { trembler(boite.current); toast("Echo réfléchit encore : envoie ta phrase quand il a répondu.", { duration: 3000 }); return; }
       if (pour) { enregistrer(pour.faire, texte); return; }
       if (parEcho && navigator.onLine) {
         if (tropLong) { trembler(boite.current); toast(`C'est trop long pour Echo (${v.length} signes, ${MAX_PHRASE} au plus) : coupe en deux messages.`, { duration: 6000 }); return; }
@@ -217,7 +240,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
               <button type="button" className="bouton-texte" onPointerDown={(e) => e.preventDefault()} onClick={() => setVueAnciennes(vueAnciennes === "liste" ? null : "liste")}>Retour</button>
             ) : <b>Echo</b>}
             <span className="echo-tete-actions">
-              {!vueAnciennes && anciennes().length > 0 && (
+              {!vueAnciennes && liste.length > 0 && (
                 <button type="button" className="bouton-texte" onPointerDown={(e) => e.preventDefault()} onClick={() => setVueAnciennes("liste")}>Discussions</button>
               )}
               {!vueAnciennes && !!fil?.echanges.length && (
@@ -231,7 +254,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
           <div className="echo-fil" ref={defile}>
             {vueAnciennes === "liste" ? (
               <ul className="echo-anciennes">
-                {anciennes().map((a) => (
+                {liste.map((a) => (
                   <li key={a.id}>
                     <button type="button" onPointerDown={(e) => e.preventDefault()} onClick={() => setVueAnciennes(a)}>
                       <b>{titreDe(a)}</b><span>{quandDe(a.quand)} · {a.echanges.length} message{a.echanges.length > 1 ? "s" : ""}</span>
