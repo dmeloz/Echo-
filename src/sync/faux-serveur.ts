@@ -2,7 +2,7 @@
 // du client Supabase (lire avec des filtres, écrire par lots, appels de fonctions, session). Rien ne part sur le réseau.
 
 export interface LigneServeur { foyer_id: string; genre: string; cle: string; data: unknown; supprime: boolean; par: string | null; maj: string }
-type Rep = { data: unknown; error: { message: string } | null; status: number };
+type Rep = { data: unknown; error: { message: string; code?: string } | null; status: number };
 
 export function fauxServeur() {
   let horloge = Date.parse("2026-11-27T10:00:00Z");
@@ -15,6 +15,7 @@ export function fauxServeur() {
     refuser: (_l: LigneServeur) => false, // le serveur refuse cette ligne (règle de la table)
     rpc: {} as Record<string, (args: Record<string, unknown>) => unknown>,
     appels: [] as string[], // le journal des appels, pour les tests
+    juste_avant_ecriture: null as (() => void) | null, // appelé une fois, juste avant la prochaine écriture (un autre téléphone écrit entre-temps)
     // Poser une ligne comme si un autre téléphone l'avait envoyée.
     poser(genre: string, cle: string, data: unknown, par = "autre-1", supprime = false) {
       const l: LigneServeur = { foyer_id: "F", genre, cle, data: supprime ? null : data, supprime, par, maj: new Date(++horloge).toISOString() };
@@ -32,6 +33,7 @@ export function fauxServeur() {
     private de = 0;
     private nb = Infinity;
     private ecriture: LigneServeur[] | null = null;
+    private changement: Partial<LigneServeur> | null = null;
     private un = false;
     private table: string;
     constructor(table: string) { this.table = table; }
@@ -44,13 +46,21 @@ export function fauxServeur() {
     range(a: number, b: number) { this.de = a; this.nb = b - a + 1; return this; }
     single() { this.un = true; return this; }
     upsert(lignes: LigneServeur[] | Record<string, unknown>) { this.ecriture = (Array.isArray(lignes) ? lignes : [lignes]) as LigneServeur[]; return this; }
+    update(v: Partial<LigneServeur>) { this.changement = v; return this; }
     private faire(): Rep {
-      const quoi = `${this.ecriture ? "ecrire" : "lire"}:${this.table}`;
+      const quoi = `${this.ecriture ? "ecrire" : this.changement ? "changer" : "lire"}:${this.table}`;
       etat.appels.push(quoi);
       if (enPanne(quoi)) return PANNE;
+      if (this.ecriture || this.changement) { const f = etat.juste_avant_ecriture; etat.juste_avant_ecriture = null; f?.(); }
+      if (this.changement) {
+        const visees = etat.elements.filter((l) => this.filtres.every((f) => f(l as unknown as Record<string, unknown>)));
+        if (visees.some((l) => etat.refuser({ ...l, ...this.changement }))) return { data: null, error: { message: "new row violates check constraint", code: "23514" }, status: 400 };
+        for (const l of visees) etat.poser(l.genre, l.cle, this.changement.data, etat.user, !!this.changement.supprime);
+        return { data: visees.map((l) => ({ cle: l.cle })), error: null, status: 200 };
+      }
       if (this.ecriture) {
         if (this.table === "abonnements") { etat.abonnements.push(...this.ecriture as unknown as Array<Record<string, unknown>>); return { data: null, error: null, status: 201 }; }
-        if (this.ecriture.some((l) => etat.refuser(l))) return { data: null, error: { message: "new row violates check constraint" }, status: 400 };
+        if (this.ecriture.some((l) => etat.refuser(l))) return { data: null, error: { message: "new row violates check constraint", code: "23514" }, status: 400 };
         for (const l of this.ecriture) etat.poser(l.genre, l.cle, l.data, etat.user, l.supprime);
         return { data: null, error: null, status: 201 };
       }

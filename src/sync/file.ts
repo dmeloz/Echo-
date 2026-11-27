@@ -25,10 +25,14 @@ export function lireBases(): Bases {
 }
 // Les genres fusionnés champ par champ : les tâches, et les modules qui le demandent (genres.ts).
 export const fusionnable = (cle: string) => { const g = cle.slice(0, cle.indexOf(":")); return g === "tache" || !!GENRES[g]?.fusion; };
+// Les bases ne sont gardées que si ce téléphone est dans un foyer (le moteur le dit) : seul, il n'y a personne avec qui fusionner,
+// et elles s'entasseraient sans jamais être retirées.
+let avecBases = false;
+export const garderBases = (oui: boolean) => { avecBases = oui; };
 // base absente : on l'oublie. Sans base (ou stockage plein), la ligne part comme avant : la dernière arrivée gagne.
 export function poserBase(cle: string, base?: unknown) {
   const b = lireBases();
-  if (base === undefined || base === null || !fusionnable(cle)) { if (!(cle in b)) return; delete b[cle]; }
+  if (base === undefined || base === null || !avecBases || !fusionnable(cle)) { if (!(cle in b)) return; delete b[cle]; }
   else b[cle] = base;
   try { localStorage.setItem(BASES, JSON.stringify(b)); } catch { /* rien */ }
 }
@@ -46,6 +50,11 @@ export function retirer(envoyes: File) {
   const f = lireFile();
   for (const [c, n] of Object.entries(envoyes)) if (f[c] === n) { delete f[c]; poserBase(c); }
   ecrire(f);
+}
+// En entrant dans un autre foyer : ce qui attendait ne vaut plus rien (les clés peuvent même avoir changé de place),
+// c'est « partager » qui décide de ce qui part.
+export function viderFile() {
+  try { localStorage.removeItem(CLE); localStorage.removeItem(BASES); } catch { /* rien */ }
 }
 export const surChangement = (fn: () => void) => { abonnes.add(fn); return () => abonnes.delete(fn); };
 

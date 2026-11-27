@@ -35,7 +35,7 @@ beforeEach(async () => {
   await calme();
   await Promise.all(db.tables.map((t) => t.clear()));
   stock.clear(); toast.mockClear();
-  etat.elements.length = 0; etat.membres.length = 0; etat.appels.length = 0;
+  etat.elements.length = 0; etat.membres.length = 0; etat.appels.length = 0; etat.juste_avant_ecriture = null;
   etat.panne = false; etat.refuser = () => false; etat.user = "moi-1"; etat.rpc = {};
   etat.membres.push({ foyer_id: "F", user_id: "autre-1", prenom: "Sarah", place: "elle" });
 });
@@ -238,6 +238,50 @@ describe("deux personnes changent la même tâche en même temps", () => {
     await synchro();
     expect(etat.lire("tache", "a")).toMatchObject({ supprime: false, data: { note: "Urgent" } });
     expect(etat.lire("tache", "b")?.supprime).toBe(true);
+  });
+
+  it("l'autre écrit juste entre la lecture et l'envoi : rien n'est écrasé, la fusion est refaite", async () => {
+    await dansLeFoyer();
+    etat.poser("tache", "a", tache("a"));
+    await synchro();
+    await db.taches.update("a", { titre: "Pain aux noix" });
+    etat.juste_avant_ecriture = () => etat.poser("tache", "a", tache("a", { note: "Pour samedi" }));
+    await synchro();
+    await new Promise((r) => setTimeout(r, 400)); await calme(); // le deuxième passage part tout seul
+    expect(etat.lire("tache", "a")?.data).toMatchObject({ titre: "Pain aux noix", note: "Pour samedi" });
+    expect(await db.taches.get("a")).toMatchObject({ titre: "Pain aux noix", note: "Pour samedi" });
+    expect(lireFile()).toEqual({});
+  });
+
+  it("un envoi arrivé mais dont la réponse s'est perdue n'est pas pris pour un changement de l'autre", async () => {
+    await dansLeFoyer();
+    etat.poser("tache", "a", tache("a"));
+    await synchro();
+    await db.taches.update("a", { titre: "Pain aux noix" }); // la base reste « Pain »…
+    etat.poser("tache", "a", tache("a", { titre: "Pain aux noix" }), "moi-1"); // …mais le foyer a déjà reçu ce changement, de ce téléphone
+    await db.taches.delete("a");
+    await synchro();
+    expect(etat.lire("tache", "a")?.supprime).toBe(true);
+    expect(await db.taches.get("a")).toBeUndefined();
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it("seul, sans foyer, le téléphone ne garde pas de bases ; en entrant dans un foyer, sa vieille file ne part pas", async () => {
+    await demarrer(); // pas de foyer
+    await db.horaires.put({ qui: "moi", jour: "2026-12-01", code: "C1" });
+    await db.taches.put(tache("t"));
+    await db.taches.update("t", { note: "x" });
+    expect(lireBases()).toEqual({});
+    expect(Object.keys(lireFile())).toContain("horaire:moi|2026-12-01");
+    // Il rejoint le foyer à la place « elle » : son horaire devient « elle|… », et celui de l'autre (« moi|… ») n'est pas effacé.
+    await db.reglages.put({ cle: "proprio", valeur: "moi" });
+    etat.poser("horaire", "moi|2026-12-01", { qui: "moi", jour: "2026-12-01", code: "C6" });
+    etat.rpc.rejoindre_foyer = () => [{ foyer: "F", place: "elle" }];
+    await rejoindreFoyer("123456", "Dany");
+    await calme();
+    expect(etat.lire("horaire", "moi|2026-12-01")).toMatchObject({ supprime: false, data: { code: "C6" } });
+    expect(etat.lire("horaire", "elle|2026-12-01")).toMatchObject({ supprime: false, data: { code: "C1" } });
+    expect(lireFile()).toEqual({});
   });
 
   it("un article de courses : l'un le coche, l'autre change la quantité", async () => {

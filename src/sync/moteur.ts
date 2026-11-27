@@ -9,7 +9,7 @@ import { supa } from "./client";
 import { autrePrenom } from "../lib/types";
 import { GENRES, TABLES_MODULES } from "./genres";
 import { annoncer, motDeLAutre } from "../lib/echo/discussions";
-import { cleHoraire, lireBases, lireFile, marquerDistante, noter, poserBase, retirer, surChangement } from "./file";
+import { cleHoraire, garderBases, lireBases, lireFile, marquerDistante, noter, poserBase, retirer, surChangement, viderFile } from "./file";
 import { fusionner3, pareil } from "./fusion";
 import { rattacherRappels } from "../data/rappels";
 
@@ -150,6 +150,9 @@ async function entrer(foyerId: string, place: Personne, userId: string) {
     }
     await db.reglages.bulkPut([{ cle: "proprio", valeur: place }, { cle: "foyer", valeur: { id: foyerId, userId } }, { cle: A_PARTAGER, valeur: { memeFoyer } }]);
   });
+  // Un autre foyer (ou le premier) : la file d'avant ne vaut plus rien. Ses clés datent d'avant l'échange des places
+  // (« horaire:moi|… » effacerait l'horaire de l'autre) et elle passerait devant « le foyer gagne ». C'est partager qui décide.
+  if (!memeFoyer) viderFile();
   try { localStorage.removeItem(CURSEUR); } catch { /* rien */ }
   await demarrer();
 }
@@ -219,8 +222,9 @@ type Envoi = NonNullable<Awaited<ReturnType<typeof lireLigne>>>;
 // Une ligne refusée par le serveur reste dans la file (elle n'est pas écrasée par ce qui arrive), mais n'est renvoyée
 // qu'après un nouveau changement, ou au prochain lancement d'Echo : elle ne bloque plus les autres.
 const refusees = new Map<string, number>();
-// Le serveur refuse la ligne elle-même (donnée qu'il n'accepte pas) : ce n'est ni le réseau, ni la connexion du téléphone.
-const estRefus = (statut: number) => statut >= 400 && statut < 500 && ![401, 403, 408, 429].includes(statut);
+// Le serveur refuse la ligne elle-même : une règle de la table (codes Postgres 22… et 23…) ou une ligne trop grosse (413).
+// Toute autre erreur (réseau, connexion, serveur qui se recharge) est une panne : on ne trie rien, on réessaiera.
+const estRefus = (e: { code?: string }, statut: number) => statut === 413 || /^2[23]/.test(e.code ?? "");
 
 // Envoie un lot. S'il est refusé, on le coupe en deux pour trouver les lignes refusées : les autres partent quand même.
 // Rend les lignes refusées. Une panne (réseau, serveur, connexion) lance une erreur : rien n'est retiré de la file.
@@ -228,16 +232,31 @@ async function pousser(lignes: Envoi[]): Promise<Envoi[]> {
   if (!lignes.length) return [];
   const { error, status } = await supa.from("elements").upsert(lignes, { onConflict: "foyer_id,genre,cle" });
   if (!error) return [];
-  if (!estRefus(status)) throw error;
+  if (!estRefus(error, status)) throw error;
   if (lignes.length === 1) { console.warn("[Echo synchro] ligne refusée par le serveur :", lignes[0].genre, error.message); return lignes; }
   const milieu = lignes.length >> 1;
   return [...(await pousser(lignes.slice(0, milieu))), ...(await pousser(lignes.slice(milieu)))];
 }
 
+// Remplace une ligne que le foyer a déjà, seulement si elle n'a pas bougé depuis qu'on l'a lue (maj = l'heure lue).
+// « changee » : l'autre a écrit entre la lecture et l'envoi. Rien n'est écrit, on relira et on refusionnera au passage suivant.
+async function remplacer(l: Envoi, maj: string): Promise<"ok" | "changee" | "refus"> {
+  const { data, error, status } = await supa.from("elements").update({ data: l.data, supprime: l.supprime })
+    .eq("foyer_id", l.foyer_id).eq("genre", l.genre).eq("cle", l.cle).eq("maj", maj).select("cle");
+  if (error) {
+    if (!estRefus(error, status)) throw error;
+    console.warn("[Echo synchro] ligne refusée par le serveur :", l.genre, error.message);
+    return "refus";
+  }
+  return data.length ? "ok" : "changee";
+}
+// Combien de fois de suite une ligne a bougé pendant l'envoi. Après 3, elle part sans condition : mieux vaut « la dernière gagne » qu'une ligne qui ne part jamais.
+const bougees = new Map<string, number>();
+
 /* ---------- Deux changements sur la même ligne : fusion champ par champ ---------- */
 
 type Obj = Record<string, unknown>;
-type Distante = { data: unknown; supprime: boolean; par: string | null };
+type Distante = { data: unknown; supprime: boolean; par: string | null; maj: string };
 type Conflit = { genre: string; nom: string; par: string | null; champs: string[] | null }; // champs null : effacée ici, gardée
 const couper = (c: string): [string, string] => { const i = c.indexOf(":"); return [c.slice(0, i), c.slice(i + 1)]; };
 const modele = (genre: string): { table: Table; cle: string; nettoyer: (x: unknown) => unknown } | undefined =>
@@ -248,7 +267,7 @@ async function lireDistantes(cles: string[]): Promise<Map<string, Distante>> {
   const out = new Map<string, Distante>(), parGenre = new Map<string, string[]>();
   for (const c of cles) { const [genre, cle] = couper(c); parGenre.set(genre, [...(parGenre.get(genre) ?? []), cle]); }
   for (const [genre, ks] of parGenre) for (let i = 0; i < ks.length; i += 100) {
-    const { data, error } = await supa.from("elements").select("cle, data, supprime, par").eq("foyer_id", foyer!.id).eq("genre", genre).in("cle", ks.slice(i, i + 100));
+    const { data, error } = await supa.from("elements").select("cle, data, supprime, par, maj").eq("foyer_id", foyer!.id).eq("genre", genre).in("cle", ks.slice(i, i + 100));
     if (error) throw error;
     for (const l of data) out.set(`${genre}:${l.cle}`, l);
   }
@@ -262,17 +281,19 @@ async function accorder(c: string, base: unknown, d: Distante): Promise<{ garde:
   if (!m) return { garde: false };
   const la = d.supprime ? null : (m.nettoyer(d.data) as Obj | null), b = m.nettoyer(base) as Obj | null;
   // L'autre n'a rien changé, ou a supprimé la ligne : ce qui a été fait ici part tel quel.
-  if (!la || !b || la[m.cle] !== cle || pareil(la, b)) return { garde: false };
+  // Pareil si la dernière écriture au foyer est la nôtre (un envoi arrivé, mais dont la réponse s'est perdue) : ce n'est pas « l'autre ».
+  if (!la || !b || la[m.cle] !== cle || d.par === foyer?.userId || pareil(la, b)) return { garde: false };
   const nom = String(la.titre ?? la.nom ?? "");
-  const ici = (await m.table.get(cle)) as Obj | undefined;
-  if (!ici) {
-    // Effacée ici pendant que l'autre la changeait : rien n'est perdu, sa version revient. C'est une écriture d'ici
-    // (elle repasse par la file, et un événement repart vers iCloud) ; la base devient la version du foyer.
-    await db.transaction("rw", [m.table, db.corbeille], async () => {
-      if (await m.table.get(cle)) return;
-      await m.table.put(la);
-      if (genre === "tache") await db.corbeille.delete(cle);
-    });
+  // Effacée ici pendant que l'autre la changeait : rien n'est perdu, sa version revient. C'est une écriture d'ici
+  // (elle repasse par la file, et un événement repart vers iCloud) ; la base devient la version du foyer.
+  let revenue = false;
+  await db.transaction("rw", [m.table, db.corbeille], async () => {
+    if (await m.table.get(cle)) return; // elle est là (ou revenue entre-temps, « Annuler ») : fusion normale, plus bas
+    await m.table.put(la);
+    if (genre === "tache") await db.corbeille.delete(cle);
+    revenue = true;
+  });
+  if (revenue) {
     poserBase(c, la);
     return { garde: true, conflit: { genre, nom, par: d.par, champs: null } };
   }
@@ -329,15 +350,29 @@ async function envoyer() {
         if (r.conflit) conflits.push(r.conflit);
       }
       const lignes = (await Promise.all(lot.filter((c) => !gardees.has(c)).map(lireLigne))).filter((l) => l !== null);
-      const refus = new Set((await pousser(lignes)).map((l) => `${l.genre}:${l.cle}`));
+      // Une ligne que le foyer a déjà n'est remplacée que si elle n'a pas bougé depuis la lecture ; les autres partent en un lot.
+      const cleDe = (l: Envoi) => `${l.genre}:${l.cle}`;
+      const lues = lignes.filter((l) => distantes.has(cleDe(l)) && (bougees.get(cleDe(l)) ?? 0) < 3);
+      const refus = new Set((await pousser(lignes.filter((l) => !lues.includes(l)))).map(cleDe));
+      const changees = new Set<string>();
+      for (let j = 0; j < lues.length; j += 8) {
+        await Promise.all(lues.slice(j, j + 8).map(async (l) => {
+          const c = cleDe(l), r = await remplacer(l, distantes.get(c)!.maj);
+          if (r === "refus") refus.add(c);
+          else if (r === "changee") { changees.add(c); bougees.set(c, (bougees.get(c) ?? 0) + 1); }
+        }));
+      }
       for (const c of refus) refusees.set(c, file[c]);
-      // Encore changée pendant l'envoi : elle reste dans la file, et sa base devient ce qui vient de partir.
+      // Encore changée ici pendant l'envoi : elle reste dans la file, et sa base devient ce qui vient de partir.
       const apres = lireFile();
       for (const l of lignes) {
-        const c = `${l.genre}:${l.cle}`;
-        if (!refus.has(c) && apres[c] !== file[c]) poserBase(c, l.supprime ? undefined : l.data);
+        const c = cleDe(l);
+        if (refus.has(c) || changees.has(c)) continue;
+        bougees.delete(c);
+        if (apres[c] !== file[c]) poserBase(c, l.supprime ? undefined : l.data);
       }
-      retirer(Object.fromEntries(lot.filter((c) => !refus.has(c) && !gardees.has(c)).map((c) => [c, file[c]])));
+      retirer(Object.fromEntries(lot.filter((c) => !refus.has(c) && !gardees.has(c) && !changees.has(c)).map((c) => [c, file[c]])));
+      if (changees.size) bientot(envoyer, 300);
     }
   } finally {
     if (conflits.length) await direConflits(conflits);
@@ -451,11 +486,10 @@ async function chargerMembres() {
   await db.reglages.bulkPut([{ cle: "membres", valeur: membres }, { cle: "noms", valeur: noms }]);
 }
 
-// Un envoi qui échoue n'empêche pas de recevoir (ni l'inverse).
+// Une étape qui échoue n'empêche pas les suivantes (sauf recevoir, qui attend que partager ait réussi).
 const synchroniser = () => enFile(async () => {
-  await partager();
   const rate: unknown[] = [];
-  for (const etape of [envoyer, recevoir, chargerMembres]) await etape().catch((e) => rate.push(e));
+  for (const etape of [partager, envoyer, recevoir, chargerMembres]) await etape().catch((e) => rate.push(e));
   if (rate.length) throw rate[0];
 });
 
@@ -463,6 +497,7 @@ const synchroniser = () => enFile(async () => {
 
 export async function demarrer() {
   foyer = await lireFoyer();
+  garderBases(!!foyer);
   if (!foyer) return;
   const { data } = await supa.auth.getSession();
   if (!data.session) return; // plus connecté : les Réglages proposent de reconnecter ce téléphone
