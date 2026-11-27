@@ -26,8 +26,8 @@ export function relireSiNouveauxGenres(genres = Object.keys(GENRES)) {
   const liste = [...genres].sort().join(",");
   try {
     if (localStorage.getItem(CONNUS) === liste) return false;
+    localStorage.setItem(CONNUS, liste); // d'abord la liste : si elle ne peut pas être gardée, on ne relit pas tout à chaque fois
     localStorage.removeItem(CURSEUR);
-    localStorage.setItem(CONNUS, liste);
     return true;
   } catch { return false; }
 }
