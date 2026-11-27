@@ -31,7 +31,7 @@ Règles :
 | Module | État |
 | --- | --- |
 | Agenda (id planning) | construit : aujourd'hui et les six jours suivants, vue Jour et vue Semaine, idée pour alléger le jour le plus chargé. Il lit les tâches de la base (pas de table à lui). |
-| Cuisine | lot 1 construit (courses) : voir « Cuisine » plus bas. Les repas proposés par Echo, le batch cooking et le stock par ticket viennent ensuite. |
+| Cuisine | lots 1 (courses) et 2 (semaine proposée par Echo) construits : voir « Cuisine » plus bas. Le batch cooking et le stock par ticket viennent ensuite. |
 | Maison, Budget | pas encore construits |
 
 ## Ajouter un module
@@ -70,4 +70,12 @@ Page à trois parties : Semaine, Courses, Stock (elle s'ouvre sur Courses le ven
 - **Goûts** : questionnaire en popup à la première ouverture, par personne (`cuisine_gouts`), modifiable dans Réglages → Cuisine. Pas de porc pour le foyer.
 - **Semaine** et **Stock** : formes simples, à la main, en attendant les lots suivants.
 - **Synchro** : les tables `cuisine_*` partent au foyer par `src/sync/genres.ts` (genres `course`, `habitude`, `repas`, `stock`, `gout` de la table `elements`). La migration `20261127090000_cuisine.sql` doit être appliquée au projet « echo » avant la mise en ligne.
-- Pas encore construits (donc absents de l'écran) : code-barres, photo du ticket, plusieurs magasins, repas proposés par Echo, batch cooking.
+- Pas encore construits (donc absents de l'écran) : code-barres, photo du ticket, plusieurs magasins, batch cooking, livre de recettes.
+
+## Cuisine · lot 2, la semaine proposée par Echo (2026-11-27)
+
+- **Semaine** : « Cette semaine » ou « La prochaine » (ouverte du vendredi au dimanche). Un jour = une ligne ; toucher un jour montre les portions du soir, la gamelle, les ingrédients, et « Changer », « Écrire », « Retirer ».
+- **« Prévoir ma semaine »** : l'app calcule les besoins (`besoins` dans `donnees.ts`) à partir des horaires : 2 portions le soir, 1 quand quelqu'un travaille après 20 h, et une gamelle le midi pour la personne aux horaires fixes. Elle envoie à la fonction serveur `cuisine` les jours à prévoir (lundi à vendredi, pas encore passés, sans repas), les goûts, le stock, les plats récents. Samedi et dimanche restent libres.
+- La fonction `cuisine` (`supabase/functions/cuisine/`, Claude Haiku 5.5, mêmes droits et compteur que `echo`) renvoie un plat par jour, ses ingrédients, s'il vient du congélateur (jeudi, vendredi) et la gamelle. Jamais de porc : c'est dans la consigne et vérifié à la sortie.
+- Les repas reçus sont une **proposition** (`propose: true`, barre « Proposition d'Echo ») jusqu'à **Valider**. Valider ajoute aux courses les ingrédients qui ne sont pas au stock (`manquants`), avec « Annuler ». « Changer » redemande un seul jour.
+- Secret nécessaire : `ANTHROPIC_API_KEY` (le même que pour `echo`). Sans lui, l'app le dit et on peut toujours écrire les repas à la main.

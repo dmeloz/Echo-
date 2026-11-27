@@ -25,7 +25,9 @@ export type Auteur = Personne | "echo"; // « echo » = un achat habituel remis 
 export interface Article { id: string; nom: string; qte: string; rayon: Rayon; par: Auteur; fait: number | null; faitPar?: Personne; cree: number }
 // Ce qu'Echo retient d'un produit : son rayon, et quand on l'a acheté (pour le remettre tout seul).
 export interface Habitude { cle: string; nom: string; qte: string; rayon: Rayon; achats: number[]; refus: number; pause?: number }
-export interface Repas { jour: string; plat: string }
+// Le repas du soir d'un jour. Quand Echo le propose : ses ingrédients, s'il vient du congélateur, la gamelle du midi.
+// propose = pas encore validé (la barre « Proposition d'Echo »).
+export interface Repas { jour: string; plat: string; ingredients?: Lu[]; congele?: boolean; gamelle?: string; propose?: boolean }
 export type Lieu = "frigo" | "congelateur" | "placard" | "maison";
 export const LIEUX: Array<{ id: Lieu; nom: string }> = [
   { id: "frigo", nom: "Frigo" }, { id: "congelateur", nom: "Congélateur" }, { id: "placard", nom: "Placard" }, { id: "maison", nom: "Maison" },
@@ -157,6 +159,32 @@ export function apresRefus(h: Habitude, now: number): Habitude {
   return { ...h, refus, pause: now + (rythme(h.achats) ?? 7 * JOUR) * refus };
 }
 
+/* ---------- La semaine de repas ---------- */
+
+// Ce dont le foyer a besoin un jour donné : combien de portions le soir (une de moins par personne qui travaille le soir),
+// et si quelqu'un emporte une gamelle le midi (la personne aux horaires fixes, les jours où elle travaille).
+export interface Besoin { jour: string; soir: number; absents: Personne[]; gamelle: Personne | null }
+export interface Travail { qui: Personne; jour: string; plages: Array<[string, string]>; fixe: boolean }
+export function besoins(jours: string[], travail: Travail[]): Besoin[] {
+  return jours.map((jour) => {
+    const duJour = travail.filter((t) => t.jour === jour);
+    const absents = duJour.filter((t) => t.plages.some(([, fin]) => fin >= "20:00")).map((t) => t.qui);
+    const gamelle = duJour.find((t) => t.fixe && t.plages.some(([debut, fin]) => debut <= "12:00" && fin >= "13:00"))?.qui ?? null;
+    return { jour, soir: Math.max(0, 2 - new Set(absents).size), absents: [...new Set(absents)], gamelle };
+  });
+}
+
+// Ce qu'il faut acheter pour les repas validés : leurs ingrédients, sans ce qui est déjà au stock, chaque produit une fois.
+export function manquants(repas: Repas[], stock: Produit[]): Lu[] {
+  const auStock = new Set(stock.map((p) => cleDe(p.nom)));
+  const vus = new Map<string, Lu>();
+  for (const r of repas) for (const i of r.ingredients ?? []) {
+    const cle = cleDe(i.nom);
+    if (cle && !auStock.has(cle) && !vus.has(cle)) vus.set(cle, { nom: i.nom.charAt(0).toUpperCase() + i.nom.slice(1), qte: i.qte });
+  }
+  return [...vus.values()];
+}
+
 /* ---------- Regrouper pour l'écran ---------- */
 
 export interface Groupe { rayon: Rayon; nom: string; articles: Article[]; reste: number }
@@ -192,8 +220,11 @@ export function nettoyerHabitude(x: unknown): Habitude | null {
   return { cle, nom, qte: txt(o.qte, 20), rayon: estRayon(o.rayon) ? o.rayon : "autre", achats, refus: Math.max(0, Math.min(9, nb(o.refus) ?? 0)), ...(pause ? { pause } : {}) };
 }
 export function nettoyerRepas(x: unknown): Repas | null {
-  const o = obj(x), jour = txt(o.jour, 10), plat = txt(o.plat, 80).trim();
-  return JOUR_ISO.test(jour) && plat ? { jour, plat } : null;
+  const o = obj(x), jour = txt(o.jour, 10), plat = txt(o.plat, 80).trim(), gamelle = txt(o.gamelle, 80).trim();
+  if (!JOUR_ISO.test(jour) || !plat) return null;
+  const ingredients = (Array.isArray(o.ingredients) ? o.ingredients : []).slice(0, 20)
+    .map((i) => ({ nom: txt(obj(i).nom, 60).trim(), qte: txt(obj(i).qte, 20).trim() })).filter((i) => i.nom);
+  return { jour, plat, ...(ingredients.length ? { ingredients } : {}), ...(o.congele === true ? { congele: true } : {}), ...(gamelle ? { gamelle } : {}), ...(o.propose === true ? { propose: true } : {}) };
 }
 export function nettoyerProduit(x: unknown): Produit | null {
   const o = obj(x), id = txt(o.id, 80), nom = txt(o.nom, 60).trim(), avant = txt(o.avant, 10);

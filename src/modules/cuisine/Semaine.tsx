@@ -1,41 +1,134 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { Snowflake, Sparkles, X } from "pulsoicon-react";
 import { useState } from "react";
+import { toast } from "sonner";
 import { db } from "../../data/db";
+import { useHoraires } from "../../data/hooks";
 import { auJour, plusJours } from "../../lib/dates";
 import type { ContexteModule } from "../contrat";
 import { poserRepas } from "./actions";
+import { besoins, type Besoin, type Repas } from "./donnees";
+import { ErreurSemaine, changerRepas, proposerSemaine, refuserProposition, validerSemaine, versTravail } from "./semaineEcho";
 
-// La semaine du lundi au dimanche. Lot 1 : on écrit soi-même le repas du soir, un jour = une ligne.
-// (La proposition d'Echo arrive avec le lot 2.)
-export function Semaine({ now }: ContexteModule) {
+const court = (j: string, o: Intl.DateTimeFormatOptions) => new Date(j + "T12:00:00").toLocaleDateString("fr-FR", o).replace(".", "");
+
+// La semaine du lundi au dimanche, un jour = une ligne. « Prévoir ma semaine » : Echo propose les repas du soir
+// selon les horaires, les goûts et le stock ; on change un plat ou on valide, et ce qu'il manque part aux courses.
+export function Semaine({ now, noms, proprio }: ContexteModule) {
   const today = auJour(0, now);
   const lundi = plusJours(today, -((now.getDay() + 6) % 7));
-  const jours = Array.from({ length: 7 }, (_, i) => plusJours(lundi, i));
-  const repas = useLiveQuery(() => db.cuisine_repas.where("jour").between(jours[0], jours[6], true, true).toArray(), [lundi], []);
+  // Du vendredi au dimanche, on prépare la semaine qui vient : la page s'ouvre dessus.
+  const [prochaine, setProchaine] = useState(() => [5, 6, 0].includes(now.getDay()));
+  const debut = plusJours(lundi, prochaine ? 7 : 0);
+  const jours = Array.from({ length: 7 }, (_, i) => plusJours(debut, i));
+  const repas = useLiveQuery(() => db.cuisine_repas.where("jour").between(jours[0], jours[6], true, true).toArray(), [debut], [] as Repas[]);
+  const horaires = useHoraires();
+  const [ouvert, setOuvert] = useState<string | null>(null);
   const [ecrit, setEcrit] = useState<string | null>(null);
-  const court = (j: string, o: Intl.DateTimeFormatOptions) => new Date(j + "T12:00:00").toLocaleDateString("fr-FR", o).replace(".", "");
+  const [pense, setPense] = useState<"semaine" | string | null>(null); // Echo travaille : sur la semaine, ou sur un jour
+
+  const tous = besoins(jours, versTravail(horaires));
+  const besoinDe = (j: string) => tous.find((b) => b.jour === j)!;
+  const platDe = (j: string) => repas.find((r) => r.jour === j);
+  // À prévoir : les jours pas encore passés, sans repas, du lundi au vendredi (le week-end reste libre) où quelqu'un mange.
+  const aPrevoir = tous.filter((b, i) => i < 5 && b.jour >= today && !platDe(b.jour) && (b.soir > 0 || b.gamelle));
+  const proposes = repas.filter((r) => r.propose);
+  const rienDuTout = repas.length === 0;
+
+  const avecEcho = async (quoi: "semaine" | string, faire: () => Promise<unknown>) => {
+    if (pense) return;
+    setPense(quoi);
+    try { await faire(); }
+    catch (e) { toast(e instanceof ErreurSemaine ? e.message : "Echo ne répond pas pour l'instant.", { duration: 6000 }); }
+    finally { setPense(null); }
+  };
+  const prevoir = () => avecEcho("semaine", () => proposerSemaine(aPrevoir, noms, jours));
+
+  const soirDe = (b: Besoin) => {
+    if (b.soir === 0) return "Soir : personne à la maison";
+    const qui = b.absents.map((p) => (p === proprio ? "tu travailles" : `${noms[p]} travaille`)).join(", ");
+    return `Soir : ${b.soir} portion${b.soir > 1 ? "s" : ""}${qui ? `, ${qui}` : ""}`;
+  };
 
   return (
     <>
-      <div className="semaine-dates">{court(jours[0], { day: "numeric", month: "short" })} – {court(jours[6], { day: "numeric", month: "short" })} · repas du soir</div>
-      <section className="g semaine-repas">
-        {jours.map((j) => {
-          const plat = repas.find((r) => r.jour === j)?.plat ?? "";
-          return ecrit === j ? (
-            <form key={j} className="jour-repas ecrit" onSubmit={(e) => { e.preventDefault(); (e.currentTarget.elements.namedItem("plat") as HTMLInputElement).blur(); }}>
-              <label htmlFor="plat-jour" className={j === today ? "auj" : ""}>{court(j, { weekday: "short" })}</label>
-              <input id="plat-jour" name="plat" className="saisie" autoFocus defaultValue={plat} placeholder="Le repas du soir" maxLength={80} enterKeyHint="done"
-                onBlur={(e) => { if (e.target.value.trim() !== plat) poserRepas(j, e.target.value); setEcrit(null); }} />
-            </form>
-          ) : (
-            <button key={j} type="button" className="jour-repas" onClick={() => setEcrit(j)} aria-label={`${court(j, { weekday: "long" })} : ${plat || "rien de prévu"}`}>
-              <span className={j === today ? "auj" : ""}>{court(j, { weekday: "short" })}</span>
-              <b className={plat ? "" : "libre"}>{plat || "Rien de prévu"}</b>
-            </button>
-          );
-        })}
-      </section>
-      <p className="note-donnees">Touche un jour pour écrire le repas. Bientôt, Echo proposera la semaine selon vos horaires et vos goûts.</p>
+      <div className="semaine-tete">
+        <div className="vue-choix petit" role="group" aria-label="Quelle semaine">
+          <button type="button" aria-pressed={!prochaine} onClick={() => { setProchaine(false); setOuvert(null); }}>Cette semaine</button>
+          <button type="button" aria-pressed={prochaine} onClick={() => { setProchaine(true); setOuvert(null); }}>La prochaine</button>
+        </div>
+        <span>{court(jours[0], { day: "numeric", month: "short" })} – {court(jours[6], { day: "numeric", month: "short" })}</span>
+      </div>
+
+      {pense === "semaine" && (
+        <div className="g barre-echo" role="status"><span className="echo-points" aria-hidden="true"><i /><i /><i /></span><b>Echo prépare la semaine…</b></div>
+      )}
+      {!pense && proposes.length > 0 && (
+        <div className="g barre-echo">
+          <Sparkles size={18} strokeWidth={2} className="etoile" animated={false} />
+          <b>Proposition d'Echo</b>
+          <button type="button" className="rond-champ" aria-label="Refuser la proposition" onClick={() => refuserProposition(jours)}><X size={18} strokeWidth={2.2} /></button>
+          <button type="button" className="bouton petit" onClick={() => validerSemaine(jours)}>Valider</button>
+        </div>
+      )}
+      {!pense && !proposes.length && !rienDuTout && aPrevoir.length > 0 && (
+        <button type="button" className="g barre-echo lien" onClick={prevoir}>
+          <Sparkles size={18} strokeWidth={2} className="etoile" animated={false} />
+          <b>Compléter avec Echo</b><span>{aPrevoir.length} jour{aPrevoir.length > 1 ? "s" : ""} sans repas</span>
+        </button>
+      )}
+
+      {rienDuTout && !ecrit && pense !== "semaine" ? (
+        <section className="g vide">
+          <span className="vide-icone bleu" aria-hidden="true"><Sparkles size={24} strokeWidth={1.8} animated={false} /></span>
+          <h2>Rien de prévu {prochaine ? "la semaine prochaine" : "cette semaine"}</h2>
+          <p>Echo regarde vos horaires, vos goûts et ce qu'il reste à la maison, puis te propose les repas.</p>
+          {aPrevoir.length > 0 && <div className="rangee centre"><button type="button" className="bouton" onClick={prevoir}>Prévoir ma semaine</button></div>}
+          <button type="button" className="bouton-texte" onClick={() => setEcrit(jours.find((j) => j >= today) ?? jours[0])}>Je choisis moi-même</button>
+        </section>
+      ) : null}
+
+      {(!rienDuTout || ecrit || pense === "semaine") && (
+        <section className={`g semaine-repas${pense === "semaine" ? " attend" : ""}`}>
+          {jours.map((j) => {
+            const r = platDe(j), b = besoinDe(j), nom = court(j, { weekday: "short" });
+            if (ecrit === j) return (
+              <form key={j} className="jour-repas ecrit" onSubmit={(e) => { e.preventDefault(); (e.currentTarget.elements.namedItem("plat") as HTMLInputElement).blur(); }}>
+                <label htmlFor="plat-jour" className={j === today ? "auj" : ""}>{nom}</label>
+                <input id="plat-jour" name="plat" className="saisie" autoFocus defaultValue={r?.plat ?? ""} placeholder="Le repas du soir" maxLength={80} enterKeyHint="done"
+                  onBlur={(e) => { if (e.target.value.trim() !== (r?.plat ?? "")) poserRepas(j, e.target.value); setEcrit(null); }} />
+              </form>
+            );
+            if (!r) return (
+              <button key={j} type="button" className="jour-repas" onClick={() => setEcrit(j)} aria-label={`${court(j, { weekday: "long" })} : rien de prévu, écrire un repas`}>
+                <span className={j === today ? "auj" : ""}>{nom}</span><b className="libre">{b.soir === 0 ? "Personne le soir" : "Libre"}</b>
+              </button>
+            );
+            return (
+              <div key={j} className={`jour-bloc${ouvert === j ? " ouvert" : ""}`}>
+                <button type="button" className="jour-repas" aria-expanded={ouvert === j} onClick={() => setOuvert(ouvert === j ? null : j)}>
+                  <span className={j === today ? "auj" : ""}>{nom}</span>
+                  <b>{pense === j ? "Echo cherche autre chose…" : r.plat}</b>
+                  {r.congele && <Snowflake size={16} strokeWidth={2.2} className="signe" role="img" aria-label="Au congélateur" animated={false} />}
+                </button>
+                {ouvert === j && (
+                  <div className="jour-detail">
+                    <p>{soirDe(b)}</p>
+                    {r.gamelle && <p>{b.gamelle === proprio ? "Ta gamelle" : b.gamelle ? `Gamelle de ${noms[b.gamelle]}` : "Gamelle"} : {r.gamelle}</p>}
+                    {r.congele && <p>Vient du congélateur : à sortir la veille.</p>}
+                    {r.ingredients && r.ingredients.length > 0 && <p className="ingredients">{r.ingredients.map((i) => (i.qte ? `${i.nom} (${i.qte})` : i.nom)).join(", ")}</p>}
+                    <div className="rangee">
+                      <button type="button" className="puce" disabled={!!pense} onClick={() => avecEcho(j, () => changerRepas(b, r, noms, jours))}>Changer</button>
+                      <button type="button" className="puce" onClick={() => { setOuvert(null); setEcrit(j); }}>Écrire</button>
+                      <button type="button" className="puce" onClick={() => { setOuvert(null); poserRepas(j, ""); }}>Retirer</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </section>
+      )}
     </>
   );
 }

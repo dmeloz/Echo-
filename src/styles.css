@@ -842,7 +842,27 @@ button.case::after { content: ""; position: absolute; inset: -9px; } /* zone de 
 .deja-magasin b { flex: 1; font-weight: 600; }
 
 /* Semaine : un jour = une ligne. */
-.semaine-dates { font-size: 14px; color: var(--discret); padding: 0 var(--e2); }
+.semaine-tete { display: flex; align-items: center; justify-content: space-between; gap: var(--e5); }
+.semaine-tete > span { font-size: 14px; color: var(--discret); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vue-choix.petit { flex: none; grid-template-columns: auto auto; border-radius: 999px; }
+.vue-choix.petit button { min-height: 36px; padding: 0 14px; border-radius: 999px; font-size: 14px; }
+/* La barre fine d'Echo : sa proposition (Valider), ou ce qu'il peut compléter. */
+.barre-echo { display: flex; align-items: center; gap: var(--e4); min-height: 56px; padding: 6px 6px 6px 14px; border-radius: 999px; text-align: left; color: var(--encre); }
+.barre-echo b { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; }
+.barre-echo .etoile { flex: none; color: var(--accent); }
+.barre-echo > span:not(.echo-points) { font-size: var(--t-petit); color: var(--discret); padding-right: var(--e5); white-space: nowrap; }
+.barre-echo.lien:active { scale: .98; }
+.vide-icone.bleu { border-radius: 50%; background: var(--bleu-pale); color: var(--accent); box-shadow: none; }
+.semaine-repas.attend { opacity: .5; pointer-events: none; }
+.jour-bloc { border-top: 1px solid var(--trait); }
+.jour-bloc:first-child { border-top: 0; }
+.jour-bloc > .jour-repas { border-top: 0; }
+.jour-bloc.ouvert { background: rgb(255 255 255 / .6); }
+.jour-repas .signe { flex: none; color: var(--discret); }
+.jour-detail { display: flex; flex-direction: column; gap: var(--e2); padding: 0 16px 14px 64px; font-size: 15px; color: color-mix(in oklab, var(--encre) 82%, transparent); animation: reglage-entre var(--m-apparition) var(--douce); }
+.jour-detail .ingredients { font-size: var(--t-petit); color: var(--discret); }
+.jour-detail .rangee { margin-top: var(--e4); }
+.jour-detail .puce:disabled { opacity: .5; }
 .semaine-repas { padding: 0; overflow: hidden; }
 .jour-repas { display: flex; align-items: center; gap: var(--e5); width: 100%; min-height: 54px; padding: 8px 16px; border: 0; border-top: 1px solid var(--trait); background: transparent; text-align: left; color: var(--encre); }
 .jour-repas:first-child { border-top: 0; }

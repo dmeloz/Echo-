@@ -103,7 +103,14 @@ export const oublierHabitude = (cle: string) => db.cuisine_habitudes.delete(cle)
 
 /* ---------- Semaine, stock, goûts (formes simples du lot 1) ---------- */
 
-export const poserRepas = (jour: string, plat: string) => (plat.trim() ? db.cuisine_repas.put({ jour, plat: plat.trim().slice(0, 80) }) : db.cuisine_repas.delete(jour));
+// Écrire soi-même le repas d'un jour (ou le retirer). Un plat écrit à la main n'a plus les ingrédients d'Echo.
+export async function poserRepas(jour: string, plat: string) {
+  const avant = await db.cuisine_repas.get(jour), p = plat.trim().slice(0, 80);
+  if (p) { await db.cuisine_repas.put({ jour, plat: p, ...(avant?.propose ? { propose: true } : {}) }); return; }
+  if (!avant) return;
+  await db.cuisine_repas.delete(jour);
+  toast(`${avant.plat} retiré`, { action: { label: "Annuler", onClick: () => db.cuisine_repas.put(avant) } });
+}
 
 export async function ajouterProduit(nom: string, lieu: Lieu, avant = "") {
   const n = nom.trim().slice(0, 60);
