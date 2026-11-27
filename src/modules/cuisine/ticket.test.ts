@@ -49,6 +49,9 @@ describe("ce qu'Echo a lu sur le ticket", () => {
     expect(jourDuTicket({ ...lu, date: "2027-01-01" }, NOW)).toBe("2026-11-27");
     expect(jourDuTicket({ ...lu, date: "2024-01-01" }, NOW)).toBe("2026-11-27");
     expect(jourDuTicket({ ...lu, date: "2026-11-25" }, NOW)).toBe("2026-11-25");
+    expect(nettoyerLecture({ ...brut, date: "2026-11-31" }, []).date).toBe("");
+    expect(nettoyerLecture({ ...brut, date: "2026-13-45" }, []).date).toBe("");
+    expect(nettoyerLecture({ ...brut, lignes: Array.from({ length: 90 }, (_, i) => ({ nom: "Produit " + i, lieu: "placard" })) }, []).remarque).toMatch(/80 premières/);
   });
 });
 
@@ -84,6 +87,22 @@ describe("ranger le ticket", () => {
     expect(await db.cuisine_stock.toArray()).toEqual([{ id: "p1", nom: "Blanc de poulet", lieu: "frigo", avant: "2026-11-29", cree: 1 }]);
     await toast.mock.calls.at(-1)![1].action.onClick();
     expect((await db.cuisine_stock.get("p1"))!.avant).toBe("2026-11-20");
+  });
+  it("rangé ailleurs qu'au frigo, le produit n'a pas de date ; racheté sans estimation, l'ancienne date part", async () => {
+    await db.cuisine_stock.add({ id: "p1", nom: "Lait demi-écrémé", lieu: "frigo", avant: "2026-11-20", cree: 1 });
+    const lu = nettoyerLecture(brut, []);
+    await rangerTicket(lu, [{ ...lu.lignes[1], lieu: "congelateur" }, { ...lu.lignes[0], jours: 0 }], NOW);
+    const stock = await db.cuisine_stock.toArray();
+    expect(stock.find((p) => p.lieu === "congelateur")!.avant).toBeUndefined();
+    expect(stock.find((p) => p.id === "p1")!.avant).toBeUndefined();
+    await toast.mock.calls.at(-1)![1].action.onClick();
+    expect(await db.cuisine_stock.toArray()).toEqual([{ id: "p1", nom: "Lait demi-écrémé", lieu: "frigo", avant: "2026-11-20", cree: 1 }]);
+  });
+  it("reconnaît un ticket déjà rangé même quand le total était illisible", async () => {
+    const lu = { ...nettoyerLecture(brut, []), total: 0 };
+    expect(await dejaRange(lu, NOW)).toBe(false);
+    await rangerTicket(lu, lu.lignes.slice(0, 2), NOW);
+    expect(await dejaRange(lu, NOW)).toBe(true);
   });
   it("une ligne décochée ou « pas au stock » ne va pas au stock", async () => {
     const lu = nettoyerLecture(brut, []);

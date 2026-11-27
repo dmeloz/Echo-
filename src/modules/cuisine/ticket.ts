@@ -19,6 +19,7 @@ const MESSAGES: Record<string, string> = {
   refus: "La photo n'a pas pu être lue. Essaie avec une autre photo.",
   occupe: "Le service est très demandé. Réessaie dans une minute.",
   lecture: "La lecture n'a pas abouti. Réessaie avec une photo plus nette.",
+  long: "La lecture prend trop de temps. Réessaie, ou prends le ticket en deux photos.",
   service: "Le service de lecture ne répond pas. Réessaie dans un moment.",
 };
 export class ErreurTicket extends Error {}
@@ -31,9 +32,9 @@ export async function lireTicket(fichier: File): Promise<LectureTicket> {
   const code = String((await db.reglages.get("codeEcho"))?.valeur ?? "").trim();
   let r: Response;
   try {
-    r = await fetch(ADRESSE, { method: "POST", headers: await entetesIA(code), body: JSON.stringify({ image: photo.data, type: photo.type, courses }), signal: AbortSignal.timeout(90_000) });
-  } catch {
-    throw new ErreurTicket("Pas de connexion avec Echo. Réessaie.");
+    r = await fetch(ADRESSE, { method: "POST", headers: await entetesIA(code), body: JSON.stringify({ image: photo.data, type: photo.type, courses }), signal: AbortSignal.timeout(150_000) });
+  } catch (e) {
+    throw new ErreurTicket(e instanceof DOMException && e.name === "TimeoutError" ? MESSAGES.long : "Pas de connexion avec Echo. Réessaie.");
   }
   const corps = await r.json().catch(() => null);
   if (!r.ok || !corps) throw new ErreurTicket(MESSAGES[corps?.erreur] ?? MESSAGES.service);
@@ -46,11 +47,14 @@ export async function lireTicket(fichier: File): Promise<LectureTicket> {
 export const jourDuTicket = (lu: LectureTicket, now = new Date()) =>
   (lu.date && lu.date <= auJour(0, now) && lu.date >= auJour(-31, now) ? lu.date : auJour(0, now));
 
+// Le total gardé : celui du ticket, ou la somme des lignes s'il était illisible.
+const somme = (lignes: Array<{ prix: number }>) => Math.round(lignes.reduce((s, l) => s + l.prix, 0) * 100) / 100;
+
 // Le même ticket déjà rangé ? (même magasin, même jour, même total)
 export async function dejaRange(lu: LectureTicket, now = new Date()) {
-  if (!lu.total) return false;
-  const jour = jourDuTicket(lu, now);
-  return (await db.cuisine_tickets.toArray()).some((t) => t.date === jour && t.total === lu.total && cleDe(t.magasin) === cleDe(lu.magasin));
+  const jour = jourDuTicket(lu, now), total = lu.total || somme(lu.lignes);
+  if (!total) return false;
+  return (await db.cuisine_tickets.toArray()).some((t) => t.date === jour && t.total === total && cleDe(t.magasin) === cleDe(lu.magasin));
 }
 
 export interface Bilan { stock: number; coches: number }
@@ -66,10 +70,12 @@ export async function rangerTicket(lu: LectureTicket, gardees: LigneTicket[], no
     const stock = await db.cuisine_stock.toArray();
     for (const [i, l] of gardees.entries()) {
       if (l.lieu === "aucun") continue;
-      const avant = l.jours ? plusJours(jour, l.jours) : undefined;
+      // La date estimée ne vaut que pour le frigo : rangé ailleurs d'un toucher, le produit n'en a plus.
+      const avant = l.jours && l.lieu === "frigo" ? plusJours(jour, l.jours) : undefined;
       const present = [...stock, ...neufs].find((p) => p.lieu === l.lieu && cleDe(p.nom) === cleDe(l.nom));
       if (!present) neufs.push({ id: nouvelId(), nom: l.nom, lieu: l.lieu, ...(avant ? { avant } : {}), cree: quand + i });
-      else if (avant && !neufs.includes(present)) { anciens.push({ ...present }); await db.cuisine_stock.update(present.id, { avant }); }
+      // Déjà là : c'est du neuf, l'ancienne date ne vaut plus (remplacée par l'estimation, ou retirée).
+      else if (!neufs.includes(present) && present.avant !== avant) { anciens.push({ ...present }); await db.cuisine_stock.update(present.id, { avant }); }
     }
     await db.cuisine_stock.bulkAdd(neufs);
     const noms = new Set(gardees.map((l) => l.course).filter(Boolean));
@@ -78,7 +84,7 @@ export async function rangerTicket(lu: LectureTicket, gardees: LigneTicket[], no
       coches.push(a);
       await db.cuisine_courses.update(a.id, { fait: quand, faitPar: par });
     }
-    ticket = { id: nouvelId(), magasin: lu.magasin, date: jour, total: lu.total || Math.round(gardees.reduce((s, l) => s + l.prix, 0) * 100) / 100, monnaie: lu.monnaie,
+    ticket = { id: nouvelId(), magasin: lu.magasin, date: jour, total: lu.total || somme(lu.lignes), monnaie: lu.monnaie,
       lignes: gardees.map(({ nom, qte, prix }) => ({ nom, qte, prix })), par, cree: quand };
     await db.cuisine_tickets.add(ticket);
   });

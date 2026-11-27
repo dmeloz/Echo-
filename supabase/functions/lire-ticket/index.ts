@@ -75,11 +75,18 @@ const repondre = (corps: unknown, statut: number, origine: string | null) =>
 const texte = (x: unknown, max: number) => (typeof x === "string" ? x.replace(/\s+/g, " ").trim().slice(0, max) : "");
 const montant = (x: unknown) => (typeof x === "number" && Number.isFinite(x) && x > 0 && x < 100_000 ? Math.round(x * 100) / 100 : 0);
 
+// Une vraie date du calendrier (« 2026-11-31 » n'en est pas une).
+function vraiJour(j: string) {
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(j) ? new Date(j + "T12:00:00Z") : null;
+  return !!d && !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === j;
+}
+
 // On ne fait pas confiance à la réponse : tailles bornées, lieux connus, et un article de la liste ne sert qu'une fois.
 function nettoyer(lu: unknown, courses: string[]) {
   const o = (lu && typeof lu === "object" ? lu : {}) as Record<string, unknown>;
   const libres = new Set(courses);
-  const lignes = (Array.isArray(o.lignes) ? o.lignes : []).slice(0, MAX_LIGNES).flatMap((l) => {
+  const brutes = Array.isArray(o.lignes) ? o.lignes : [];
+  const lignes = brutes.slice(0, MAX_LIGNES).flatMap((l) => {
     const x = (l && typeof l === "object" ? l : {}) as Record<string, unknown>;
     const nom = texte(x.nom, 40);
     if (!nom) return [];
@@ -92,11 +99,11 @@ function nettoyer(lu: unknown, courses: string[]) {
   return {
     lisible: o.lisible === true && lignes.length > 0,
     magasin: texte(o.magasin, 40),
-    date: /^\d{4}-\d{2}-\d{2}$/.test(date) && !Number.isNaN(Date.parse(date)) ? date : "",
+    date: vraiJour(date) ? date : "",
     total: montant(o.total),
     monnaie: o.monnaie === "EUR" ? "EUR" : "CHF",
     lignes,
-    remarque: texte(o.remarque, 200),
+    remarque: brutes.length > MAX_LIGNES ? "Ticket très long : seules les 80 premières lignes sont lues." : texte(o.remarque, 200),
   };
 }
 

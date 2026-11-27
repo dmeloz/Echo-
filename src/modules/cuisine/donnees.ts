@@ -265,13 +265,19 @@ export interface LectureTicket { lisible: boolean; magasin: string; date: string
 // Le ticket gardé : le magasin, le jour, le total et les prix (pour le budget, plus tard).
 export interface Ticket { id: string; magasin: string; date: string; total: number; monnaie: "CHF" | "EUR"; lignes: Array<{ nom: string; qte: string; prix: number }>; par: Personne; cree: number }
 
+// Une vraie date du calendrier (« 2026-11-31 » n'en est pas une).
+export function vraiJour(j: string) {
+  const d = JOUR_ISO.test(j) ? new Date(j + "T12:00:00Z") : null;
+  return !!d && !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === j;
+}
 const prix = (x: unknown) => { const n = nb(x); return n !== null && n > 0 && n < 100_000 ? Math.round(n * 100) / 100 : 0; };
 const monnaie = (x: unknown) => (x === "EUR" ? "EUR" : "CHF");
 
 // La réponse du serveur n'est pas crue sur parole : tailles bornées, lieux connus, un article de la liste coché une seule fois.
 export function nettoyerLecture(x: unknown, courses: string[]): LectureTicket {
   const o = obj(x), libres = new Set(courses), date = txt(o.date, 10);
-  const lignes = (Array.isArray(o.lignes) ? o.lignes : []).slice(0, 80).flatMap((l): LigneTicket[] => {
+  const brutes = Array.isArray(o.lignes) ? o.lignes : [];
+  const lignes = brutes.slice(0, 80).flatMap((l): LigneTicket[] => {
     const i = obj(l), nom = txt(i.nom, 40).trim();
     if (!nom) return [];
     const lieu: Rangement = LIEUX.find((k) => k.id === i.lieu)?.id ?? "aucun";
@@ -279,12 +285,13 @@ export function nettoyerLecture(x: unknown, courses: string[]): LectureTicket {
     const course = typeof i.course === "string" && libres.delete(i.course) ? i.course : "";
     return [{ nom, qte: txt(i.qte, 20).trim(), prix: prix(i.prix), lieu, jours: lieu === "frigo" && j !== null && Number.isInteger(j) && j > 0 && j <= 60 ? j : 0, course, sur: i.sur !== false }];
   });
-  return { lisible: o.lisible === true && lignes.length > 0, magasin: txt(o.magasin, 40).trim(), date: JOUR_ISO.test(date) ? date : "", total: prix(o.total), monnaie: monnaie(o.monnaie), lignes, remarque: txt(o.remarque, 200).trim() };
+  return { lisible: o.lisible === true && lignes.length > 0, magasin: txt(o.magasin, 40).trim(), date: vraiJour(date) ? date : "", total: prix(o.total), monnaie: monnaie(o.monnaie), lignes,
+    remarque: brutes.length > 80 ? "Ticket très long : seules les 80 premières lignes sont lues." : txt(o.remarque, 200).trim() };
 }
 
 export function nettoyerTicket(x: unknown): Ticket | null {
   const o = obj(x), id = txt(o.id, 80), date = txt(o.date, 10);
-  if (!id || !JOUR_ISO.test(date) || !personne(o.par)) return null;
+  if (!id || !vraiJour(date) || !personne(o.par)) return null;
   const lignes = (Array.isArray(o.lignes) ? o.lignes : []).slice(0, 80)
     .map((l) => ({ nom: txt(obj(l).nom, 40).trim(), qte: txt(obj(l).qte, 20).trim(), prix: prix(obj(l).prix) })).filter((l) => l.nom);
   return { id, magasin: txt(o.magasin, 40).trim(), date, total: prix(o.total), monnaie: monnaie(o.monnaie), lignes, par: o.par, cree: nb(o.cree) ?? Date.now() };
