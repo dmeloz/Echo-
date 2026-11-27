@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, Calendar, ChevronLeft, ChevronRight, HardDrive, LayoutGrid, SlidersHorizontal, Sparkles, Users } from "pulsoicon-react";
+import { Bell, Calendar, CalendarDays, ChevronLeft, ChevronRight, HardDrive, House, LayoutGrid, ShoppingBasket, SlidersHorizontal, Sparkles, Users, Wallet } from "pulsoicon-react";
 import { toast } from "sonner";
 import type { Noms, Personne, Tache } from "../lib/types";
 import { effacerExemples, remettre, remettreExemples, toutEffacer } from "../data/actions";
@@ -56,6 +56,9 @@ export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]
   );
 }
 
+// L'icône d'un module dans le sommaire : la même que sa tuile de l'accueil (les curseurs pour un module sans icône connue).
+const ICONE_MODULE: Record<string, typeof Users> = { planning: CalendarDays, cuisine: ShoppingBasket, maison: House, budget: Wallet };
+
 const TITRES: Record<Theme, string> = { foyer: "Foyer", echo: "Echo", notifications: "Notifications", agenda: "Agenda", modules: "Modules", app: "Données et app" };
 
 function Sommaire({ taches, noms, masques, proprio, onOuvrir }: { taches: Tache[]; noms: Noms; masques: string[]; proprio: Personne; onOuvrir: (t: Theme | string) => void }) {
@@ -88,15 +91,23 @@ function Sommaire({ taches, noms, masques, proprio, onOuvrir }: { taches: Tache[
             <ChevronRight size={18} strokeWidth={2} className="sommaire-chev" />
           </button>
         ))}
-        {avecReglages(masques).map((m) => (
-          <button key={m.id} type="button" className="sommaire-ligne" onClick={() => onOuvrir(m.id)}>
-            <span className="sommaire-ico"><SlidersHorizontal size={19} strokeWidth={2} /></span>
-            <span className="sommaire-txt"><b>{m.libelle}</b><small>{m.resume}</small></span>
-            <ChevronRight size={18} strokeWidth={2} className="sommaire-chev" />
-          </button>
-        ))}
       </nav>
-      <p className="note-donnees">Icônes : PulsoIcon (licence ISC). Agenda et Cuisine (courses) sont construits ; Maison et Budget pas encore.</p>
+      {avecReglages(masques).length > 0 && <>
+        <span className="lab sommaire-groupe" id="lab-reglages-modules">Modules</span>
+        <nav className="g sommaire" aria-labelledby="lab-reglages-modules">
+          {avecReglages(masques).map((m, i) => {
+            const Icone = ICONE_MODULE[m.id] ?? SlidersHorizontal;
+            return (
+              <button key={m.id} type="button" className="sommaire-ligne" onClick={() => onOuvrir(m.id)}>
+                <span className={`sommaire-ico${i % 2 ? " t" : ""}`}><Icone size={19} strokeWidth={2} /></span>
+                <span className="sommaire-txt"><b>{m.libelle}</b><small>{m.resume}</small></span>
+                <ChevronRight size={18} strokeWidth={2} className="sommaire-chev" />
+              </button>
+            );
+          })}
+        </nav>
+      </>}
+      <p className="note-donnees">Icônes : PulsoIcon (licence ISC).</p>
     </>
   );
 }

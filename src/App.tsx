@@ -128,6 +128,8 @@ export default function App() {
   const liste = taches ?? [];
   const reste = tachesDuJour(liste, now).ouvertes.length;
   const d = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  // Sur l'accueil, la salutation prend de la place : la date s'y écrit en court pour tenir sur une ligne (« ven. 27 nov. »).
+  const dCourt = now.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
   const salut = now.getHours() < 5 ? "Bonne nuit" : now.getHours() < 18 ? "Bonjour" : "Bonsoir";
 
   return (
@@ -142,7 +144,7 @@ export default function App() {
           <header className="entete">
             {recherche !== null ? <ChampRecherche valeur={recherche} onValeur={setRecherche} onFermer={() => setRecherche(null)} /> : <>
             <div>
-              <div className="date">{vue.id === "aujourdhui" ? `${salut} ${noms[proprio]} · ${d}` : d.charAt(0).toUpperCase() + d.slice(1)}</div>
+              <div className="date">{vue.id === "aujourdhui" ? `${salut} ${noms[proprio]} · ${dCourt}` : d.charAt(0).toUpperCase() + d.slice(1)}</div>
               <h1 className="page-titre">{vue.libelle}</h1>
             </div>
             <div className="entete-droite">

@@ -32,7 +32,7 @@ export interface Habitude { cle: string; nom: string; qte: string; rayon: Rayon;
 export interface Repas { jour: string; plat: string; ingredients?: Lu[]; duStock?: string[]; congele?: boolean; gamelle?: string; propose?: boolean }
 export type Lieu = "frigo" | "congelateur" | "placard" | "maison";
 export const LIEUX: Array<{ id: Lieu; nom: string }> = [
-  { id: "frigo", nom: "Frigo" }, { id: "congelateur", nom: "Congélateur" }, { id: "placard", nom: "Placard" }, { id: "maison", nom: "Maison" },
+  { id: "frigo", nom: "Frigo" }, { id: "congelateur", nom: "Congélateur" }, { id: "placard", nom: "Placard" }, { id: "maison", nom: "Ménage et hygiène" }, // pas « Maison » : c'est aussi un module
 ];
 // reste : ce qu'il reste du produit. Absent = plein ; « peu » = presque fini (il est alors remis aux courses).
 export type Reste = "moitie" | "peu";
