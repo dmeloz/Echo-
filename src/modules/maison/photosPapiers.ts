@@ -11,13 +11,15 @@ const chemin = async (nom: string) => { const f = await lireFoyer(); return f ? 
 const ENVOYEES = "maisonPhotosEnvoyees";
 const envoyees = async () => new Set(((await db.reglages.get(ENVOYEES))?.valeur as string[] | undefined) ?? []);
 
+// La liste des photos déjà sur le serveur : lue et écrite d'un seul geste, pour que deux envois en même temps ne s'effacent pas.
+const noter = (f: (deja: Set<string>) => void) => db.transaction("rw", db.reglages, async () => { const deja = await envoyees(); f(deja); await db.reglages.put({ cle: ENVOYEES, valeur: [...deja] }); });
+
 async function envoyer(nom: string, blob: Blob) {
   const c = await chemin(nom);
   if (!c) return false;
   const { error } = await supa.storage.from(SEAU).upload(c, blob, { contentType: "image/jpeg", upsert: true });
   if (error) return false;
-  const deja = await envoyees(); deja.add(nom);
-  await db.reglages.put({ cle: ENVOYEES, valeur: [...deja].slice(-500) });
+  await noter((deja) => deja.add(nom));
   return true;
 }
 
@@ -37,7 +39,7 @@ export async function photosDe(p: Papier): Promise<Array<{ nom: string; blob: Bl
     const c = await chemin(nom);
     if (!c) break;
     const { data } = await supa.storage.from(SEAU).download(c).catch(() => ({ data: null }));
-    if (data) { await db.photos.put({ id: nom, tacheId: clePhotos(p), blob: data, cree: Date.now() }); ici.push({ id: nom, tacheId: clePhotos(p), blob: data, cree: Date.now() }); }
+    if (data) { await noter((deja) => deja.add(nom)); await db.photos.put({ id: nom, tacheId: clePhotos(p), blob: data, cree: Date.now() }); ici.push({ id: nom, tacheId: clePhotos(p), blob: data, cree: Date.now() }); }
   }
   return p.photos.flatMap((n) => { const x = ici.find((y) => y.id === n); return x ? [{ nom: n, blob: x.blob }] : []; });
 }
@@ -46,14 +48,18 @@ export async function photosDe(p: Papier): Promise<Array<{ nom: string; blob: Bl
 export async function oublierPhotos(noms: string[]) {
   if (!noms.length) return;
   await db.photos.bulkDelete(noms);
+  await noter((deja) => noms.forEach((n) => deja.delete(n)));
   const f = await lireFoyer();
   if (f) await supa.storage.from(SEAU).remove(noms.map((n) => `${f.id}/${n}`)).catch(() => {});
 }
 
-// Au démarrage de la page : les photos prises sans internet partent maintenant.
-export async function envoyerEnAttente() {
+// À l'ouverture de Papiers : les photos prises sans internet partent, et celles qu'aucun papier ne porte plus
+// (papier ou photo retirés sur l'autre téléphone, message d'annulation balayé) quittent le téléphone et le serveur après un jour.
+export async function envoyerEnAttente(now = Date.now()) {
+  const gardees = new Set((await db.maison_papiers.toArray()).flatMap((p) => p.photos));
+  const locales = await db.photos.filter((x) => x.tacheId.startsWith("papier:")).toArray();
+  await oublierPhotos(locales.filter((x) => !gardees.has(x.id) && now - x.cree > 86_400_000).map((x) => x.id));
   if (!(await lireFoyer())) return;
   const deja = await envoyees();
-  const locales = await db.photos.filter((x) => x.tacheId.startsWith("papier:") && !deja.has(x.id)).toArray();
-  for (const x of locales) await envoyer(x.id, x.blob);
+  for (const x of locales) if (gardees.has(x.id) && !deja.has(x.id)) await envoyer(x.id, x.blob);
 }

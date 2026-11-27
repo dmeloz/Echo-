@@ -6,7 +6,7 @@ import { nouvelId, sansAccents } from "../../lib/dates";
 import { vibrer } from "../../lib/gestes";
 import { reduirePhoto } from "../../lib/photos";
 import type { ContexteModule } from "../contrat";
-import { ajouterPapier, changerPapier, papierFait, retirerPapier } from "./actions";
+import { ajouterPapier, ajouterPhotosPapier, changerPapier, papierFait, retirerPapier, retirerPhotoPapier } from "./actions";
 import { DOSSIERS, QUOIS, REPETES, aFairePapier, bientot, joursAvant, lireMontant, lirePapier, nomDossier, quandPapier, texteMontant, type Dossier, type Papier } from "./donnees";
 import { envoyerEnAttente, garderPhoto, oublierPhotos, photosDe } from "./photosPapiers";
 
@@ -43,13 +43,13 @@ function Photos({ p }: { p: Papier }) {
   const ajouter = async (fichiers: File[]) => {
     const ajoutees: string[] = [];
     for (const f of fichiers.slice(0, 12 - p.photos.length)) ajoutees.push(await garderPhoto(p, await reduirePhoto(f), nouvelId()));
-    if (ajoutees.length) await changerPapier(p.id, { photos: [...p.photos, ...ajoutees] });
+    if (ajoutees.length) await ajouterPhotosPapier(p.id, ajoutees);
   };
   return (
     <div className="photos">
       {vues.map((v) => (
         <span key={v.nom} className="photo"><a href={v.url} target="_blank" rel="noreferrer"><img src={v.url} alt={`Photo de ${p.titre}`} /></a>
-          <button type="button" className="retirer" aria-label="Retirer la photo" onClick={async () => { await changerPapier(p.id, { photos: p.photos.filter((n) => n !== v.nom) }); oublierPhotos([v.nom]).catch(() => {}); }}><X size={14} strokeWidth={2.4} /></button></span>
+          <button type="button" className="retirer" aria-label="Retirer la photo" onClick={async () => { await retirerPhotoPapier(p.id, v.nom); oublierPhotos([v.nom]).catch(() => {}); }}><X size={14} strokeWidth={2.4} /></button></span>
       ))}
       {p.photos.length < 12 && (
         <label className="ajout-photo"><Camera size={22} strokeWidth={2} /><span>Photo</span>
@@ -72,7 +72,7 @@ function Detail({ p, onFermer }: { p: Papier; onFermer: () => void }) {
         {QUOIS.map((q) => <button key={q.id} type="button" className="puce" aria-pressed={p.quoi === q.id} onClick={() => { vibrer(); changerPapier(p.id, { quoi: q.id, fait: undefined }); }}>{q.nom}</button>)}
       </div>
       {p.quoi && <>
-        <label className="puce">Pour le <input type="date" max="2099-12-31" value={p.echeance ?? ""} onChange={(e) => changerPapier(p.id, { echeance: e.target.value || undefined, fait: undefined })} /></label>
+        <label className="puce">Pour le <input type="date" max="2099-12-31" value={p.echeance ?? ""} onChange={(e) => changerPapier(p.id, { echeance: e.target.value || undefined, fait: undefined, jour: undefined })} /></label>
         <div className="stock-restes" role="group" aria-label="Ça revient">
           {REPETES.map((r) => <button key={r.id} type="button" className="puce" aria-pressed={p.repete === r.id} onClick={() => { vibrer(); changerPapier(p.id, { repete: r.id }); }}>{r.nom}</button>)}
         </div>
@@ -132,7 +132,7 @@ export function Papiers({ now, choix }: ContexteModule & { choix: ReactNode }) {
     if (!p) return;
     const noms: string[] = [];
     for (const f of fichiers.slice(0, 12)) noms.push(await garderPhoto(p, await reduirePhoto(f), nouvelId()));
-    await changerPapier(p.id, { photos: noms });
+    await ajouterPhotosPapier(p.id, noms);
     setOuvert(p.id); if (!dans) setDossier(p.dossier);
   };
   const barre = (dans?: Dossier) => (

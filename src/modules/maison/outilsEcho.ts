@@ -2,7 +2,7 @@ import { db } from "../../data/db";
 import type { Action, Executant } from "../../lib/echo/outils";
 import { autre, type Personne } from "../../lib/types";
 import { ajouterCorvees, ajouterPapier, ajouterReparation, faireCorvee, memeNom } from "./actions";
-import { DOSSIERS, ETATS_REPARATION, QUOIS, REPETES, aFairePapier, besoin, depuis, devinerDossier, equilibre, joursAvant, nomDossier, nomRythme, parts, pour, quandPapier, texteMontant, trouverCorvees, type Corvee, type QuiCorvee, type Taille } from "./donnees";
+import { DOSSIERS, ETATS_REPARATION, QUOIS, REPETES, aFairePapier, besoin, depuis, devinerDossier, equilibre, joursAvant, nomDossier, nomRythme, parts, pour, quandPapier, texteMontant, trouverCorvees, vraiJour, type Corvee, type QuiCorvee, type Taille } from "./donnees";
 
 // Ce que l'assistant Echo peut faire dans la Maison (décrit dans supabase/functions/_shared/echo-outils.ts).
 const court = (s: unknown, n: number) => (typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, n) : "");
@@ -83,7 +83,9 @@ export const OUTILS_MAISON: Record<string, Executant> = {
   },
   voir_papiers: {
     lire: async (_e, ctx) => {
-      const papiers = (await db.maison_papiers.toArray()).sort((a, b) => joursAvant(a, ctx.now) - joursAvant(b, ctx.now)).slice(0, 80);
+      // Ce qui reste à faire d'abord (le plus proche en tête), puis le reste, les plus récents devant.
+      const tous = await db.maison_papiers.toArray();
+      const papiers = [...tous.filter(aFairePapier).sort((a, b) => joursAvant(a, ctx.now) - joursAvant(b, ctx.now)), ...tous.filter((p) => !aFairePapier(p)).sort((a, b) => b.cree - a.cree)].slice(0, 80);
       return {
         papiers: papiers.map((p) => ({
           titre: p.titre, dossier: nomDossier(p.dossier), ...(p.emetteur ? { deQui: p.emetteur } : {}), ...(p.note ? { note: p.note } : {}),
@@ -99,8 +101,8 @@ export const OUTILS_MAISON: Record<string, Executant> = {
       const titre = court(e.titre, 100);
       if (!titre) return "Donne un titre au papier.";
       const quoi = QUOIS.find((q) => q.id === e.aFaire)?.id ?? "";
-      const echeance = /^\d{4}-\d{2}-\d{2}$/.test(String(e.pourLe)) && !Number.isNaN(Date.parse(String(e.pourLe))) ? String(e.pourLe) : undefined;
-      if (quoi && !echeance) return "Pour une chose à faire, donne la date (pourLe : AAAA-MM-JJ).";
+      const echeance = vraiJour(String(e.pourLe)) ? String(e.pourLe) : undefined;
+      if (quoi && !echeance) return "Pour une chose à faire, donne une date qui existe (pourLe : AAAA-MM-JJ).";
       const francs = Number(e.montantFrancs);
       const montant = Number.isFinite(francs) && francs > 0 && francs < 1_000_000 ? Math.round(francs * 100) : undefined;
       if ((await db.maison_papiers.toArray()).some((p) => !p.fait && memeNom(p.titre, titre))) return `« ${titre} » est déjà rangé dans les papiers.`;

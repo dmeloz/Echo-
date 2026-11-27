@@ -146,12 +146,21 @@ export const changerPapier = (id: string, x: Partial<Omit<Papier, "id" | "cree">
 // C'est fait (payé, renouvelé…) : une chose qui revient repart à la prochaine échéance. Avec Annuler.
 export async function papierFait(p: Papier, now = new Date()) {
   const apres = apresFait(p, now);
-  await db.maison_papiers.update(p.id, { echeance: apres.echeance, fait: apres.fait });
-  toast(`${p.titre} : fait`, annuler(() => db.maison_papiers.update(p.id, { echeance: p.echeance, fait: p.fait })));
+  await db.maison_papiers.update(p.id, { echeance: apres.echeance, fait: apres.fait, jour: apres.jour });
+  toast(`${p.titre} : fait`, annuler(() => db.maison_papiers.update(p.id, { echeance: p.echeance, fait: p.fait, jour: p.jour })));
 }
-// Retirer un papier : il part, ses photos restent 10 secondes (le temps d'Annuler), puis quittent le téléphone et le serveur.
+// Les photos d'un papier : on repart toujours de la liste du moment (une autre photo a pu arriver entre-temps), 12 au plus.
+const photosPapier = (id: string, f: (noms: string[]) => string[]) => db.transaction("rw", db.maison_papiers, async () => {
+  const p = await db.maison_papiers.get(id);
+  if (p) await db.maison_papiers.update(id, { photos: [...new Set(f(p.photos))].slice(0, 12) });
+});
+export const ajouterPhotosPapier = (id: string, noms: string[]) => photosPapier(id, (l) => [...l, ...noms]);
+export const retirerPhotoPapier = (id: string, nom: string) => photosPapier(id, (l) => l.filter((n) => n !== nom));
+// Retirer un papier : il part ; ses photos attendent la fin du message (le temps d'Annuler), puis quittent le téléphone et le serveur.
+// Message balayé ou app fermée avant : le ménage de photosPapiers (envoyerEnAttente) les retire plus tard.
 export async function retirerPapier(p: Papier, oublier: (noms: string[]) => Promise<void>) {
   await db.maison_papiers.delete(p.id);
-  let annule = false;
-  toast(`${p.titre} : retiré`, { ...annuler(() => { annule = true; return db.maison_papiers.put(p); }), onAutoClose: () => { if (!annule) oublier(p.photos).catch(() => {}); } });
+  let annule = false, fini = false;
+  const finir = () => { if (annule || fini) return; fini = true; oublier(p.photos).catch(() => {}); };
+  toast(`${p.titre} : retiré`, { ...annuler(() => { annule = true; return db.maison_papiers.put(p); }), onAutoClose: finir, onDismiss: finir });
 }

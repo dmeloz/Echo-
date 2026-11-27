@@ -214,9 +214,10 @@ export type RepetePapier = "" | "mois" | "trimestre" | "an";
 export const REPETES: Array<{ id: RepetePapier; nom: string; mois: number }> = [
   { id: "", nom: "Une fois", mois: 0 }, { id: "mois", nom: "Chaque mois", mois: 1 }, { id: "trimestre", nom: "Chaque trimestre", mois: 3 }, { id: "an", nom: "Chaque année", mois: 12 },
 ];
+// jour : le jour du mois d'origine d'une échéance qui revient (29, 30 ou 31), pour qu'un loyer du 31 ne glisse pas au 28.
 // montant : en centimes de franc (entier). Sur le téléphone, les photos sont dans la table photos (clé « papier:<id> »).
 // photos : les noms des photos (« <id>.jpg »), gardées sur le serveur du foyer et sur chaque téléphone qui les a vues.
-export interface Papier { id: string; titre: string; dossier: Dossier; emetteur: string; note: string; quoi: QuoiPapier; echeance?: string; montant?: number; repete: RepetePapier; fait?: string; photos: string[]; cree: number }
+export interface Papier { id: string; titre: string; dossier: Dossier; emetteur: string; note: string; quoi: QuoiPapier; echeance?: string; montant?: number; repete: RepetePapier; fait?: string; jour?: number; photos: string[]; cree: number }
 export const clePhotos = (p: Pick<Papier, "id">) => `papier:${p.id}`;
 
 // « 89.90 », « 89,90 CHF », « 1'250.- » → centimes. Rien de lisible : undefined.
@@ -242,15 +243,25 @@ export function lirePapier(texte: string, now = new Date()): Pick<Papier, "titre
     const d = new Date(y, m - 1, j, 12);
     return d.getMonth() === m - 1 ? iso(d) : undefined;
   };
-  // « 89.90 le 15.12 » : 89.90 n'est pas un jour, on prend la première vraie date.
-  const num = [...t.matchAll(/\s*(?:le|au|avant le|pour le|d'ici le)?\s*(?<![\d.,'’])\b(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\b(?![.,]?\d|\s*(?:chf|fr\b|francs?|\.-))/gi)].find((m) => annee(Number(m[1]), Number(m[2]), m[3]));
-  const mot = /\s*(?:le|au|avant le|pour le|d'ici le)?\s*\b(\d{1,2})(?:er)?\s+([a-zéèû]+)(?:\s+(\d{4}))?\b/i.exec(t);
-  const moisMot = mot ? MOIS_FR.indexOf(sansAccents(mot[2])) : -1;
-  if (num) { echeance = annee(Number(num[1]), Number(num[2]), num[3]); if (echeance) t = (t.slice(0, num.index) + t.slice(num.index + num[0].length)).trim(); }
-  else if (mot && moisMot >= 0) { echeance = annee(Number(mot[1]), moisMot + 1, mot[3]); if (echeance) t = (t.slice(0, mot.index) + t.slice(mot.index + mot[0].length)).trim(); }
-  const somme = /\s*(?:chf\s*)?(\d{1,3}(?:['’]\d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(?:\.-|chf|fr\.?|francs?)?(?=\s|$)/i.exec(t);
+  // Les montants écrits : avec des centimes ou une monnaie (« 89.90 », « 450.- », « CHF 20 »), ou un nombre seul en fin de ligne qui n'est pas une année.
+  const sommesDe = (x: string) => [...x.matchAll(/(?<![\w.,'’/])(chf\s*)?(\d{1,3}(?:['’]\d{3})+|\d+)(?:[.,](\d{1,2}))?(\s*(?:\.-|chf\b|fr\b\.?|francs?\b))?(?![\w]|[.,/]\d)/gi)]
+    .filter((m) => m[1] || m[3] || m[4] || (m.index + m[0].length === x.length && !/^(?:19|20)\d\d$/.test(m[2])));
+  const sans = (x: string, m: RegExpMatchArray) => (x.slice(0, m.index) + " " + x.slice(m.index! + m[0].length)).replace(/\s+/g, " ").trim();
+  // Les dates écrites : « le 15.12 », « 15.12.2026 », « 3 mars ». Le petit mot devant (le, au, avant le…) est un mot entier, jamais la fin d'un autre.
+  const PRE = "(?:(?<=^|\\s)(le|au|avant le|pour le|d'ici le)\\s+)?(?<![\\w.,'’/])";
+  const dates = [
+    ...[...t.matchAll(new RegExp(PRE + "(\\d{1,2})[./](\\d{1,2})(?:[./](\\d{2,4}))?(?![\\w]|[.,/]\\d|\\s*(?:chf|fr\\b|francs?|\\.-))", "gi"))]
+      // « Parking 12.05 » tout seul est un prix : sans « le », sans année, il faut un autre montant dans la ligne pour y voir une date.
+      .map((m) => ({ m, e: annee(Number(m[2]), Number(m[3]), m[4]), sur: !!m[1] || !!m[4] || m[0].includes("/") || sommesDe(sans(t, m)).length > 0 })),
+    ...[...t.matchAll(new RegExp(PRE + "(\\d{1,2})(?:er)?\\s+([a-zéèûô]+)(?:\\s+(\\d{4}))?(?![\\wéèûô])", "gi"))]
+      .map((m) => ({ m, e: annee(Number(m[2]), MOIS_FR.indexOf(sansAccents(m[3].toLowerCase())) + 1, m[4]), sur: true })),
+  ].filter((d) => d.e && d.sur);
+  // Celle qui suit « le » passe devant ; sinon la dernière (« 29.05 le 15.12 » : 29.05 est le prix).
+  const date = dates.find((d) => d.m[1]) ?? dates.at(-1);
+  if (date) { echeance = date.e; t = sans(t, date.m); }
+  const somme = sommesDe(t).at(-1);
   const montant = somme ? lireMontant(somme[0]) : undefined;
-  if (montant !== undefined && somme) t = (t.slice(0, somme.index) + t.slice(somme.index + somme[0].length)).trim();
+  if (montant !== undefined && somme) t = sans(t, somme);
   t = t.replace(/\s+(?:expire|[àa] payer|[àa] renouveler)$/i, "").replace(/[.,;:–-]+$/, "").trim();
   if (!t) return null;
   const s = sansAccents(texte);
@@ -270,7 +281,14 @@ export function quandPapier(p: Papier, now = new Date()): string {
 // C'est fait : une chose qui revient repart à la prochaine échéance ; sinon, elle garde le jour où c'est fait.
 export function apresFait(p: Papier, now = new Date()): Papier {
   const mois = REPETES.find((r) => r.id === p.repete)?.mois ?? 0;
-  if (mois && p.echeance) { let e = plusMois(p.echeance, mois); while (e < auJour(0, now)) e = plusMois(e, mois); return { ...p, echeance: e, fait: undefined }; }
+  if (mois && p.echeance) {
+    const j = p.jour ?? Number(p.echeance.slice(8));
+    // Le mois suivant, au jour d'origine s'il existe (le 31 → 28 février → 31 mars).
+    const suivant = (e: string) => { const n = plusMois(e.slice(0, 8) + "01", mois), [y, m] = n.split("-").map(Number); return `${n.slice(0, 8)}${String(Math.min(j, new Date(y, m, 0).getDate())).padStart(2, "0")}`; };
+    let e = suivant(p.echeance);
+    while (e < auJour(0, now)) e = suivant(e);
+    return { ...p, echeance: e, fait: undefined, jour: j > 28 ? j : undefined };
+  }
   return { ...p, fait: auJour(0, now) };
 }
 
@@ -318,13 +336,15 @@ export function nettoyerContact(x: unknown): Contact | null {
   if (!id || !nom) return null;
   return { id, nom, role: txt(o.role, 30).trim(), tel: txt(o.tel, 20).replace(/[^\d+ ]/g, ""), cree: nb(o.cree) ?? Date.now() };
 }
+// Un jour qui existe vraiment (« 2026-02-31 » n'en est pas un).
+export const vraiJour = (s: string) => JOUR_ISO.test(s) && iso(new Date(s + "T12:00:00")) === s;
 export function nettoyerPapier(x: unknown): Papier | null {
   const o = obj(x), id = txt(o.id, 80), titre = txt(o.titre, 100).trim(), echeance = txt(o.echeance, 10), fait = txt(o.fait, 10), montant = nb(o.montant);
   if (!id || !titre) return null;
   const dossier = DOSSIERS.find((d) => d.id === o.dossier)?.id ?? "autre";
   const quoi = QUOIS.find((q) => q.id === o.quoi)?.id ?? "";
   const repete = REPETES.find((r) => r.id === o.repete)?.id ?? "";
-  return { id, titre, dossier, emetteur: txt(o.emetteur, 60).trim(), note: txt(o.note, 300), quoi, ...(JOUR_ISO.test(echeance) ? { echeance } : {}),
-    ...(montant !== null && Number.isInteger(montant) && montant > 0 && montant < 100_000_000 ? { montant } : {}), repete, ...(JOUR_ISO.test(fait) ? { fait } : {}),
+  return { id, titre, dossier, emetteur: txt(o.emetteur, 60).trim(), note: txt(o.note, 300), quoi, ...(vraiJour(echeance) ? { echeance } : {}),
+    ...(montant !== null && Number.isInteger(montant) && montant > 0 && montant < 100_000_000 ? { montant } : {}), repete, ...(vraiJour(fait) ? { fait } : {}), ...(repete && [29, 30, 31].includes(o.jour as number) ? { jour: o.jour as number } : {}),
     photos: (Array.isArray(o.photos) ? o.photos : []).filter((n): n is string => typeof n === "string" && /^[a-z0-9]{4,40}\.jpg$/.test(n)).slice(0, 12), cree: nb(o.cree) ?? Date.now() };
 }
