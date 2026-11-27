@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { ChevronLeft, ChevronRight, Plus } from "pulsoicon-react";
+import { ChevronLeft, ChevronRight, Plus, Users } from "pulsoicon-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { db } from "../../data/db";
@@ -8,11 +8,11 @@ import { auJour } from "../../lib/dates";
 import { vibrer } from "../../lib/gestes";
 import { autre, type Noms, type Personne } from "../../lib/types";
 import type { ContexteModule } from "../contrat";
-import { commencer, payer, retirerDepense } from "./actions";
+import { commencer, payer, payeurDuTicket, rembourser, retirerDepense } from "./actions";
 import { FeuilleChanger, FeuilleDepense, FeuillePoste, FeuilleSolde, type Nouveau } from "./Feuilles";
 import {
-  aRemplir, avancee, bilan, chf, dernierSolde, duMois, enveloppes, jourLong, moisDe, nomMois, parMois, periode, plusMoisB, resteAPayer, toutesCategories, valeurDe, vivants,
-  type APayer, type Bilan, type Categorie, type CompteSolde, type Depense, type Poste, type Solde,
+  aRemplir, avances, avancee, avecTickets, bilan, chf, debutBudget, duA, estTicket, dernierSolde, duMois, enveloppes, jourLong, moisDe, nomMois, parMois, periode, plusMoisB, resteAPayer, toutesCategories, valeurDe, vivants,
+  type APayer, type Bilan, type Categorie, type CompteSolde, type Depense, type Poste, type Payeur, type Solde,
 } from "./donnees";
 
 type Partie = "mois" | "charges" | "comptes";
@@ -106,10 +106,19 @@ function Mois({ postes, b, mois, noms, proprio, depenses, categories, apayer, to
           <ul>{ds.slice(0, 30).map((d) => (
             <li key={d.id} className={ouverte === d.id ? "ouvert" : ""}>
               <button type="button" className="stock-ligne" aria-expanded={ouverte === d.id} onClick={() => setOuverte(ouverte === d.id ? null : d.id)}>
-                <b>{d.quoi || cats.get(d.cat) || "Dépense"}<small>{[jourLong(d.jour), cats.get(d.cat) ?? d.cat, d.qui === "commun" ? "compte commun" : d.qui === proprio ? "payé par toi" : `payé par ${noms[d.qui]}`].join(" · ")}</small></b>
+                <b>{d.quoi || cats.get(d.cat) || "Dépense"}<small>{[jourLong(d.jour), estTicket(d) ? "ticket de caisse" : cats.get(d.cat) ?? d.cat, d.qui === "commun" ? "compte commun" : `payé par ${d.qui === proprio ? "toi" : noms[d.qui]}${d.rembourse ? ", rendu" : ""}`].join(" · ")}</small></b>
                 <span className="compte">{chf(d.c)}</span>
               </button>
-              {ouverte === d.id && <div className="stock-plus"><button type="button" className="bouton-texte danger" onClick={() => { setOuverte(null); retirerDepense(d); }}>Retirer cette dépense</button></div>}
+              {ouverte === d.id && (estTicket(d) ? (
+                <div className="stock-plus">
+                  <span className="lab">Qui a payé ce ticket</span>
+                  <div className="stock-restes" role="group" aria-label={`Qui a payé ${d.quoi}`}>
+                    {([["commun", "Compte commun"], [proprio, noms[proprio]], [l_autre, noms[l_autre]]] as Array<[Payeur, string]>).map(([q, nom]) =>
+                      <button key={q} type="button" className="puce" aria-pressed={d.qui === q} onClick={() => { vibrer(4); payeurDuTicket(d, q); }}>{nom}</button>)}
+                  </div>
+                  <p className="aide-champ">Ce ticket vient de Cuisine. Pour l'enlever, retire-le là-bas.</p>
+                </div>
+              ) : <div className="stock-plus"><button type="button" className="bouton-texte danger" onClick={() => { setOuverte(null); retirerDepense(d); }}>Retirer cette dépense</button></div>)}
             </li>
           ))}</ul>
         )}
@@ -210,6 +219,29 @@ function Chacun({ postes, b, mois, noms, proprio, ouvrir, qui, onRetour, onNouve
   );
 }
 
+/* ---------- Entre nous : ce que chacun a avancé pour le foyer ---------- */
+
+function EntreNous({ depenses, noms, proprio, onRetour }: { depenses: Depense[]; noms: Noms; proprio: Personne; onRetour: () => void }) {
+  const du = duA(depenses);
+  const qui = ([proprio, autre(proprio)] as const).filter((q) => du[q] > 0);
+  return (
+    <>
+      <button type="button" className="retour-agenda" onClick={onRetour}><ChevronLeft size={18} strokeWidth={2} animated={false} /> Budget</button>
+      <p className="phrase">{qui.length ? "Ce que l'un de vous a payé pour le foyer avec son argent. Le compte commun le lui doit." : <><b>Tout est à jour entre vous.</b> Quand l'un de vous paie une dépense du foyer avec son argent, elle arrive ici.</>}</p>
+      {qui.map((q) => (
+        <section className={`g liste-stock budget-liste`} key={q}>
+          <div className="budget-tete colonne"><small>{q === proprio ? "Le compte commun te doit" : `Le compte commun doit à ${noms[q]}`}</small><Chf c={du[q]} grand /></div>
+          <ul>{avances(depenses, q).map((d) => (
+            <li key={d.id}><div className="stock-ligne"><b>{d.quoi || "Dépense"}<small>{jourLong(d.jour)}{estTicket(d) ? " · ticket de caisse" : ""}</small></b><span className="compte">{chf(d.c)}</span></div></li>
+          ))}</ul>
+          <button type="button" className="bouton petit budget-rendu" onClick={() => { vibrer(8); rembourser(q, depenses); }}>C'est rendu</button>
+          <p className="aide-champ">À toucher quand le virement du compte commun vers {q === proprio ? "ton compte" : `le compte de ${noms[q]}`} est fait.</p>
+        </section>
+      ))}
+    </>
+  );
+}
+
 /* ---------- Comptes : les vrais soldes, et ce qui est mis de côté ---------- */
 
 function Comptes({ postes, b, mois, ouvrir, soldes, onSolde, onNouveau }: Vue & { soldes: Solde[]; onSolde: (c: CompteSolde) => void; onNouveau: (n: Nouveau) => void }) {
@@ -259,7 +291,10 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
   const donnees = useLiveQuery(async () => ({
     postes: await db.budget_postes.toArray(), depenses: await db.budget_depenses.toArray(), categories: await db.budget_categories.toArray() as Categorie[],
     soldes: await db.budget_soldes.toArray(), apayer: await db.budget_apayer.toArray(),
+    // Les tickets de caisse gardés par Cuisine : le Budget les lit (rien n'est copié) pour les compter dans les Courses.
+    tickets: await db.cuisine_tickets.toArray(),
   }), [], undefined);
+  const [entreNous, setEntreNous] = useState(false);
   const partie = useReglage<Partie>("budgetPartie", "mois");
   const [decalage, setDecalage] = useState(0);
   const [chacun, setChacun] = useState<Personne | null>(null);
@@ -268,12 +303,14 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
   const [depense, setDepense] = useState(false);
   const [solde, setSolde] = useState<CompteSolde | null>(null);
   const [groupe, setGroupe] = useState<string | null>(null);
-  useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie, chacun]);
+  useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie, chacun, entreNous]);
   // Le geste « retour » de l'app (glisser vers la droite) ferme le détail de chacun.
-  useEffect(() => { const retour = () => { setChacun(null); setGroupe(null); }; window.addEventListener("echo-retour", retour); return () => window.removeEventListener("echo-retour", retour); }, []);
+  useEffect(() => { const retour = () => { setChacun(null); setGroupe(null); setEntreNous(false); }; window.addEventListener("echo-retour", retour); return () => window.removeEventListener("echo-retour", retour); }, []);
 
   if (!donnees) return null;
-  const { postes, depenses, categories, soldes, apayer } = donnees;
+  const { postes, categories, soldes, apayer } = donnees;
+  const depenses = avecTickets(donnees.depenses, donnees.tickets, debutBudget(postes));
+  const du = duA(depenses), aRendre = du.moi + du.elle;
   if (!postes.length) return <Depart />;
 
   const mois = plusMoisB(moisDe(today), decalage);
@@ -291,6 +328,7 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
     </>
   );
 
+  if (entreNous) return <EntreNous depenses={depenses} noms={noms} proprio={proprio} onRetour={() => setEntreNous(false)} />;
   if (chacun) return <><Chacun {...vue} qui={chacun} onRetour={() => setChacun(null)} onNouveau={setNouveau} />{feuilles}</>;
   if (groupe) return (
     <>
@@ -323,6 +361,9 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
           <span className="vues-goutte" aria-hidden="true" />
           {PARTIES.map((p) => <button key={p} type="button" role="tab" aria-selected={partie === p} onClick={() => { vibrer(4); poserReglage("budgetPartie", p); }}>{NOM_PARTIE[p]}</button>)}
         </div>
+        <button type="button" className="rond-horaires budget-nous" aria-label={aRendre ? `Entre nous : ${chf(aRendre)} francs à rendre` : "Entre nous"} onClick={() => setEntreNous(true)}>
+          <Users size={19} strokeWidth={1.8} />{aRendre > 0 && <i aria-hidden="true" />}
+        </button>
       </div>
       {partie === "charges" ? <Charges {...vue} onChacun={setChacun} onNouveau={setNouveau} onGroupe={setGroupe} />
         : partie === "comptes" ? <Comptes {...vue} soldes={soldes} onSolde={setSolde} onNouveau={setNouveau} />
