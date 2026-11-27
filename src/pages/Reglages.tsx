@@ -9,6 +9,7 @@ import { marquerGuide, poserReglage, useMaintenant, useNoms, useProfil, useRegla
 import { CodeInvitation } from "../components/Connexion";
 import { SectionIcloud } from "../components/Icloud";
 import { SectionTrajets } from "../components/Trajets";
+import { annulables, annulerDuJournal } from "../lib/echo/retour";
 import { estConnecte, inviter, type Foyer, type Membre } from "../sync/moteur";
 import { MODULES, basculerModule } from "../modules/registre";
 import { exporter, importer } from "../data/sauvegarde";
@@ -395,7 +396,17 @@ function ManquesEcho() {
 // Le journal d'Echo : ce qu'il a fait, pour qui, et quand (partagé au foyer). Les 30 dernières lignes.
 function JournalEcho() {
   const lignes = useLiveQuery(() => db.echo_journal.orderBy("quand").reverse().limit(30).toArray(), [], []);
+  // Ce qui peut encore s'annuler d'ici (7 jours, sur le téléphone qui a fait l'action).
+  const retours = useReglage<unknown>("echoRetours", null);
+  const [possibles, setPossibles] = useState<Set<string>>(new Set());
+  useEffect(() => { let vivant = true; annulables().then((s) => { if (vivant) setPossibles(s); }); return () => { vivant = false; }; }, [retours]);
   const quand = (t: number) => new Date(t).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const annuler = async (id: string) => {
+    const r = await annulerDuJournal(id).catch(() => null);
+    if (!r) toast("Cette action ne peut plus être annulée d'ici.");
+    else if (!r.remis) toast("Rien à annuler : ça a déjà été changé depuis.");
+    else toast(r.changes ? "Annulé, sauf ce qui a été changé depuis." : "Annulé.");
+  };
   return (
     <section className="g reglages">
       <span className="lab">Ce qu'Echo a fait</span>
@@ -404,10 +415,12 @@ function JournalEcho() {
           {lignes.map((l) => (
             <li key={l.id}>
               <span><b>{l.annule ? <s>{l.action}</s> : l.action}</b><small>{quand(l.quand)}{l.par ? ` · demandé par ${l.par}` : ""}{l.annule ? " · annulé" : ""}</small></span>
+              {!l.annule && possibles.has(l.id) && <button type="button" className="bouton-texte" onClick={() => annuler(l.id)}>Annuler</button>}
             </li>
           ))}
         </ul>
       )}
+      {lignes.length > 0 && <p className="aide-champ">Tu peux annuler une action pendant 7 jours, sur le téléphone qui l'a demandée.</p>}
     </section>
   );
 }
