@@ -13,6 +13,7 @@ import { OUTILS_BASE, type ContexteEcho } from "./outils";
 import { nettoyerJournal } from "./journal";
 import { motDuMatin, NOTE_BONJOUR } from "./initiative";
 import { MODULES, outilsEcho } from "../../modules/registre";
+import { NOUVEAUTES } from "./nouveautes";
 
 const TOUS = outilsEcho(MODULES);
 
@@ -352,5 +353,14 @@ describe("le mot du matin", () => {
     expect(outilsRecus[0]).toContain("voir_jours");
     expect(outilsRecus[0]).not.toContain("ajouter_tache");
     expect(outilsRecus[0].every((n) => OUTILS_ECHO.find((o) => o.name === n)?.genre === "lire")).toBe(true);
+  });
+});
+
+describe("les mises à jour d'Echo", () => {
+  it("la plus récente d'abord, chacune avec un titre unique et au moins une phrase", () => {
+    expect(NOUVEAUTES.length).toBeGreaterThan(0);
+    expect(NOUVEAUTES.map((n) => n.jour)).toEqual([...NOUVEAUTES.map((n) => n.jour)].sort().reverse());
+    expect(new Set(NOUVEAUTES.map((n) => n.titre)).size).toBe(NOUVEAUTES.length);
+    expect(NOUVEAUTES.every((n) => /^\d{4}-\d{2}-\d{2}$/.test(n.jour) && n.titre && n.points.length > 0 && n.points.every(Boolean))).toBe(true);
   });
 });

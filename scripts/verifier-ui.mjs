@@ -6,11 +6,13 @@ import { join } from "node:path";
 const fautes = [];
 const fichiers = (d) => readdirSync(d).flatMap((f) => { const p = join(d, f); return statSync(p).isDirectory() ? fichiers(p) : [p]; });
 
-const css = readFileSync("src/styles.css", "utf8").split("\n");
-css.forEach((l, i) => {
-  for (const m of l.matchAll(/font-size:\s*([\d.]+)px/g))
-    if (Number(m[1]) < 13 && !l.includes("exception")) fautes.push(`styles.css:${i + 1} texte de ${m[1]} px (minimum 13 px)`);
-});
+// Toutes les feuilles de style, et aussi le raccourci « font: 700 11px/1 … » (la taille est le premier nombre en px).
+for (const f of fichiers("src").filter((f) => f.endsWith(".css"))) {
+  readFileSync(f, "utf8").split("\n").forEach((l, i) => {
+    const tailles = [...l.matchAll(/font-size:\s*([\d.]+)px/g), ...l.matchAll(/font:\s*[^;{}]*?\b([\d.]+)px/g)].map((m) => Number(m[1]));
+    for (const t of tailles) if (t < 13 && !l.includes("exception")) fautes.push(`${f}:${i + 1} texte de ${t} px (minimum 13 px)`);
+  });
+}
 
 for (const f of fichiers("src").filter((f) => /\.(tsx?|css)$/.test(f) && !f.endsWith(".test.ts"))) {
   readFileSync(f, "utf8").split("\n").forEach((l, i) => {

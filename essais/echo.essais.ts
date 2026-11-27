@@ -1,7 +1,9 @@
 // Les phrases d'essai d'Echo : de vraies phrases envoyées au vrai modèle, avec la même consigne et les mêmes outils
 // que la fonction en ligne (demandeTour), et les vrais outils de l'app sur une base en mémoire.
 // À lancer avant chaque mise en ligne d'un changement d'Echo : `ANTHROPIC_API_KEY=… npm run essais`.
-// Sans clé, les essais sont sautés. Coût : environ 1 à 3 centimes pour toute la liste.
+// Ou contre la fonction déployée, sans clé ici (elle a la sienne) : `ECHO_JETON=… npm run essais`, où ECHO_JETON est le
+// jeton de session d'un membre d'un foyer (d'essai de préférence) ; ECHO_URL change l'adresse. Rien de secret dans le dépôt.
+// Sans clé ni jeton, les essais sont sautés. Coût : environ 1 à 3 centimes pour toute la liste.
 import "fake-indexeddb/auto";
 import Anthropic from "@anthropic-ai/sdk";
 import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,16 +14,28 @@ vi.stubGlobal("navigator", {});
 import { db } from "../src/data/db";
 import type { Horaire } from "../src/lib/horaires";
 import type { Tache } from "../src/lib/types";
+import type { Poste } from "../src/modules/budget/donnees";
 import { lancerEcho, type Appeler, type ResultatEcho, type Tour } from "../src/lib/echo/boucle";
-import { OUTILS_BASE, type Action, type ContexteEcho } from "../src/lib/echo/outils";
+import type { Action, ContexteEcho } from "../src/lib/echo/outils";
+import { ADRESSE_ECHO } from "../src/lib/assistant";
+import { MODULES, outilsEcho } from "../src/modules/registre";
 import { coutMicro, demandeTour } from "../supabase/functions/_shared/echo-outils";
 
 const cle = process.env.ANTHROPIC_API_KEY;
-const client = cle ? new Anthropic() : null;
+const jeton = process.env.ECHO_JETON;
+const adresse = process.env.ECHO_URL || ADRESSE_ECHO;
+const client = cle && !jeton ? new Anthropic() : null;
+const OUTILS = outilsEcho(MODULES);
 let micro = 0;
 
-const appeler: Appeler = async ({ situation, messages }) => {
-  const d = demandeTour(situation, messages);
+// Avec un jeton : la fonction en ligne, comme le fait l'app (sans le direct). Sinon : le modèle, avec la clé.
+const appeler: Appeler = jeton ? async (corps) => {
+  const r = await fetch(adresse, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${jeton}` }, body: JSON.stringify(corps), signal: AbortSignal.timeout(110_000) });
+  const c = await r.json().catch(() => null);
+  if (!r.ok || !c || !Array.isArray(c.content)) throw new Error(`La fonction echo a répondu ${r.status} : ${c?.erreur ?? "illisible"}`);
+  return c as Tour;
+} : async ({ situation, messages, outils }) => {
+  const d = demandeTour(situation, messages, outils);
   const r = await client!.beta.messages.create({ ...d, messages: messages as Anthropic.Beta.BetaMessageParam[] });
   micro += coutMicro(r.model ?? d.model, r.usage);
   return { content: r.content, stop_reason: r.stop_reason ?? "" } as Tour;
@@ -34,11 +48,20 @@ const t = (id: string, titre: string, x: Partial<Tache> = {}): Tache =>
   ({ id, titre, qui: "moi", jour: "2026-11-26", heure: "", niveau: null, repete: "", note: "", fait: null, faitLe: null, cree: 1, ...x });
 const h = (jour: string, code: Horaire["code"]): Horaire => ({ qui: "moi", jour, code });
 
+const poste = (id: string, sorte: Poste["sorte"], c: number, x: Partial<Poste> = {}): Poste => ({ id, nom: id, sorte, rythme: "mois", valeurs: [{ des: "2026-11", c, quand: 1 }], cree: 1, ...x });
+const BUDGET: Poste[] = [
+  poste("revenu-moi", "revenu", 300_000, { qui: "moi" }), poste("revenu-elle", "revenu", 500_000, { qui: "elle" }),
+  poste("Assurance", "perso", 40_000, { qui: "moi" }), poste("Leasing", "perso", 60_000, { qui: "elle" }),
+  poste("virement-moi", "virement", 140_000, { qui: "moi" }), poste("virement-elle", "virement", 260_000, { qui: "elle" }),
+  poste("Loyer", "foyer", 200_000, { compte: "commun" }), poste("Courses", "foyer", 50_000, { compte: "commun", cat: "courses" }), poste("part-plaisir", "part", 25),
+];
+
 interface Cas {
   phrase: string;
   taches?: Tache[];
   horaires?: Horaire[];
   corvees?: string[];
+  budget?: boolean; // un budget d'essai rempli (des chiffres ronds, pas ceux d'un vrai foyer)
   verifier: (r: ResultatEcho, a: Action[]) => void;
 }
 
@@ -140,23 +163,44 @@ const CAS: Record<string, Cas> = {
       expect(r.reponse.length).toBeGreaterThan(0);
     },
   },
+  "une dépense déjà faite va au Budget, pas aux papiers ni aux tâches": {
+    phrase: "j'ai payé 45 fr. à la Migros",
+    budget: true,
+    verifier: (_r, a) => {
+      expect(a).toHaveLength(1);
+      expect(a[0]).toMatchObject({ outil: "ajouter_depense", genre: "petit" });
+      expect(a[0].libelle).toMatch(/45/);
+      expect(a[0].details).toEqual(["Courses", "compte commun"]);
+    },
+  },
+  "une question sur le budget : il lit, il ne propose rien": {
+    phrase: "combien il me reste ce mois ?",
+    budget: true,
+    verifier: (r, a) => {
+      expect(a).toHaveLength(0);
+      expect(r.reponse).toMatch(/1[\s\u202f']?200/); // ce qui reste à Dany dans le budget d'essai
+    },
+  },
 };
 
 beforeEach(async () => {
   await db.taches.clear(); await db.horaires.clear(); await db.echo_journal.clear(); await db.maison_corvees.clear(); await db.maison_faits.clear();
+  await db.budget_postes.clear(); await db.budget_depenses.clear();
 });
-afterAll(() => { if (cle) console.log(`Coût des essais : environ ${(micro / 1e6).toFixed(3)} $`); });
+afterAll(() => { if (jeton) console.log("Essais faits contre la fonction en ligne : le coût est compté dans le budget du jour du foyer."); else if (cle) console.log(`Coût des essais : environ ${(micro / 1e6).toFixed(3)} $`); });
 
-describe.skipIf(!cle)("phrases d'essai d'Echo (vrai modèle)", () => {
+describe.skipIf(!cle && !jeton)("phrases d'essai d'Echo (vrai modèle)", () => {
   for (const [nom, c] of Object.entries(CAS)) {
     it(nom, async () => {
       if (c.taches) await db.taches.bulkAdd(c.taches);
       if (c.horaires) await db.horaires.bulkAdd(c.horaires);
       if (c.corvees) await db.maison_corvees.bulkAdd(c.corvees.map((nom, i) => ({ id: "cv" + i, nom, piece: "", tous: 7, taille: 2 as const, qui: "libre" as const, fait: null, cree: 0 })));
-      const r = await lancerEcho(c.phrase, ctx, { appeler, outils: OUTILS_BASE, seul: false });
+      if (c.budget) await db.budget_postes.bulkAdd(BUDGET);
+      const r = await lancerEcho(c.phrase, ctx, { appeler, outils: OUTILS, seul: false });
       c.verifier(r, r.aConfirmer);
       // Rien ne doit avoir changé sans le oui de la personne.
       expect((await db.taches.toArray()).map((x) => x.id).sort()).toEqual((c.taches ?? []).map((x) => x.id).sort());
+      expect(await db.budget_depenses.count()).toBe(0);
     });
   }
 });

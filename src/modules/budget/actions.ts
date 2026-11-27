@@ -3,7 +3,7 @@ import { db } from "../../data/db";
 import { auJour, nouvelId, sansAccents } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
 import {
-  CATS_BASE, DEPART, changer, chf, cleCategorie, ecrire, moisDe, nettoyerAPayer, proposerVirements, valeurDe,
+  CATS_BASE, DEPART, avances, changer, chf, cleCategorie, ecrire, estTicket, somme, moisDe, nettoyerAPayer, proposerVirements, valeurDe,
   type APayer, type Categorie, type Changement, type Compte, type CompteSolde, type Depense, type Payeur, type Poste, type Rythme, type Solde, type Sorte,
 } from "./donnees";
 
@@ -94,16 +94,46 @@ export async function arreterPoste(p: Poste, mois: string) {
 /* ---------- Les dépenses et les catégories ---------- */
 
 export interface NouvelleDepense { c: number; quoi: string; cat: string; qui: Payeur; jour?: string }
-export async function ajouterDepense(n: NouvelleDepense, now = new Date()): Promise<Depense | null> {
+// sansBruit : pour Echo, qui montre lui-même ce qu'il a fait et sait l'annuler.
+export async function ajouterDepense(n: NouvelleDepense, now = new Date(), sansBruit = false): Promise<Depense | null> {
   if (!Number.isInteger(n.c) || n.c <= 0) return null;
   const d: Depense = { id: nouvelId(), jour: n.jour ?? auJour(0, now), c: n.c, quoi: propre(n.quoi, 80), cat: n.cat || "divers", qui: n.qui, cree: Date.now() };
   await db.budget_depenses.add(d);
-  toast(`${d.quoi || "Dépense"} : ${chf(d.c)} CHF`, annuler(() => db.budget_depenses.delete(d.id)));
+  if (!sansBruit) toast(`${d.quoi || "Dépense"} : ${chf(d.c)} CHF`, annuler(() => db.budget_depenses.delete(d.id)));
   return d;
 }
 export async function retirerDepense(d: Depense) {
   await db.budget_depenses.delete(d.id);
   toast(`${d.quoi || "Dépense"} : retiré`, annuler(() => db.budget_depenses.put(d)));
+}
+// Un ticket de caisse est compté pour le compte commun ; dire que c'est l'un des deux qui a payé garde une ligne à part pour ce ticket.
+const pareille = (a: Depense | undefined, b: Depense) => !!a && a.qui === b.qui && a.c === b.c && a.rembourse === b.rembourse;
+export async function payeurDuTicket(d: Depense, qui: Payeur) {
+  if (!estTicket(d) || d.qui === qui) return; // le même payeur : rien ne change (un remboursement déjà noté reste noté)
+  const avant = await db.budget_depenses.get(d.id);
+  const apres: Depense = { id: d.id, jour: d.jour, c: d.c, quoi: d.quoi, cat: d.cat, qui, cree: d.cree };
+  await db.budget_depenses.put(apres);
+  // « Annuler » ne remet l'état d'avant que si la ligne n'a pas rechangé entre-temps.
+  toast(qui === "commun" ? `${d.quoi} : payé par le compte commun` : `${d.quoi} : noté dans Entre nous`, annuler(async () => {
+    if (!pareille(await db.budget_depenses.get(d.id), apres)) return;
+    await (avant ? db.budget_depenses.put(avant) : db.budget_depenses.delete(d.id));
+  }));
+}
+// Entre nous : le compte commun a rendu à quelqu'un tout ce qu'il avait avancé. Les lignes venues d'un ticket sont gardées avec leur date de remboursement.
+export async function rembourser(qui: Personne, toutes: Depense[], now = new Date()): Promise<number> {
+  const dues = avances(toutes, qui), jour = auJour(0, now);
+  if (!dues.length) return 0;
+  const avant = await db.budget_depenses.bulkGet(dues.map((d) => d.id));
+  const rendues = dues.map((d) => ({ ...d, rembourse: jour }));
+  await db.budget_depenses.bulkPut(rendues);
+  // « Annuler » ne touche qu'aux lignes restées telles que ce geste les a laissées.
+  toast(`${chf(somme(dues))} CHF rendus`, annuler(() => db.transaction("rw", db.budget_depenses, async () => {
+    for (const [i, d] of rendues.entries()) {
+      if (!pareille(await db.budget_depenses.get(d.id), d)) continue;
+      if (avant[i]) await db.budget_depenses.put(avant[i]!); else await db.budget_depenses.delete(d.id);
+    }
+  })));
+  return dues.length;
 }
 // Créer une catégorie : elle est gardée pour le foyer. Une catégorie qui existe déjà est simplement rendue.
 export async function ajouterCategorie(nom: string): Promise<Categorie | null> {

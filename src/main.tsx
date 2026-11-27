@@ -5,6 +5,7 @@ import "@fontsource-variable/figtree"; // la police est dans l'app : rien n'est 
 import App from "./App";
 import { suivreClavier } from "./lib/clavier";
 import "./styles.css";
+import "./finitions.css";
 
 // Filet de sécurité : un enregistrement qui rate ne reste jamais muet.
 addEventListener("unhandledrejection", (e) => {

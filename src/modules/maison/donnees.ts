@@ -278,6 +278,11 @@ export function quandPapier(p: Papier, now = new Date()): string {
   if (!Number.isFinite(n)) return "";
   return n < 0 ? (n === -1 ? "c'était hier" : `c'était il y a ${-n} jours`) : n === 0 ? "aujourd'hui" : n === 1 ? "demain" : n <= 30 ? `dans ${n} jours` : `le ${new Date(p.echeance + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`;
 }
+// Les papiers à régler un jour donné, pour la ligne de la journée : ceux qui tombent ce jour-là, et aujourd'hui aussi ceux en retard.
+// auBudget : les lignes « à payer » que le Budget annonce déjà lui-même (module allumé, ligne présente) : on ne les redit pas.
+export const papiersDu = (papiers: Papier[], jour: string, aujourdhui: string, auBudget: ReadonlySet<string> = new Set()) =>
+  papiers.filter((p) => aFairePapier(p) && !auBudget.has(idAPayer(p)) && (p.echeance === jour || (jour === aujourdhui && p.echeance! < aujourdhui)))
+    .sort((a, b) => a.echeance!.localeCompare(b.echeance!));
 // C'est fait : une chose qui revient repart à la prochaine échéance ; sinon, elle garde le jour où c'est fait.
 export function apresFait(p: Papier, now = new Date()): Papier {
   const mois = REPETES.find((r) => r.id === p.repete)?.mois ?? 0;
@@ -294,8 +299,10 @@ export function apresFait(p: Papier, now = new Date()): Papier {
 
 // La ligne « à payer » que le module Budget reprendra (forme convenue avec le fil Budget, 2026-11-27).
 export interface APayer { id: string; titre: string; emetteur: string; montant: number; echeance: string; repete: RepetePapier; dossier: Dossier; papier: string; paye: false | string }
+// L'id de la ligne au Budget : un par échéance pour ce qui revient (sinon le mois suivant sortirait déjà payé).
+export const idAPayer = (p: Pick<Papier, "id" | "repete" | "echeance">) => (p.repete && p.echeance ? `papier:${p.id}:${p.echeance}` : `papier:${p.id}`);
 export const aPayer = (p: Papier): APayer | null =>
-  p.quoi === "payer" && p.montant && p.echeance ? { id: `papier:${p.id}`, titre: p.titre, emetteur: p.emetteur, montant: p.montant, echeance: p.echeance, repete: p.repete, dossier: p.dossier, papier: p.id, paye: p.fait ?? false } : null;
+  p.quoi === "payer" && p.montant && p.echeance ? { id: idAPayer(p), titre: p.titre.slice(0, 80), emetteur: p.emetteur, montant: p.montant, echeance: p.echeance, repete: p.repete, dossier: p.dossier, papier: p.id, paye: p.fait ?? false } : null;
 
 /* ---------- Ce qui arrive du foyer : on ne garde que les formes attendues ---------- */
 

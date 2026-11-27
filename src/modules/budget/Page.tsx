@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { ChevronLeft, ChevronRight, Plus } from "pulsoicon-react";
+import { ChevronLeft, ChevronRight, Plus, Users } from "pulsoicon-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { db } from "../../data/db";
@@ -8,11 +8,11 @@ import { auJour } from "../../lib/dates";
 import { vibrer } from "../../lib/gestes";
 import { autre, type Noms, type Personne } from "../../lib/types";
 import type { ContexteModule } from "../contrat";
-import { commencer, payer, retirerDepense } from "./actions";
+import { commencer, payer, payeurDuTicket, rembourser, retirerDepense } from "./actions";
 import { FeuilleChanger, FeuilleDepense, FeuillePoste, FeuilleSolde, type Nouveau } from "./Feuilles";
 import {
-  aRemplir, avancee, bilan, chf, dernierSolde, duMois, enveloppes, jourLong, moisDe, nomMois, parMois, periode, plusMoisB, resteAPayer, toutesCategories, valeurDe, vivants,
-  type APayer, type Bilan, type Categorie, type CompteSolde, type Depense, type Poste, type Solde,
+  aRemplir, avances, avancee, avecTickets, bilan, bornes, chf, debutBudget, duA, estTicket, dernierSolde, duMois, enveloppes, jourLong, moisDe, nomMois, parMois, periode, plusMoisB, pointDuMois, resteAPayer, toutesCategories, valeurDe, vivants,
+  type APayer, type Bilan, type Categorie, type CompteSolde, type Depense, type Poste, type Payeur, type Solde,
 } from "./donnees";
 
 type Partie = "mois" | "charges" | "comptes";
@@ -37,7 +37,7 @@ function Depart() {
 
 /* ---------- Mois : ce qui reste à chacun, puis le commun ---------- */
 
-function Mois({ postes, b, mois, noms, proprio, depenses, categories, apayer, today, onChacun, onPartie }: Vue & { depenses: Depense[]; categories: Categorie[]; apayer: APayer[]; today: string; onChacun: (p: Personne) => void; onPartie: (p: Partie) => void }) {
+function Mois({ postes, b, mois, noms, proprio, depenses, categories, apayer, today, onChacun, onPartie, onPoint }: Vue & { depenses: Depense[]; categories: Categorie[]; apayer: APayer[]; today: string; onChacun: (p: Personne) => void; onPartie: (p: Partie) => void; onPoint: () => void }) {
   const [ouverte, setOuverte] = useState<string | null>(null);
   const l_autre = autre(proprio);
   const envs = enveloppes(postes, depenses, mois);
@@ -106,14 +106,96 @@ function Mois({ postes, b, mois, noms, proprio, depenses, categories, apayer, to
           <ul>{ds.slice(0, 30).map((d) => (
             <li key={d.id} className={ouverte === d.id ? "ouvert" : ""}>
               <button type="button" className="stock-ligne" aria-expanded={ouverte === d.id} onClick={() => setOuverte(ouverte === d.id ? null : d.id)}>
-                <b>{d.quoi || cats.get(d.cat) || "Dépense"}<small>{[jourLong(d.jour), cats.get(d.cat) ?? d.cat, d.qui === "commun" ? "compte commun" : d.qui === proprio ? "payé par toi" : `payé par ${noms[d.qui]}`].join(" · ")}</small></b>
+                <b>{d.quoi || cats.get(d.cat) || "Dépense"}<small>{[jourLong(d.jour), estTicket(d) ? "ticket de caisse" : cats.get(d.cat) ?? d.cat, d.qui === "commun" ? "compte commun" : `payé par ${d.qui === proprio ? "toi" : noms[d.qui]}${d.rembourse ? ", rendu" : ""}`].join(" · ")}</small></b>
                 <span className="compte">{chf(d.c)}</span>
               </button>
-              {ouverte === d.id && <div className="stock-plus"><button type="button" className="bouton-texte danger" onClick={() => { setOuverte(null); retirerDepense(d); }}>Retirer cette dépense</button></div>}
+              {ouverte === d.id && (estTicket(d) ? (
+                <div className="stock-plus">
+                  <span className="lab">Qui a payé ce ticket</span>
+                  <div className="stock-restes" role="group" aria-label={`Qui a payé ${d.quoi}`}>
+                    {([["commun", "Compte commun"], [proprio, noms[proprio]], [l_autre, noms[l_autre]]] as Array<[Payeur, string]>).map(([q, nom]) =>
+                      <button key={q} type="button" className="puce" aria-pressed={d.qui === q} onClick={() => { vibrer(4); payeurDuTicket(d, q); }}>{nom}</button>)}
+                  </div>
+                  <p className="aide-champ">Ce ticket vient de Cuisine. Pour l'enlever, retire-le là-bas.</p>
+                </div>
+              ) : <div className="stock-plus"><button type="button" className="bouton-texte danger" onClick={() => { setOuverte(null); retirerDepense(d); }}>Retirer cette dépense</button></div>)}
             </li>
           ))}</ul>
         )}
       </section>
+
+      <button type="button" className="budget-a-remplir budget-vers-point" onClick={() => { vibrer(4); onPoint(); }}>
+        <b>Le point de {nomMois(mois).toLowerCase()}</b><span>Ce qui a été dépensé, ce qui reste, ce qui a changé.</span>
+      </button>
+    </>
+  );
+}
+
+/* ---------- Le point du mois : le résumé, tout recalculé ---------- */
+
+function PointDuMois({ postes, mois, noms, proprio, depenses, categories, apayer, today, onRetour }: Pick<Vue, "postes" | "mois" | "noms" | "proprio"> & { depenses: Depense[]; categories: Categorie[]; apayer: APayer[]; today: string; onRetour: () => void }) {
+  const p = pointDuMois(postes, depenses, apayer, mois, today);
+  const cats = new Map(toutesCategories(categories).map((c) => [c.id, c.nom]));
+  const avant = nomMois(plusMoisB(mois, -1)).toLowerCase(), ecart = p.avant === null ? 0 : p.depense - p.avant;
+  const tenues = p.enveloppes.filter((e) => e.reste >= 0).length, depassees = p.enveloppes.length - tenues;
+  const ecrit = (sorte: string, c: number) => (sorte === "part" ? `${c} %` : chf(c));
+  const aQui = (q?: Personne) => (!q ? "" : q === proprio ? " (toi)" : ` (${noms[q]})`);
+  return (
+    <>
+      <button type="button" className="retour-agenda" onClick={onRetour}><ChevronLeft size={18} strokeWidth={2} animated={false} /> Budget</button>
+      <p className="phrase">
+        <b>Le point de {nomMois(mois).toLowerCase()}.</b> {periode(mois)}, {p.fini ? "mois terminé." : today < bornes(mois).du ? "pas encore commencé." : p.restants > 1 ? `encore ${p.restants} jours.` : "dernier jour."}
+        {p.enveloppes.length > 0 && (depassees ? ` ${depassees > 1 ? `${depassees} enveloppes dépassées` : "1 enveloppe dépassée"}.` : " Toutes les enveloppes tiennent.")}
+      </p>
+
+      <section className="g liste-stock budget-liste">
+        <div className="budget-tete colonne"><small>Dépensé {p.fini ? "ce mois-là" : "jusqu'ici"}</small><Chf c={p.depense} grand />
+          {/* Un mois en cours ne se compare pas à un mois entier : on donne seulement le chiffre du mois d'avant. */}
+          {p.avant !== null && <small>{!p.fini ? `${chf(p.avant)} sur tout ${avant}` : ecart === 0 ? `comme en ${avant}` : `${chf(Math.abs(ecart))} de ${ecart > 0 ? "plus" : "moins"} qu'en ${avant} (${chf(p.avant)})`}</small>}
+        </div>
+        {p.cats.length === 0 ? <p className="aide-champ">Aucune dépense notée.</p> : (
+          <ul>{p.cats.map((c) => (
+            <li key={c.cat}><div className="stock-ligne"><b>{cats.get(c.cat) ?? c.cat}{p.avant !== null && <small>{chf(c.avant)} en {avant}</small>}</b><span className="compte">{chf(c.c)}</span></div></li>
+          ))}</ul>
+        )}
+      </section>
+
+      {p.enveloppes.length > 0 && (
+        <section className="g liste-stock budget-liste"><span className="lab">Les enveloppes</span>
+          <ul>{p.enveloppes.map((e) => (
+            <li key={e.cat}><div className="stock-ligne"><b>{e.nom}<small>{chf(e.depense)} sur {chf(e.budget)}</small></b>
+              <span className={`compte${e.reste < 0 ? " attend" : ""}`}>{e.reste < 0 ? `dépassé de ${chf(-e.reste)}` : `reste ${chf(e.reste)}`}</span></div></li>
+          ))}</ul>
+        </section>
+      )}
+
+      <section className="g liste-stock budget-liste"><span className="lab">Ce qui reste</span>
+        <ul>
+          {([proprio, autre(proprio)] as const).map((q) => <li key={q}><div className="stock-ligne"><b>{q === proprio ? "À toi" : `À ${noms[q]}`}</b><span className="compte">{chf(p.reste[q])}</span></div></li>)}
+          <li><div className="stock-ligne"><b>Pour l'épargne<small>la part du compte commun mise de côté</small></b><span className="compte">{chf(p.epargne)}</span></div></li>
+          <li><div className="stock-ligne"><b>Pour le plaisir</b><span className="compte">{chf(p.plaisir)}</span></div></li>
+        </ul>
+        {p.resteCommun < 0 && <p className="aide-champ">Les charges du foyer dépassent ce qui est versé au commun de {chf(-p.resteCommun)}.</p>}
+      </section>
+
+      <section className="g liste-stock budget-liste"><span className="lab">Les factures</span>
+        <ul>
+          <li><div className="stock-ligne"><b>Encore à payer{p.aPayer.retard > 0 && <small>{p.aPayer.retard > 1 ? `${p.aPayer.retard} en retard` : "1 en retard"}</small>}</b><span className={`compte${p.aPayer.retard ? " attend" : ""}`}>{p.aPayer.nombre ? `${p.aPayer.nombre} · ${chf(p.aPayer.c)}` : "rien"}</span></div></li>
+          <li><div className="stock-ligne"><b>Payées ce mois</b><span className="compte">{p.payees}</span></div></li>
+        </ul>
+      </section>
+
+      {p.changements.length > 0 && (
+        <section className="g liste-stock budget-liste"><span className="lab">Ce qui a changé depuis {avant}</span>
+          <ul>{p.changements.map((c) => (
+            <li key={c.id}><div className="stock-ligne"><b>{c.nom}{aQui(c.qui)}<small>{c.avant === null ? "nouvelle ligne" : `avant ${ecrit(c.sorte, c.avant)}`}</small></b><span className="compte">{c.apres === null ? "arrêtée" : ecrit(c.sorte, c.apres)}</span></div></li>
+          ))}</ul>
+        </section>
+      )}
+
+      {p.aRendre.moi + p.aRendre.elle > 0 && (
+        <p className="aide-champ">{([proprio, autre(proprio)] as const).filter((q) => p.aRendre[q] > 0).map((q) => `Le compte commun ${q === proprio ? "te doit" : `doit à ${noms[q]}`} ${chf(p.aRendre[q])}`).join(". ")}. À régler dans « Entre nous ».</p>
+      )}
     </>
   );
 }
@@ -210,6 +292,29 @@ function Chacun({ postes, b, mois, noms, proprio, ouvrir, qui, onRetour, onNouve
   );
 }
 
+/* ---------- Entre nous : ce que chacun a avancé pour le foyer ---------- */
+
+function EntreNous({ depenses, noms, proprio, onRetour }: { depenses: Depense[]; noms: Noms; proprio: Personne; onRetour: () => void }) {
+  const du = duA(depenses);
+  const qui = ([proprio, autre(proprio)] as const).filter((q) => du[q] > 0);
+  return (
+    <>
+      <button type="button" className="retour-agenda" onClick={onRetour}><ChevronLeft size={18} strokeWidth={2} animated={false} /> Budget</button>
+      <p className="phrase">{qui.length ? "Ce que l'un de vous a payé pour le foyer avec son argent. Le compte commun le lui doit." : <><b>Tout est à jour entre vous.</b> Quand l'un de vous paie une dépense du foyer avec son argent, elle arrive ici.</>}</p>
+      {qui.map((q) => (
+        <section className={`g liste-stock budget-liste`} key={q}>
+          <div className="budget-tete colonne"><small>{q === proprio ? "Le compte commun te doit" : `Le compte commun doit à ${noms[q]}`}</small><Chf c={du[q]} grand /></div>
+          <ul>{avances(depenses, q).map((d) => (
+            <li key={d.id}><div className="stock-ligne"><b>{d.quoi || "Dépense"}<small>{jourLong(d.jour)}{estTicket(d) ? " · ticket de caisse" : ""}</small></b><span className="compte">{chf(d.c)}</span></div></li>
+          ))}</ul>
+          <button type="button" className="bouton petit budget-rendu" onClick={() => { vibrer(8); rembourser(q, depenses); }}>C'est rendu</button>
+          <p className="aide-champ">À toucher quand le virement du compte commun vers {q === proprio ? "ton compte" : `le compte de ${noms[q]}`} est fait.</p>
+        </section>
+      ))}
+    </>
+  );
+}
+
 /* ---------- Comptes : les vrais soldes, et ce qui est mis de côté ---------- */
 
 function Comptes({ postes, b, mois, ouvrir, soldes, onSolde, onNouveau }: Vue & { soldes: Solde[]; onSolde: (c: CompteSolde) => void; onNouveau: (n: Nouveau) => void }) {
@@ -259,7 +364,11 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
   const donnees = useLiveQuery(async () => ({
     postes: await db.budget_postes.toArray(), depenses: await db.budget_depenses.toArray(), categories: await db.budget_categories.toArray() as Categorie[],
     soldes: await db.budget_soldes.toArray(), apayer: await db.budget_apayer.toArray(),
+    // Les tickets de caisse gardés par Cuisine : le Budget les lit (rien n'est copié) pour les compter dans les Courses.
+    tickets: await db.cuisine_tickets.toArray(),
   }), [], undefined);
+  const [entreNous, setEntreNous] = useState(false);
+  const [point, setPoint] = useState(false);
   const partie = useReglage<Partie>("budgetPartie", "mois");
   const [decalage, setDecalage] = useState(0);
   const [chacun, setChacun] = useState<Personne | null>(null);
@@ -268,12 +377,14 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
   const [depense, setDepense] = useState(false);
   const [solde, setSolde] = useState<CompteSolde | null>(null);
   const [groupe, setGroupe] = useState<string | null>(null);
-  useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie, chacun]);
+  useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie, chacun, entreNous, point]);
   // Le geste « retour » de l'app (glisser vers la droite) ferme le détail de chacun.
-  useEffect(() => { const retour = () => { setChacun(null); setGroupe(null); }; window.addEventListener("echo-retour", retour); return () => window.removeEventListener("echo-retour", retour); }, []);
+  useEffect(() => { const retour = () => { setChacun(null); setGroupe(null); setEntreNous(false); setPoint(false); }; window.addEventListener("echo-retour", retour); return () => window.removeEventListener("echo-retour", retour); }, []);
 
   if (!donnees) return null;
-  const { postes, depenses, categories, soldes, apayer } = donnees;
+  const { postes, categories, soldes, apayer } = donnees;
+  const depenses = avecTickets(donnees.depenses, donnees.tickets, debutBudget(postes));
+  const du = duA(depenses), aRendre = du.moi + du.elle;
   if (!postes.length) return <Depart />;
 
   const mois = plusMoisB(moisDe(today), decalage);
@@ -291,6 +402,8 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
     </>
   );
 
+  if (point) return <PointDuMois postes={postes} mois={mois} noms={noms} proprio={proprio} depenses={depenses} categories={categories} apayer={apayer} today={today} onRetour={() => setPoint(false)} />;
+  if (entreNous) return <EntreNous depenses={depenses} noms={noms} proprio={proprio} onRetour={() => setEntreNous(false)} />;
   if (chacun) return <><Chacun {...vue} qui={chacun} onRetour={() => setChacun(null)} onNouveau={setNouveau} />{feuilles}</>;
   if (groupe) return (
     <>
@@ -323,10 +436,13 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
           <span className="vues-goutte" aria-hidden="true" />
           {PARTIES.map((p) => <button key={p} type="button" role="tab" aria-selected={partie === p} onClick={() => { vibrer(4); poserReglage("budgetPartie", p); }}>{NOM_PARTIE[p]}</button>)}
         </div>
+        <button type="button" className="rond-horaires budget-nous" aria-label={aRendre ? `Entre nous : ${chf(aRendre)} francs à rendre` : "Entre nous"} onClick={() => setEntreNous(true)}>
+          <Users size={19} strokeWidth={1.8} />{aRendre > 0 && <i aria-hidden="true" />}
+        </button>
       </div>
       {partie === "charges" ? <Charges {...vue} onChacun={setChacun} onNouveau={setNouveau} onGroupe={setGroupe} />
         : partie === "comptes" ? <Comptes {...vue} soldes={soldes} onSolde={setSolde} onNouveau={setNouveau} />
-        : <Mois {...vue} depenses={depenses} categories={categories} apayer={apayer} today={today} onChacun={setChacun} onPartie={(p) => poserReglage("budgetPartie", p)} />}
+        : <Mois {...vue} depenses={depenses} categories={categories} apayer={apayer} today={today} onChacun={setChacun} onPartie={(p) => poserReglage("budgetPartie", p)} onPoint={() => setPoint(true)} />}
       {feuilles}
     </>
   );

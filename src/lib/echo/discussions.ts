@@ -7,7 +7,8 @@ import type { Message } from "./boucle";
 // Une ligne d'action montrée sous la réponse d'Echo, et ce qu'elle est devenue.
 export type EtatAction = "fait" | "propose" | "oui" | "non" | "annule";
 export interface LigneEchange { texte: string; etat: EtatAction }
-export interface Echange { moi: string; echo: string; actions?: LigneEchange[] }
+// photo : une photo accompagnait la phrase (elle n'est pas gardée, seulement le fait qu'il y en avait une).
+export interface Echange { moi: string; echo: string; actions?: LigneEchange[]; photo?: boolean }
 // suite : la conversation à renvoyer au serveur ; note : ce que l'app dira à Echo avant la phrase suivante.
 // nouveau : Echo a écrit de lui-même (un mot le matin, ce que l'autre a fait) et ce n'est pas encore lu.
 // parle : la dernière phrase de la personne (les mots d'Echo ne relancent pas la discussion).
