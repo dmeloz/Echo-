@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { db } from "../../data/db";
 import { auJour, nouvelId, sansAccents } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
-import { minutesDe, type Appareil, type Contact, type Corvee, type EtatReparation, type Fait, type Modele, type QuiCorvee, type Reparation, type Taille } from "./donnees";
+import { apresFait, devinerDossier, minutesDe, type Appareil, type Papier, type Contact, type Corvee, type EtatReparation, type Fait, type Modele, type QuiCorvee, type Reparation, type Taille } from "./donnees";
 
 // Les gestes du module Maison sur ses propres tables. Tout ce qui change montre « Annuler ».
 
@@ -126,4 +126,41 @@ export const changerContact = (id: string, x: Partial<Pick<Contact, "role" | "te
 export async function retirerContact(c: Contact) {
   await db.maison_contacts.delete(c.id);
   toast(`${c.nom} : retiré`, annuler(() => db.maison_contacts.put(c)));
+}
+
+/* ---------- Papiers ---------- */
+
+export type NouveauPapier = Partial<Omit<Papier, "id" | "cree" | "titre" | "photos">> & { titre: string };
+// Ranger un papier. Le même titre encore à faire n'est pas doublé. Rend le papier, ou null.
+export async function ajouterPapier(n: NouveauPapier, silencieux = false): Promise<Papier | null> {
+  const titre = propre(n.titre, 100);
+  if (!titre) return null;
+  if ((await db.maison_papiers.toArray()).some((p) => !p.fait && memeNom(p.titre, titre))) { if (!silencieux) toast("C'est déjà rangé"); return null; }
+  const p: Papier = { id: nouvelId(), titre: titre[0].toUpperCase() + titre.slice(1), dossier: n.dossier ?? devinerDossier(titre), emetteur: propre(n.emetteur ?? "", 60), note: propre(n.note ?? "", 300),
+    quoi: n.quoi ?? "", ...(n.echeance ? { echeance: n.echeance } : {}), ...(n.montant ? { montant: n.montant } : {}), repete: n.repete ?? "", photos: [], cree: Date.now() };
+  await db.maison_papiers.add(p);
+  if (!silencieux) toast(`${p.titre} : rangé`, annuler(() => db.maison_papiers.delete(p.id)));
+  return p;
+}
+export const changerPapier = (id: string, x: Partial<Omit<Papier, "id" | "cree">>) => db.maison_papiers.update(id, x);
+// C'est fait (payé, renouvelé…) : une chose qui revient repart à la prochaine échéance. Avec Annuler.
+export async function papierFait(p: Papier, now = new Date()) {
+  const apres = apresFait(p, now);
+  await db.maison_papiers.update(p.id, { echeance: apres.echeance, fait: apres.fait, jour: apres.jour });
+  toast(`${p.titre} : fait`, annuler(() => db.maison_papiers.update(p.id, { echeance: p.echeance, fait: p.fait, jour: p.jour })));
+}
+// Les photos d'un papier : on repart toujours de la liste du moment (une autre photo a pu arriver entre-temps), 12 au plus.
+const photosPapier = (id: string, f: (noms: string[]) => string[]) => db.transaction("rw", db.maison_papiers, async () => {
+  const p = await db.maison_papiers.get(id);
+  if (p) await db.maison_papiers.update(id, { photos: [...new Set(f(p.photos))].slice(0, 12) });
+});
+export const ajouterPhotosPapier = (id: string, noms: string[]) => photosPapier(id, (l) => [...l, ...noms]);
+export const retirerPhotoPapier = (id: string, nom: string) => photosPapier(id, (l) => l.filter((n) => n !== nom));
+// Retirer un papier : il part ; ses photos attendent la fin du message (le temps d'Annuler), puis quittent le téléphone et le serveur.
+// Message balayé ou app fermée avant : le ménage de photosPapiers (envoyerEnAttente) les retire plus tard.
+export async function retirerPapier(p: Papier, oublier: (noms: string[]) => Promise<void>) {
+  await db.maison_papiers.delete(p.id);
+  let annule = false, fini = false;
+  const finir = () => { if (annule || fini) return; fini = true; oublier(p.photos).catch(() => {}); };
+  toast(`${p.titre} : retiré`, { ...annuler(() => { annule = true; return db.maison_papiers.put(p); }), onAutoClose: finir, onDismiss: finir });
 }
