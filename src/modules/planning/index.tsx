@@ -1,5 +1,5 @@
+import { lazy } from "react";
 import type { Module } from "../contrat";
-import { PagePlanning } from "./Page";
 import { TuilePlanning } from "./Tuile";
 
 export const planning: Module = {
@@ -8,6 +8,6 @@ export const planning: Module = {
   resume: "Ta semaine, jour par jour",
   etat: "construit",
   prevu: [],
-  Page: PagePlanning,
+  Page: lazy(() => import("./Page").then((m) => ({ default: m.PagePlanning }))), // chargée à la première ouverture
   Tuile: TuilePlanning,
 };

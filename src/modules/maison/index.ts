@@ -1,10 +1,10 @@
+import { lazy } from "react";
 import { liveQuery } from "dexie";
 import { db } from "../../data/db";
 import type { Personne } from "../../lib/types";
 import type { Module } from "../contrat";
 import { ajouterCorvees, cocherCorvees } from "./actions";
 import { ditFait, lireCorvee, trouverCorvees, type Corvee } from "./donnees";
-import { PageMaison } from "./Page";
 import { ReglagesMaison } from "./ReglagesMaison";
 import { TuileMaison } from "./Tuile";
 import { OUTILS_MAISON } from "./outilsEcho";
@@ -19,7 +19,7 @@ export const maison: Module = {
   resume: "Corvées, entretien, papiers",
   etat: "construit",
   prevu: [],
-  Page: PageMaison,
+  Page: lazy(() => import("./Page").then((m) => ({ default: m.PageMaison }))), // chargée à la première ouverture
   Tuile: TuileMaison,
   Reglages: ReglagesMaison,
   outils: OUTILS_MAISON,

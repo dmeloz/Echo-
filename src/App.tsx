@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { BarreAjout } from "./components/BarreAjout";
 import { BoutonEcho } from "./components/BoutonEcho";
@@ -128,6 +128,8 @@ export default function App() {
   const liste = taches ?? [];
   const reste = tachesDuJour(liste, now).ouvertes.length;
   const d = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  // Sur l'accueil, la salutation prend de la place : la date s'y écrit en court pour tenir sur une ligne (« ven. 27 nov. »).
+  const dCourt = now.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
   const salut = now.getHours() < 5 ? "Bonne nuit" : now.getHours() < 18 ? "Bonjour" : "Bonsoir";
 
   return (
@@ -142,7 +144,7 @@ export default function App() {
           <header className="entete">
             {recherche !== null ? <ChampRecherche valeur={recherche} onValeur={setRecherche} onFermer={() => setRecherche(null)} /> : <>
             <div>
-              <div className="date">{vue.id === "aujourdhui" ? `${salut} ${noms[proprio]} · ${d}` : d.charAt(0).toUpperCase() + d.slice(1)}</div>
+              <div className="date">{vue.id === "aujourdhui" ? `${salut} ${noms[proprio]} · ${dCourt}` : d.charAt(0).toUpperCase() + d.slice(1)}</div>
               <h1 className="page-titre">{vue.libelle}</h1>
             </div>
             <div className="entete-droite">
@@ -162,7 +164,7 @@ export default function App() {
           ) : <Secours key={vue.id}>
           <div className="cadre arrivee">
             {!baseOk ? <BaseFermee /> : taches === undefined ? <Squelette />
-              : module ? (module.Page && module.etat === "construit" ? <module.Page noms={noms} proprio={proprio} now={now} aller={aller} ouvrir={(t) => ouvrir(t)} /> : <Bientot module={module} onAller={aller} />)
+              : module ? (module.Page && module.etat === "construit" ? <Suspense fallback={<Squelette />}><module.Page noms={noms} proprio={proprio} now={now} aller={aller} ouvrir={(t) => ouvrir(t)} /></Suspense> : <Bientot module={module} onAller={aller} />)
               : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} proprio={proprio} onGuide={() => setGuideFerme(false)} onRelier={() => setRelier(true)} />
               : <Aujourdhui taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} />}
           </div>
