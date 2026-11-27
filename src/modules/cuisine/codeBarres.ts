@@ -27,25 +27,36 @@ export async function chercherProduit(code: string): Promise<Trouve> {
 export async function rangerScanne(t: CodeConnu, lieu: Lieu) {
   const nom = t.nom.replace(/\s+/g, " ").trim().slice(0, 60), qte = lireQuantite(t.qte).qte;
   if (!nom) return;
-  let avant: Produit | undefined, id = "";
+  let avant: Produit | undefined, id = "", codeAvant: CodeConnu | undefined;
+  const aCode = codeValide(t.code);
   await db.transaction("rw", db.cuisine_stock, db.cuisine_codes, async () => {
     avant = (await db.cuisine_stock.toArray()).find((p) => !p.repas && p.lieu === lieu && cleDe(p.nom) === cleDe(nom));
     if (avant) { id = avant.id; await db.cuisine_stock.update(id, { nb: Math.min(99, (avant.nb ?? 1) + 1), reste: undefined }); }
     else { id = nouvelId(); await db.cuisine_stock.add({ id, nom, lieu, ...(qte ? { qte } : {}), cree: Date.now() }); }
-    if (codeValide(t.code)) await db.cuisine_codes.put({ code: t.code, nom, qte: qte ?? "" });
+    if (aCode) { codeAvant = await db.cuisine_codes.get(t.code); await db.cuisine_codes.put({ code: t.code, nom, qte: qte ?? "" }); }
   });
-  const ancien = avant;
-  toast(ancien ? `${nom} : un de plus au stock` : `${nom} : ajouté au stock`, { action: { label: "Annuler", onClick: () => (ancien ? db.cuisine_stock.put(ancien) : db.cuisine_stock.delete(id)) } });
+  const ancien = avant, code = codeAvant;
+  // Annuler retire l'unité que ce scan a ajoutée (pas celles scannées après), et rend au code le nom qu'il avait.
+  toast(ancien ? `${nom} : un de plus au stock` : `${nom} : ajouté au stock`, { action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_stock, db.cuisine_codes, async () => {
+    const p = await db.cuisine_stock.get(id);
+    if (p && (p.nb ?? 1) > 1) await db.cuisine_stock.update(id, { nb: p.nb! - 1 > 1 || ancien?.nb ? p.nb! - 1 : undefined });
+    else if (p && !ancien) await db.cuisine_stock.delete(id);
+    if (aCode) { if (code) await db.cuisine_codes.put(code); else await db.cuisine_codes.delete(t.code); }
+  }) } });
 }
 
 // Le lecteur de codes : celui du téléphone s'il existe, sinon la bibliothèque (chargée seulement ici, avec son fichier servi par l'app).
 type Lecteur = { detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue: string }>> };
-const FORMATS = ["ean_13", "ean_8", "upc_a", "upc_e"];
+const FORMATS = ["ean_13", "ean_8", "upc_a"];
 let lecteur: Promise<Lecteur> | null = null;
 export function ouvrirLecteur(): Promise<Lecteur> {
   lecteur ??= (async () => {
-    const natif = (globalThis as { BarcodeDetector?: new (o: { formats: string[] }) => Lecteur }).BarcodeDetector;
-    if (natif) try { return new natif({ formats: FORMATS }); } catch { /* formats pas pris en charge : on passe à la bibliothèque */ }
+    // Le lecteur du téléphone ne sert que s'il dit lire ces codes (il peut exister sans rien savoir lire).
+    const natif = (globalThis as { BarcodeDetector?: (new (o: { formats: string[] }) => Lecteur) & { getSupportedFormats?: () => Promise<string[]> } }).BarcodeDetector;
+    if (natif) try {
+      const lus = (await natif.getSupportedFormats?.()) ?? [];
+      if (FORMATS.every((f) => lus.includes(f))) return new natif({ formats: FORMATS });
+    } catch { /* on passe à la bibliothèque */ }
     const [{ BarcodeDetector, prepareZXingModule }, { default: wasm }] = await Promise.all([import("barcode-detector/ponyfill"), import("zxing-wasm/reader/zxing_reader.wasm?url")]);
     prepareZXingModule({ overrides: { locateFile: (chemin: string, dossier: string) => (chemin.endsWith(".wasm") ? wasm : dossier + chemin) } });
     return new BarcodeDetector({ formats: FORMATS as never }) as Lecteur;

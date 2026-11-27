@@ -26,6 +26,7 @@ beforeEach(async () => {
 describe("plusieurs magasins", () => {
   it("reconnaît l'enseigne d'un ticket", () => {
     expect([nomMagasin("MIGROS NYON"), nomMagasin("Migros Gland"), nomMagasin("lidl"), nomMagasin(" * "), nomMagasin("")]).toEqual(["Migros", "Migros", "Lidl", "", ""]);
+    expect([nomMagasin("E.Leclerc"), nomMagasin("La Vie Claire"), nomMagasin("SUPER U Divonne"), nomMagasin("Le Shop")]).toEqual(["Leclerc", "Vie", "Super u", "Shop"]);
   });
 
   it("retient où chaque produit s'achète, et Annuler l'oublie", async () => {
@@ -67,7 +68,8 @@ describe("le code-barres", () => {
     await rangerScanne(creme, "frigo");
     await rangerScanne(creme, "frigo");
     expect((await db.cuisine_stock.toArray()).map((p) => p.nb)).toEqual([3]);
-    await annuler();
+    // Annuler le DEUXIÈME scan, alors qu'un troisième a suivi : une seule unité part.
+    await toast.mock.calls.at(-2)![1].action.onClick();
     expect((await db.cuisine_stock.toArray()).map((p) => p.nb)).toEqual([2]);
     // Hors ligne, un code déjà vu est retrouvé ; un code jamais vu reste à nommer.
     expect(await chercherProduit("7610200012340")).toEqual({ code: "7610200012340", nom: "Crème entière", qte: "25 cl", connu: true });
@@ -75,5 +77,6 @@ describe("le code-barres", () => {
     await rangerScanne({ code: "96385074", nom: "Riz", qte: "" }, "placard");
     await annuler();
     expect(await db.cuisine_stock.count()).toBe(1);
+    expect(await db.cuisine_codes.get("96385074")).toBeUndefined(); // le nom écrit par erreur n'est pas gardé
   });
 });

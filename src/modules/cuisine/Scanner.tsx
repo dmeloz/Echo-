@@ -1,6 +1,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { X } from "pulsoicon-react";
 import { useEffect, useRef, useState } from "react";
+import { toast } from "sonner";
 import { db } from "../../data/db";
 import { useEcranAllume, vibrer } from "../../lib/gestes";
 import { chercherProduit, ouvrirLecteur, rangerScanne, type Trouve } from "./codeBarres";
@@ -22,39 +23,52 @@ export function Scanner({ onQuitter }: { onQuitter: () => void }) {
     return () => removeEventListener("echo-retour", onQuitter);
   }, [onQuitter]);
 
+  const dernier = useRef({ code: "", vu: 0 }); // le code qu'on vient de traiter : il faut le quitter des yeux avant de le relire
   const montrer = async (code: string) => {
     if (occupe.current) return;
     occupe.current = true;
     vibrer(12); setCherche(true);
-    const t = await chercherProduit(code);
-    setCherche(false); setTrouve(t); setLieu(lieuProbable(t.nom, await db.cuisine_habitudes.toArray()));
+    try {
+      const t = await chercherProduit(code);
+      const habitudes = await db.cuisine_habitudes.toArray().catch(() => []);
+      dernier.current = { code, vu: Date.now() };
+      setLieu(lieuProbable(t.nom, habitudes)); setTrouve(t);
+    } catch { occupe.current = false; toast("Je n'ai pas pu chercher ce produit. Réessaie."); }
+    finally { setCherche(false); }
   };
-  const suivant = () => { setTrouve(null); occupe.current = false; };
+  const suivant = () => { setTrouve(null); dernier.current.vu = Date.now(); occupe.current = false; };
 
   useEffect(() => {
     let flux: MediaStream | null = null, parti = false, minuteur = 0;
+    const couper = () => { flux?.getTracks().forEach((t) => t.stop()); flux = null; };
     (async () => {
       try {
-        const [f, lecteur] = await Promise.all([navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false }), ouvrirLecteur()]);
-        flux = f;
+        flux = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" }, audio: false });
+        if (parti) { couper(); return; }
+        const lecteur = await ouvrirLecteur();
         const v = video.current;
-        if (parti || !v) { f.getTracks().forEach((t) => t.stop()); return; }
-        v.srcObject = f;
+        if (parti || !v) { couper(); return; }
+        v.srcObject = flux;
         await v.play();
         setCamera("ok");
         // Trois lectures par seconde suffisent, et laissent le téléphone tranquille.
+        let rates = 0;
         const lire = async () => {
           if (parti) return;
           if (!occupe.current && v.readyState >= 2) {
-            const code = (await lecteur.detect(v).catch(() => []))[0]?.rawValue;
-            if (code && codeValide(code)) await montrer(code);
+            let code = "";
+            try { code = (await lecteur.detect(v))[0]?.rawValue ?? ""; rates = 0; }
+            catch { if (++rates >= 6) { couper(); setCamera("non"); return; } } // le lecteur ne marche pas ici : on tape le code
+            const d = dernier.current;
+            if (code && code === d.code && Date.now() - d.vu < 2500) d.vu = Date.now(); // toujours le même produit sous l'objectif
+            else if (code && codeValide(code)) await montrer(code);
           }
           minuteur = window.setTimeout(lire, 330);
         };
         lire();
-      } catch { if (!parti) setCamera("non"); }
+      } catch { couper(); if (!parti) setCamera("non"); }
     })();
-    return () => { parti = true; clearTimeout(minuteur); flux?.getTracks().forEach((t) => t.stop()); };
+    return () => { parti = true; clearTimeout(minuteur); couper(); };
     // La caméra s'ouvre une fois, à l'arrivée sur la page.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -73,7 +87,7 @@ export function Scanner({ onQuitter }: { onQuitter: () => void }) {
 
       {camera === "non" && !trouve && (
         <form className="g ajout-stock" autoComplete="off" onSubmit={(e) => { e.preventDefault(); const c = (e.currentTarget.elements.namedItem("code") as HTMLInputElement).value.replace(/\D/g, ""); if (c) montrer(c); }}>
-          <p className="aide-champ">Autorise la caméra pour Echo dans les réglages du téléphone, ou tape les chiffres sous le code-barres.</p>
+          <p className="aide-champ">La caméra ou le lecteur n'a pas pu démarrer. Autorise la caméra pour Echo dans les réglages du téléphone, ou tape les chiffres sous le code-barres.</p>
           <label className="vh" htmlFor="code-barres">Chiffres du code-barres</label>
           <input id="code-barres" name="code" className="saisie" inputMode="numeric" placeholder="7610200012345" maxLength={14} enterKeyHint="search" />
           <button type="submit" className="bouton petit">Chercher</button>

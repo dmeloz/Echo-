@@ -45,7 +45,7 @@ export function Magasin({ courses, onQuitter }: { courses: Article[]; onQuitter:
     <div className="magasin">
       <div className="magasin-tete">
         <button type="button" className="loupe-ouvrir" aria-label="Quitter le mode magasin" onClick={onQuitter}><X size={20} strokeWidth={2.2} /></button>
-        <div><b>Au magasin</b><span>{reste ? `Reste ${reste} sur ${total}` : "Tout est pris"}</span></div>
+        <div><b>Au magasin</b><span>{reste ? `Reste ${reste} sur ${total}${ou ? ` chez ${ou}` : ""}` : ailleurs.length ? `Tout est pris chez ${ou}` : "Tout est pris"}</span></div>
       </div>
       <div className="magasin-barre" role="progressbar" aria-valuemin={0} aria-valuemax={total} aria-valuenow={total - reste} aria-label="Articles pris"><i style={{ width: `${total ? ((total - reste) / total) * 100 : 0}%` }} /></div>
 
@@ -76,8 +76,8 @@ export function Magasin({ courses, onQuitter }: { courses: Article[]; onQuitter:
       ) : (
         <section className="g vide">
           <svg className="sceau" width="56" height="56" viewBox="0 0 56 56" fill="none" aria-hidden="true"><circle cx="28" cy="28" r="24" pathLength={1} /><path d="M18 28.5l7 7 13-14" pathLength={1} /></svg>
-          <h2>Tout est pris</h2>
-          <p>Tu peux ranger le téléphone.</p>
+          <h2>{ailleurs.length ? `Tout est pris chez ${ou}` : "Tout est pris"}</h2>
+          <p>{ailleurs.length ? `Il reste ${ailleurs.length} article${ailleurs.length > 1 ? "s" : ""} à prendre ailleurs.` : "Tu peux ranger le téléphone."}</p>
         </section>
       )}
 
@@ -98,7 +98,7 @@ export function Magasin({ courses, onQuitter }: { courses: Article[]; onQuitter:
           </section>
         </>
       )}
-      <div className="rangee centre"><button type="button" className={`bouton${reste ? " second" : ""}`} onClick={finir}>Courses finies</button></div>
+      <div className="rangee centre"><button type="button" className={`bouton${reste || ailleurs.length ? " second" : ""}`} onClick={finir}>Courses finies</button></div>
     </div>
   );
 }

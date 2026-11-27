@@ -325,7 +325,10 @@ export const montant = (n: number, m: "CHF" | "EUR") => (m === "EUR" ? `${n.toFi
 
 // L'enseigne d'un ticket : son premier mot (« MIGROS NYON » et « Migros Gland » sont le même magasin pour la liste).
 export function nomMagasin(brut: string) {
-  const m = brut.replace(/[^\p{L}\p{N}' -]/gu, " ").trim().split(/\s+/)[0] ?? "";
+  // Sans l'article ni la lettre seule du début (« E.Leclerc », « La Vie Claire ») ; deux mots quand le premier ne dit rien (« Super U »).
+  const mots = brut.replace(/[^\p{L}\p{N}' -]/gu, " ").trim().split(/\s+/).filter(Boolean);
+  while (mots.length > 1 && (mots[0].length < 2 || /^(le|la|les|the)$/i.test(mots[0]))) mots.shift();
+  const m = (/^(super|hyper|march[ée]|magasin|boucherie|boulangerie)$/i.test(mots[0] ?? "") ? mots.slice(0, 2) : mots.slice(0, 1)).join(" ");
   return m.length < 2 ? "" : (m.charAt(0).toUpperCase() + m.slice(1).toLowerCase()).slice(0, 20);
 }
 // Où un produit s'achète d'habitude : le magasin qui revient le plus souvent sur les tickets.
