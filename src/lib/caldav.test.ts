@@ -22,6 +22,9 @@ describe("calendrier iCloud", () => {
     expect(r.map((x) => x.href)).toEqual(["/123/calendars/home/", "/123/calendars/rappels/", "/123/calendars/"]);
     expect(r.map((x) => estCalendrierEvenements(x.corps))).toEqual([true, false, false]);
     expect(prop(r[0].corps, "displayname")).toBe("Maison & travail");
+    // iCloud écrit parfois les attributs avec des apostrophes.
+    expect(estCalendrierEvenements(`<resourcetype><collection/><calendar xmlns='urn:ietf:params:xml:ns:caldav'/></resourcetype><supported-calendar-component-set xmlns='urn:ietf:params:xml:ns:caldav'><comp name='VEVENT'/></supported-calendar-component-set>`)).toBe(true);
+    expect(estCalendrierEvenements(`<resourcetype><collection/><calendar xmlns='urn:ietf:params:xml:ns:caldav'/></resourcetype><supported-calendar-component-set><comp name='VTODO'/></supported-calendar-component-set>`)).toBe(false);
     expect(lienDans(`<d:current-user-principal><d:href>/123/principal/</d:href></d:current-user-principal>`, "current-user-principal")).toBe("/123/principal/");
   });
 

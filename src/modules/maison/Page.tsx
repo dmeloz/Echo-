@@ -56,12 +56,12 @@ export function PageMaison(ctx: ContexteModule) {
 
   if (toutes === undefined) return null;
   const corvees = toutes.filter((c) => !c.entretien);
-  // Les parties : comme dans l'Agenda, trois mots posés sur la page et une goutte de verre sous le mot choisi.
+  // Les parties : les mots posés sur la page, une goutte de verre glisse sous le mot choisi (comme l'Agenda).
   const choix = (
     <div className="agenda-barre">
-      <div className="vues" role="tablist" aria-label="Partie de la maison" style={{ "--i": PARTIES.findIndex(([id]) => id === partie) } as React.CSSProperties}>
+      <div className="vues" role="tablist" aria-label="Partie de la maison" style={{ "--i": PARTIES.findIndex(([id]) => id === partie), "--n": PARTIES.length } as React.CSSProperties}>
         <span className="vues-goutte" aria-hidden="true" />
-        {PARTIES.map(([id, nom]) => <button key={id} type="button" role="tab" aria-selected={partie === id} onClick={() => { vibrer(); poserReglage("maisonPartie", id); }}>{nom}</button>)}
+        {PARTIES.map(([id, nom]) => <button key={id} type="button" role="tab" aria-selected={partie === id} onClick={() => { vibrer(4); poserReglage("maisonPartie", id); }}>{nom}</button>)}
       </div>
     </div>
   );

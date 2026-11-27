@@ -18,7 +18,7 @@ export async function exporter() {
     app: "echo", version: 1, exporteLe: new Date().toISOString(), taches, horaires,
     photos: await Promise.all(photos.map(async ({ blob, ...p }) => ({ ...p, data: await versTexte(blob) }))),
     // Le choix « téléphone de qui » reste propre à chaque téléphone.
-    reglages: reglages.filter((r) => !["proprio", "guideVu", "codeEcho", "nomFiche"].includes(r.cle)),
+    reglages: reglages.filter((r) => !["proprio", "guideVu", "codeEcho", "nomFiche", "trajets"].includes(r.cle)),
   };
   const nom = `echo-sauvegarde-${f.exporteLe.slice(0, 10)}.json`;
   const fichier = new File([JSON.stringify(f)], nom, { type: "application/json" });

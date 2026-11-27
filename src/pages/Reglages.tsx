@@ -8,6 +8,7 @@ import { db } from "../data/db";
 import { marquerGuide, poserReglage, useMaintenant, useNoms, useProfil, useReglage } from "../data/hooks";
 import { CodeInvitation } from "../components/Connexion";
 import { SectionIcloud } from "../components/Icloud";
+import { SectionTrajets } from "../components/Trajets";
 import { estConnecte, inviter, type Foyer, type Membre } from "../sync/moteur";
 import { MODULES, basculerModule } from "../modules/registre";
 import { exporter, importer } from "../data/sauvegarde";
@@ -49,7 +50,7 @@ export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]
       {theme === "foyer" && <SectionFoyer noms={noms} proprio={proprio} onRelier={onRelier} />}
       {theme === "echo" && <SectionEcho autre={noms[autre(proprio)]} />}
       {theme === "notifications" && <SectionNotifications noms={noms} proprio={proprio} />}
-      {theme === "agenda" && <SectionIcloud relie={relie} />}
+      {theme === "agenda" && <><SectionTrajets /><SectionIcloud relie={relie} /></>}
       {theme === "modules" && <SectionModules masques={masques} />}
       {theme === "app" && <SectionApp taches={taches} onGuide={onGuide} toi={noms[proprio]} />}
     </div>
