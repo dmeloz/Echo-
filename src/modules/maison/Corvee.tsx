@@ -4,13 +4,14 @@ import type { ContexteModule } from "../contrat";
 import { changerCorvee, cocherCorvee, reporterCorvee, retirerCorvee } from "./actions";
 import { RYTHMES, RYTHMES_ENTRETIEN, TAILLES, aFaire, besoin, deborde, nomRythme, type Corvee, type QuiCorvee } from "./donnees";
 
-// La ligne d'une corvée (ou d'un geste d'entretien) : le rond, le nom, la jauge, et ses réglages quand on la touche.
+// La ligne d'une corvée (ou d'un geste d'entretien) : le rond, le nom, son état, et ses réglages quand on la touche.
 
-const ETATS = ["", "Peut attendre", "Bientôt", "À faire"];
-// La petite jauge d'une corvée : elle se remplit avec le temps. Rouge seulement quand elle attend depuis longtemps.
-function Jauge({ c, now }: { c: Corvee; now: Date }) {
-  const n = besoin(c, now), trop = deborde(c, now);
-  return <i className={`jauge besoin n${n}${trop ? " deborde" : ""}`} role="img" aria-label={trop ? "Attend depuis longtemps" : ETATS[n]}><i /><i /><i /></i>;
+// L'état d'une corvée, en un mot : rien tant qu'elle peut attendre, « Bientôt », « À faire », puis « Attend » quand elle déborde.
+// (Pas de jauge ici : dans le Stock de Cuisine, une jauge pleine veut dire « il en reste ».)
+function Etat({ c, now }: { c: Corvee; now: Date }) {
+  const n = besoin(c, now);
+  if (n === 1) return null;
+  return deborde(c, now) ? <span className="compte attend">Attend</span> : <span className={`compte${n === 3 ? " en-cours" : ""}`}>{n === 3 ? "À faire" : "Bientôt"}</span>;
 }
 
 // Les réglages d'une corvée, sous sa ligne : son rythme, sa taille, qui s'en occupe.
@@ -53,7 +54,7 @@ export function LigneCorvee({ c, sous, ouvert, onOuvrir, ...ctx }: Ctx & { c: Co
         <button type="button" className="coche" aria-label={`${c.nom} : c'est fait`} onClick={() => { vibrer(12); onOuvrir(null); cocherCorvee(c, ctx.proprio); }} />
         <button type="button" className="stock-ligne" aria-expanded={ouvert} onClick={() => onOuvrir(ouvert ? null : c.id)}>
           <b>{c.nom}{sous && <small>{sous}</small>}</b>
-          <Jauge c={c} now={ctx.now} />
+          <Etat c={c} now={ctx.now} />
         </button>
       </div>
       {ouvert && <Detail c={c} {...ctx} onFermer={() => onOuvrir(null)} />}

@@ -1051,9 +1051,7 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .corvee-plus { padding-left: 40px; }
 .corvee-plus .lab { margin-top: var(--e3); }
 .corvee-gestes { gap: 0 var(--e3); margin-left: -8px; }
-/* La jauge d'une corvée se remplit avec le temps ; elle ne passe au rouge que si la corvée attend depuis longtemps. */
-.jauge.besoin.n1 i:first-child { background: var(--turquoise); }
-.jauge.besoin.deborde i { background: var(--urgent); }
+.liste-stock .compte.attend { background: rgb(224 122 30 / .14); color: #a85510; }
 .equilibre { display: flex; flex-direction: column; gap: var(--e3); margin: var(--e2) var(--e2) 0; }
 .equilibre > div:first-child { display: flex; justify-content: space-between; font-size: var(--t-petit); color: var(--discret); }
 .equilibre b { color: var(--encre); font-weight: 700; }

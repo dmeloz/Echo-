@@ -71,7 +71,7 @@ export function besoin(c: Corvee, now = new Date()): 1 | 2 | 3 {
   return reste <= 0 ? 3 : reste <= Math.max(1, Math.round(c.tous / 3)) ? 2 : 1;
 }
 export const aFaire = (c: Corvee, now = new Date()) => besoin(c, now) === 3;
-// Elle attend depuis longtemps (plus de la moitié de son rythme en trop) : le seul moment où la jauge passe au rouge.
+// Elle attend depuis longtemps (plus de la moitié de son rythme en trop) : son état passe alors à « Attend ».
 export const deborde = (c: Corvee, now = new Date()) => ecart(jourDu(c), auJour(0, now)) > Math.max(1, Math.round(c.tous / 2));
 // « il y a 8 jours », « jamais notée », « dimanche » : la petite ligne sous le nom.
 export function depuis(c: Corvee, now = new Date()): string {
