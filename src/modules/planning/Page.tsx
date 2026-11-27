@@ -14,6 +14,7 @@ import { vibrer } from "../../lib/gestes";
 
 type Vue = "jour" | "semaine" | "mois";
 const NOM_VUE: Record<Vue, string> = { jour: "Jour", semaine: "Semaine", mois: "Mois" };
+const VUES: Vue[] = ["jour", "semaine", "mois"];
 const court = (jour: string) => new Date(jour + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "");
 const numero = (jour: string) => new Date(jour + "T12:00:00").getDate();
 const classeQui = (t: Tache) => (t.qui === "nous" ? "nous" : t.qui);
@@ -47,11 +48,15 @@ export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
 
   return (
     <>
-      <button type="button" className="lien-horaires" onClick={() => setSousPage(true)}><CalendarClock size={16} strokeWidth={1.8} animated={false} /> Mes horaires</button>
-      <div className="vue-choix" role="group" aria-label="Vue">
-        {(["jour", "semaine", "mois"] as Vue[]).map((v) => (
-          <button key={v} type="button" aria-pressed={vue === v} onClick={() => poserReglage("planningVue", v)}>{NOM_VUE[v]}</button>
-        ))}
+      {/* Les vues : trois mots posés sur la page, une goutte de verre glisse sous le mot choisi. Mes horaires : un rond à droite. */}
+      <div className="agenda-barre">
+        <div className="vues" role="tablist" aria-label="Vue" style={{ "--i": VUES.indexOf(vue) } as React.CSSProperties}>
+          <span className="vues-goutte" aria-hidden="true" />
+          {VUES.map((v) => (
+            <button key={v} type="button" role="tab" aria-selected={vue === v} onClick={() => { vibrer(4); poserReglage("planningVue", v); }}>{NOM_VUE[v]}</button>
+          ))}
+        </div>
+        <button type="button" className="rond-horaires" aria-label="Mes horaires" onClick={() => setSousPage(true)}><CalendarClock size={19} strokeWidth={1.8} /></button>
       </div>
 
       {vue === "mois" ? <VueMois taches={taches} travail={travail} today={today} onJour={choisirJour} /> : <>

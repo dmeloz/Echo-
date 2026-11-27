@@ -1063,9 +1063,20 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .maison-depart .puce { min-height: 40px; }
 .maison-depart .gouts-pied { flex-direction: row-reverse; }
 
-/* Agenda : le petit lien vers la sous-page « Mes horaires », et le retour. */
-.lien-horaires, .retour-agenda { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 0; background: rgb(255 255 255 / .7); border-radius: 999px; padding: 7px 12px; font-size: 14px; font-weight: 700; color: var(--bleu); }
-.lien-horaires { align-self: flex-end; margin-bottom: -4px; }
+/* Agenda : les vues en trois mots, une goutte de verre qui glisse (ressort) sous le mot choisi ; pas de bande grise. */
+.agenda-barre { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -2px 0 -2px; }
+.vues { --i: 0; position: relative; display: grid; grid-template-columns: repeat(3, 1fr); width: min(270px, 72%); }
+.vues button { position: relative; z-index: 1; border: 0; background: none; min-height: 38px; padding: 0 6px; font-size: 15px; font-weight: 700; color: var(--discret); transition: color .3s var(--douce, ease); }
+.vues button[aria-selected="true"] { color: var(--encre); }
+.vues button:active { scale: .96; }
+.vues-goutte { position: absolute; top: 0; bottom: 0; left: calc(var(--i) * 100% / 3); width: calc(100% / 3); border-radius: 999px;
+  background: linear-gradient(180deg, rgb(255 255 255 / .95), rgb(255 255 255 / .7)); border: 1px solid rgb(255 255 255 / .9);
+  box-shadow: 0 4px 14px var(--ombre), inset 0 1px 0 #fff; transition: left .55s cubic-bezier(.34, 1.45, .5, 1); }
+.rond-horaires { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgb(255 255 255 / .9); display: grid; place-items: center; color: var(--bleu);
+  background: rgb(255 255 255 / .75); box-shadow: 0 4px 14px var(--ombre); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.rond-horaires:active { scale: .92; }
+@media (prefers-reduced-motion: reduce) { .vues-goutte { transition: none; } }
+.retour-agenda { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 0; background: rgb(255 255 255 / .7); border-radius: 999px; padding: 7px 12px; font-size: 14px; font-weight: 700; color: var(--bleu); }
 
 /* « Réduire la transparence » ou « Augmenter le contraste » (Réglages de l'iPhone → Accessibilité) :
    le verre devient opaque et les bords plus nets. Le reste du style ne change pas. */
