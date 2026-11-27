@@ -57,6 +57,7 @@ describe("le choix du modèle", () => {
     expect(estPlan("dentiste jeudi 15h pour Sarah")).toBe(false);
     expect(estPlan("plus de lait")).toBe(false);
     expect(estPlan("range la vaisselle et sors la poubelle")).toBe(false);
+    expect(estPlan("j’ai à faire le garage, les courses")).toBe(true); // l'apostrophe courbe de l'iPhone
   });
   it("toute la phrase garde le même modèle ; une réponse à un plan reste avec Sonnet ; budget presque fini : Haiku", () => {
     const m = (p: string, sansPlan = false) => demandeTour("Le foyer : x", [{ role: "user", content: p }], undefined, { sansPlan });

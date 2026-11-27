@@ -7,9 +7,9 @@ import { heureFr, libelleJour } from "../lib/dates";
 import { NIVEAUX, niveauPropose } from "../lib/importance";
 import { appelerServeur, ErreurEcho } from "../lib/assistant";
 import { executer, lancerEcho, type Faite, type ResultatEcho } from "../lib/echo/boucle";
-import { aDireBonjour, motDuMatin, noterBonjour } from "../lib/echo/initiative";
+import { aDireBonjour, initiativePermise, motDuMatin, noterBonjour } from "../lib/echo/initiative";
 import type { Action } from "../lib/echo/outils";
-import { anciennes, annoncer, archiver, avecMot, chargerFil, EVT_MOT, EVT_NON_LU, expire, garderFil, MAX_ECHANGES, nouveauFil, oublierAncienne, rappelDe, titreDe, type Ancienne, type Echange, type EtatAction, type Fil, type Mot } from "../lib/echo/discussions";
+import { anciennes, annoncer, archiver, avecMot, chargerFil, EVT_MOT, EVT_NON_LU, expire, garderFil, garderMotsEnAttente, motsEnAttente, parleRecemment, MAX_ECHANGES, nouveauFil, oublierAncienne, rappelDe, titreDe, type Ancienne, type Echange, type EtatAction, type Fil, type Mot } from "../lib/echo/discussions";
 import { REPETES, type Noms, type Personne } from "../lib/types";
 import { ajouter } from "../data/actions";
 import { nomDe, useReglage } from "../data/hooks";
@@ -101,7 +101,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const { actifs } = useModulesActifs();
   const versEcho = actif && (!!code || relie) && !simple && navigator.onLine;
   // Pendant une discussion avec Echo, tout lui est envoyé (« plus de lait » aussi : il a les courses).
-  const pour = v && !tache && !((echo || fil) && versEcho) ? actifs.map((m) => (m.etat === "construit" ? m.comprendre?.(v) ?? null : null)).find((x) => x) ?? null : null;
+  const pour = v && !tache && !((echo || parleRecemment(fil)) && versEcho) ? actifs.map((m) => (m.etat === "construit" ? m.comprendre?.(v) ?? null : null)).find((x) => x) ?? null : null;
   const parEcho = actif && (!!code || relie) && !simple && !pour;
   const tropLong = parEcho && v.length > MAX_PHRASE;
   // L'écran de discussion, comme dans l'app Claude : dès qu'Echo travaille, ou qu'une discussion est en cours.
@@ -116,32 +116,48 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
 
   // Echo prend l'initiative (src/lib/echo/initiative.ts) : son mot entre dans la discussion, quand il ne coupe rien
   // (pas pendant qu'il réfléchit ou attend un oui : le mot attend son tour).
-  const mots = useRef<Mot[]>([]);
-  const [motsEnAttente, setMotsEnAttente] = useState(0);
+  const [nbMots, setNbMots] = useState(() => motsEnAttente().length);
   useEffect(() => {
-    const recevoir = (e: Event) => { mots.current.push((e as CustomEvent<Mot>).detail); setMotsEnAttente((n) => n + 1); };
+    const recevoir = (e: Event) => {
+      garderMotsEnAttente([...motsEnAttente(), (e as CustomEvent<Mot>).detail]);
+      setNbMots((n) => n + 1);
+      window.dispatchEvent(new CustomEvent(EVT_NON_LU, { detail: true }));
+    };
     window.addEventListener(EVT_MOT, recevoir);
     return () => window.removeEventListener(EVT_MOT, recevoir);
   }, []);
   useEffect(() => {
-    if (echo || !mots.current.length) return;
+    const l = motsEnAttente();
+    if (echo || !l.length) return;
     let f = filActuel();
-    for (const m of mots.current.splice(0)) f = avecMot(f, m);
+    for (const m of l) f = avecMot(f, m);
+    garderMotsEnAttente([]);
     setFil(f);
-  }, [echo, motsEnAttente]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [echo, nbMots]); // eslint-disable-line react-hooks/exhaustive-deps
   // Le petit mot du matin : la première fois qu'on ouvre l'app entre 5 h et midi.
-  const initiative = useReglage("echoInitiative", true);
+  // Les réglages sont relus au moment même (pas leurs valeurs par défaut, le temps qu'ils se chargent).
+  const pourMatin = useRef({ code, relie, ctx: () => ({ noms, proprio, now: new Date() }) });
+  pourMatin.current = { code, relie, ctx: () => ({ noms, proprio, now: new Date() }) };
   useEffect(() => {
-    if (!actif || !initiative || !(code || relie)) return;
-    const essayer = () => {
-      if (document.visibilityState !== "visible" || !navigator.onLine || !aDireBonjour()) return;
-      noterBonjour();
-      motDuMatin(ctx(), appelerServeur(code), outilsEcho(actifs)).then((m) => { if (m) annoncer(m); }).catch(() => { /* pas de mot ce matin */ });
+    let enCours = false;
+    const essayer = async () => {
+      if (enCours || document.visibilityState !== "visible" || !navigator.onLine || !aDireBonjour()) return;
+      enCours = true;
+      try {
+        const outils = await initiativePermise();
+        const { code: c, relie: r, ctx: x } = pourMatin.current;
+        if (!outils || !(c || r) || !aDireBonjour()) return;
+        noterBonjour();
+        const m = await motDuMatin(x(), appelerServeur(c), outils);
+        if (m) annoncer(m);
+      } catch { /* pas de mot ce matin */ } finally { enCours = false; }
     };
-    essayer();
-    document.addEventListener("visibilitychange", essayer);
-    return () => document.removeEventListener("visibilitychange", essayer);
-  }, [actif, initiative, code, relie, actifs]); // eslint-disable-line react-hooks/exhaustive-deps
+    // Un peu après l'ouverture : le temps que le foyer et les réglages se chargent.
+    const t = window.setTimeout(essayer, 3000);
+    const visible = () => { essayer(); };
+    document.addEventListener("visibilitychange", visible);
+    return () => { clearTimeout(t); document.removeEventListener("visibilitychange", visible); };
+  }, []);
   // Ouvert sous les yeux : c'est lu (la discussion reprend ses 15 minutes à partir de maintenant).
   useEffect(() => {
     if (ecran && !vueAnciennes && fil?.nouveau) setFil({ ...fil, nouveau: false, quand: Date.now() });
@@ -223,13 +239,17 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
     const avant = filActuel();
     // Une nouvelle discussion peu après la précédente : Echo en reçoit un court rappel (« et pour demain soir ? »),
     // sauf si on vient de toucher « Nouvelle » pour changer de sujet.
-    const rappel = avant?.echanges.length || sansRappel ? "" : rappelDe(anciennes()[0]);
+    // La discussion reprend telle quelle si on y parlait il y a moins de 15 minutes. Sinon (elle ne tenait qu'à des mots d'Echo,
+    // ou on l'ouvre longtemps après), Echo repart d'une conversation neuve avec un rappel de ce qui est à l'écran.
+    const vivante = parleRecemment(avant);
+    const aEcran = !!avant?.echanges.some((e) => e.moi);
+    const rappel = vivante || sansRappel ? "" : aEcran && avant ? rappelDe(avant, Date.now(), 700, true) : rappelDe(anciennes()[0]);
     sansRappel = false;
     const dejaFaites: Faite[] = [];
     try {
       const r = await lancerEcho(phrase, ctx(), {
         appeler: appelerServeur(code), outils: outilsEcho(actifs), seul, noter: executer, faites: dejaFaites,
-        discussion: avant?.suite, note: [rappel, avant?.note].filter(Boolean).join(" "),
+        discussion: vivante ? avant?.suite : undefined, note: [rappel, avant?.note].filter(Boolean).join(" "),
         // La réponse s'écrit sous les yeux, comme dans l'app Claude.
         enDirect: (t) => { if (num === demande.current) setEcho({ etat: "pense", phrase, direct: t }); },
       });
@@ -244,7 +264,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
         actions: [...r.faites.map((f) => ({ texte: f.ligne, etat: "fait" as const })), ...r.aConfirmer.map((a) => ({ texte: ligneDe(a), etat: "propose" as const }))],
       };
       const base = filActuel() ?? avant ?? nouveauFil();
-      setFil({ ...base, suite: r.suite ?? [], echanges: [...base.echanges, echange].slice(-MAX_ECHANGES), quand: Date.now(), note: undefined });
+      setFil({ ...base, suite: r.suite ?? [], echanges: [...base.echanges, echange].slice(-MAX_ECHANGES), quand: Date.now(), parle: Date.now(), note: undefined });
       setEcho(r.aConfirmer.length ? { etat: "propose", r, phrase } : null);
     } catch (e) {
       // Echo a fait des petites choses avant de s'arrêter : on le dit, avec Annuler, et on ne repasse pas en mode simple (doublons).
@@ -317,7 +337,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
               {fil?.echanges.map((x, i) => <Bulles key={i} x={x} />)}
               {echo?.etat === "pense" && <>
                 <p className="bulle-moi">{echo.phrase}</p>
-                {echo.direct ? <p className="echo-dit" aria-live="polite">{echo.direct}</p> : (
+                {echo.direct ? <p className="echo-dit">{echo.direct}</p> : (
                   <div className="echo-pense" role="status">
                     <span className="echo-points" aria-hidden="true"><i /><i /><i /></span>
                     <span>Echo réfléchit…</span>

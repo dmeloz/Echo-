@@ -264,7 +264,7 @@ function phrases(messages: unknown[]) {
 const MOTS_FORTS = /\b(planifi\w*|organis\w*|programme|je dois|j'ai [àa] faire|tout ce que)\b/i;
 const MOTS_FAIBLES = /\b(demain|semaine|week-end|weekend|journ[ée]e)\b/i;
 export function estPlan(phrase: string) {
-  const t = phrase.toLowerCase();
+  const t = phrase.toLowerCase().replace(/[’‘]/g, "'"); // l'iPhone écrit « j’ai » avec une apostrophe courbe
   const choses = (t.match(/,| et | puis | aussi /g) ?? []).length;
   if (t.length >= 160) return true;
   if (MOTS_FORTS.test(t)) return choses >= 1 || t.length >= 60;

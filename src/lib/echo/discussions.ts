@@ -10,7 +10,8 @@ export interface LigneEchange { texte: string; etat: EtatAction }
 export interface Echange { moi: string; echo: string; actions?: LigneEchange[] }
 // suite : la conversation à renvoyer au serveur ; note : ce que l'app dira à Echo avant la phrase suivante.
 // nouveau : Echo a écrit de lui-même (un mot le matin, ce que l'autre a fait) et ce n'est pas encore lu.
-export interface Fil { id: string; debut: number; quand: number; suite: Message[]; echanges: Echange[]; note?: string; nouveau?: boolean }
+// parle : la dernière phrase de la personne (les mots d'Echo ne relancent pas la discussion).
+export interface Fil { id: string; debut: number; quand: number; suite: Message[]; echanges: Echange[]; note?: string; nouveau?: boolean; parle?: number }
 export interface Ancienne { id: string; debut: number; quand: number; echanges: Echange[] }
 
 // Une discussion reste « en cours » 15 minutes après le dernier message : pendant ce temps, tout ce qu'on écrit va à Echo.
@@ -22,8 +23,13 @@ export const MAX_ANCIENNES = 20;
 const CLE = "echo-discussion";
 const CLE_ANCIENNES = "echo-discussions";
 
-// Une discussion non lue ne part pas chez les anciennes : elle attend qu'on l'ouvre.
-export const expire = (f: Pick<Fil, "quand" | "nouveau">, now = Date.now()) => !f.nouveau && now - f.quand >= REPRISE;
+// Une discussion non lue ne part pas chez les anciennes : elle attend qu'on l'ouvre (12 heures au plus).
+export const NON_LU_MAX = 12 * 3600_000;
+export const expire = (f: Pick<Fil, "quand" | "nouveau">, now = Date.now()) => now - f.quand >= (f.nouveau ? NON_LU_MAX : REPRISE);
+// La personne parle avec Echo en ce moment (sa dernière phrase date de moins de 15 minutes) : tout ce qu'elle écrit va à Echo,
+// et la conversation continue telle quelle. Une discussion qui ne tient qu'à des mots d'Echo ne compte pas.
+export const parleRecemment = (f: Fil | null | undefined, now = Date.now()) =>
+  !!f && f.echanges.some((e) => e.moi) && now - (f.parle ?? f.quand) < REPRISE;
 
 const lire = <T>(cle: string, defaut: T): T => {
   try { const v = localStorage.getItem(cle); return v ? (JSON.parse(v) as T) : defaut; } catch { return defaut; }
@@ -87,7 +93,7 @@ export function rappelDe(a: Ancienne | undefined, now = Date.now(), place = 700,
   const lignes: string[] = [];
   let reste = place - 80;
   for (const e of [...a.echanges].reverse()) {
-    const l = `Toi : ${e.moi.replace(/\s+/g, " ").slice(0, 160)} / Echo : ${e.echo.replace(/\s+/g, " ").slice(0, 240)}`;
+    const l = `${e.moi ? `Toi : ${e.moi.replace(/\s+/g, " ").slice(0, 160)} / ` : ""}Echo : ${e.echo.replace(/\s+/g, " ").slice(0, 240)}`;
     if (l.length > reste) break;
     lignes.unshift(l);
     reste -= l.length + 3;
@@ -113,7 +119,12 @@ export function avecMot(f: Fil | null, mot: Mot, now = Date.now()): Fil {
   const g = f ?? nouveauFil(now);
   return { ...g, echanges: [...g.echanges, { moi: "", echo: mot.texte }].slice(-MAX_ECHANGES), quand: now, nouveau: true, note: [g.note, mot.note].filter(Boolean).join(" ") };
 }
-export const nonLu = () => lire<Fil | null>(CLE, null)?.nouveau === true;
+// Les mots qui attendent leur tour (Echo réfléchit ou attend un oui) : gardés tout de suite, pour ne rien perdre si l'app se ferme.
+const CLE_ATTENTE = "echo-mots";
+const motOk = (m: unknown): m is Mot => !!m && typeof (m as Mot).texte === "string" && typeof (m as Mot).note === "string";
+export const motsEnAttente = (): Mot[] => { const l = lire<unknown>(CLE_ATTENTE, []); return Array.isArray(l) ? l.filter(motOk).slice(-20) : []; };
+export const garderMotsEnAttente = (l: Mot[]) => ecrire(CLE_ATTENTE, l.length ? l.slice(-20) : null);
+export const nonLu = () => lire<Fil | null>(CLE, null)?.nouveau === true || motsEnAttente().length > 0;
 
 // Ce que l'autre vient de faire, dit par Echo. nouvelles : « a ajouté « Dentiste » », « a terminé « Poubelles » ».
 export function motDeLAutre(prenom: string, nouvelles: string[]): Mot | null {

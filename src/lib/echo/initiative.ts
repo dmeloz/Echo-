@@ -1,3 +1,5 @@
+import { db } from "../../data/db";
+import { MODULES, outilsEcho } from "../../modules/registre";
 import { auJour } from "../dates";
 import { genreDe } from "../../../supabase/functions/_shared/echo-outils";
 import { lancerEcho, type Appeler } from "./boucle";
@@ -18,6 +20,14 @@ export function aDireBonjour(now = new Date()) {
 // Noté avant d'appeler Echo : un seul essai par jour, même s'il échoue (pas de mot répété ni de dépense en boucle).
 export function noterBonjour(now = new Date()) {
   try { localStorage.setItem(CLE_BONJOUR, auJour(0, now)); } catch { /* stockage fermé : tant pis pour aujourd'hui */ }
+}
+
+// Les réglages lus dans la base au moment même : Echo allumé, initiative permise. Rend les outils d'Echo (modules allumés), ou null.
+export async function initiativePermise(): Promise<Record<string, Executant> | null> {
+  const [actif, initiative, masques] = await Promise.all(["assistantEcho", "echoInitiative", "modulesMasques"].map((c) => db.reglages.get(c)));
+  if (actif?.valeur === false || initiative?.valeur === false) return null;
+  const caches = Array.isArray(masques?.valeur) ? (masques!.valeur as string[]) : [];
+  return outilsEcho(MODULES.filter((m) => !caches.includes(m.id)));
 }
 
 // Ce qu'Echo reçoit à la place d'une phrase de la personne (rien de cela n'apparaît dans la discussion).

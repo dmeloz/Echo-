@@ -214,38 +214,52 @@ async function tourAgent(d: DemandeAgent, source: "membre" | "code", origine: st
 
   const client = new Anthropic();
   const demande = demandeTour(situation, messages, outils, { sansPlan: reste < RESERVE_PLAN });
-  const noterCout = async (r: Anthropic.Beta.BetaMessage) => {
-    const { error: errNote } = await db.rpc("noter_depense_echo", { p_source: source, p_micro: coutMicro(r.model ?? demande.model, r.usage) });
+  const noterCout = async (modele: string | undefined, usage: Parameters<typeof coutMicro>[1]) => {
+    const { error: errNote } = await db.rpc("noter_depense_echo", { p_source: source, p_micro: coutMicro(modele ?? demande.model, usage) });
     if (errNote) console.error("[echo] noter_depense", errNote.message);
   };
   // En direct : la réponse arrive mot à mot, une ligne JSON par morceau ({ t }), puis le tour entier ({ fin }) ou { erreur }.
   // Le texte en direct n'est qu'un aperçu : c'est le tour entier, à la fin, qui compte (outils, réflexion, repli).
+  // Si l'app se ferme en route, la réponse s'arrête, et ce qui a déjà été produit est quand même compté dans le budget.
   if (d.direct === true) {
     const enc = new TextEncoder();
+    const flux = client.beta.messages.stream({ ...demande, messages: messages as Anthropic.Beta.BetaMessageParam[] });
+    let ferme = false;
     const corps = new ReadableStream({
       async start(c) {
-        const ligne = (o: unknown) => c.enqueue(enc.encode(`${JSON.stringify(o)}\n`));
+        const ligne = (o: unknown) => { if (ferme) return; try { c.enqueue(enc.encode(`${JSON.stringify(o)}\n`)); } catch { ferme = true; } };
+        let modele: string | undefined;
+        const usage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+        let compte = false;
         try {
-          const flux = client.beta.messages.stream({ ...demande, messages: messages as Anthropic.Beta.BetaMessageParam[] });
           for await (const ev of flux) {
-            if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") ligne({ t: ev.delta.text });
+            if (ev.type === "message_start") { modele = ev.message.model; Object.assign(usage, ev.message.usage); }
+            else if (ev.type === "message_delta" && ev.usage) { usage.output_tokens = ev.usage.output_tokens ?? usage.output_tokens; }
+            else if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") ligne({ t: ev.delta.text });
+            if (ferme) { flux.abort(); break; }
           }
-          const r = await flux.finalMessage();
-          await noterCout(r);
-          if (r.stop_reason === "refusal") ligne({ erreur: "refus" });
-          else if (r.stop_reason === "max_tokens") ligne({ erreur: "lecture" });
-          else ligne({ fin: { content: r.content, stop_reason: r.stop_reason } });
+          if (!ferme) {
+            const r = await flux.finalMessage();
+            compte = true;
+            await noterCout(r.model, r.usage);
+            if (r.stop_reason === "refusal") ligne({ erreur: "refus" });
+            else if (r.stop_reason === "max_tokens") ligne({ erreur: "lecture" });
+            else ligne({ fin: { content: r.content, stop_reason: r.stop_reason } });
+          }
         } catch (e) {
           ligne({ erreur: erreurDe(e) });
+        } finally {
+          if (!compte && (usage.input_tokens || usage.output_tokens)) await noterCout(modele, usage).catch(() => {});
+          if (!ferme) { try { c.close(); } catch { /* déjà fermé */ } }
         }
-        c.close();
       },
+      cancel() { ferme = true; flux.abort(); },
     });
     return new Response(corps, { status: 200, headers: { ...cors(origine), "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache" } });
   }
   try {
     const r = await client.beta.messages.create({ ...demande, messages: messages as Anthropic.Beta.BetaMessageParam[] });
-    await noterCout(r);
+    await noterCout(r.model, r.usage);
     if (r.stop_reason === "refusal") return repondre({ erreur: "refus" }, 422, origine);
     if (r.stop_reason === "max_tokens") return repondre({ erreur: "lecture" }, 502, origine);
     return repondre({ content: r.content, stop_reason: r.stop_reason }, 200, origine);
