@@ -2,6 +2,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../data/db";
 import { budget } from "./budget";
 import type { Module } from "./contrat";
+import { OUTILS_BASE, type Executant } from "../lib/echo/outils";
 import { cuisine } from "./cuisine";
 import { maison } from "./maison";
 import { planning } from "./planning";
@@ -17,3 +18,7 @@ export function useModulesActifs(): { actifs: Module[]; masques: string[] } {
 }
 export const basculerModule = async (id: string, masques: string[]) =>
   db.reglages.put({ cle: "modulesMasques", valeur: masques.includes(id) ? masques.filter((x) => x !== id) : [...masques, id] });
+
+// Les outils d'Echo : ceux de la base (tâches, agenda) et ceux des modules allumés.
+export const outilsEcho = (actifs: Module[]): Record<string, Executant> =>
+  Object.assign({}, OUTILS_BASE, ...actifs.filter((m) => m.etat === "construit").map((m) => m.outils ?? {}));

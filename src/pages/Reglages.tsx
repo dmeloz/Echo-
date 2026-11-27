@@ -5,7 +5,7 @@ import type { Noms, Personne, Tache } from "../lib/types";
 import { effacerExemples, remettre, remettreExemples, toutEffacer } from "../data/actions";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../data/db";
-import { marquerGuide, poserReglage, useMaintenant, useReglage } from "../data/hooks";
+import { marquerGuide, poserReglage, useMaintenant, useNoms, useProfil, useReglage } from "../data/hooks";
 import { CodeInvitation } from "../components/Connexion";
 import { SectionIcloud } from "../components/Icloud";
 import { estConnecte, inviter, type Foyer, type Membre } from "../sync/moteur";
@@ -13,6 +13,9 @@ import { MODULES, basculerModule } from "../modules/registre";
 import { exporter, importer } from "../data/sauvegarde";
 import { RAPPELS_DEFAUT, reglerRappels, type Rappels } from "../data/rappels";
 import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
+import type { Manque } from "../lib/echo/outils";
+import { oublier, retenir, type Refus } from "../lib/echo/memoire";
+import { MAX_SOUVENIR, MAX_SOUVENIRS } from "../../supabase/functions/_shared/echo-outils";
 
 type Theme = "foyer" | "echo" | "notifications" | "agenda" | "modules" | "app";
 // Un module construit peut avoir sa propre sous-page : sa ligne arrive dans le sommaire, à son nom.
@@ -69,7 +72,7 @@ function Sommaire({ taches, noms, masques, proprio, onOuvrir }: { taches: Tache[
 
   const lignes: Array<{ id: Theme; Icone: typeof Users; etat: string; turquoise?: boolean }> = [
     { id: "foyer", Icone: Users, etat: !foyer ? "Seulement sur ce téléphone" : membres.length > 1 ? membres.map((m) => m.prenom).join(" et ") : `Invite ${lautre}` },
-    { id: "echo", Icone: Sparkles, turquoise: true, etat: !assistant ? "Éteint · l'app comprend seule" : codeEcho || foyer ? "Comprend tes phrases et propose" : "Relie le foyer ou mets le code" },
+    { id: "echo", Icone: Sparkles, turquoise: true, etat: !assistant ? "Éteint · l'app comprend seule" : codeEcho || foyer ? "Regarde, prépare, te demande" : "Relie le foyer ou mets le code" },
     { id: "notifications", Icone: Bell, etat: !foyer || !r.actif ? "Éteintes sur ce téléphone" : r.matin ? `Allumées · résumé à ${r.matin.replace(":", " h ")}` : "Allumées" },
     { id: "agenda", Icone: Calendar, turquoise: true, etat: icloud ? "Relié à iCloud" : "iCloud pas relié" },
     { id: "modules", Icone: LayoutGrid, etat: `${affiches} affiché${affiches > 1 ? "s" : ""} sur ${MODULES.length}` },
@@ -286,21 +289,108 @@ function SectionRappels({ relie }: { relie: boolean }) {
   );
 }
 
-// L'assistant Echo : comprendre les phrases avec l'IA (Claude Haiku 5.5, sur le serveur du foyer). Il propose, tu confirmes.
+// L'assistant Echo (Claude Haiku 5.5, sur le serveur du foyer) : il regarde, prépare, et demande avant de changer quoi que ce soit.
 function SectionEcho() {
   const actif = useReglage("assistantEcho", true);
+  const seul = useReglage("echoSeul", false);
   const code = useReglage<string>("codeEcho", "");
-  return (
+  return (<>
     <section className="g reglages">
       <span className="lab">L'assistant</span>
       <label className="module-ligne">
-        <span><b>Echo comprend mes phrases</b><small>Écris ou dis une phrase libre, même avec plusieurs choses dedans : Echo propose les tâches et les rendez-vous, et rien n'est ajouté sans ton accord. Sans internet, l'app comprend seule, plus simplement.</small></span>
+        <span><b>Echo agit pour moi</b><small>Écris ou dis une phrase libre : Echo regarde ton agenda et tes horaires, puis prépare ce qu'il faut (ajouter, déplacer, donner à l'autre, cocher). Sans internet, l'app comprend seule, plus simplement.</small></span>
         <input type="checkbox" role="switch" className="interrupteur" checked={actif} onChange={() => poserReglage("assistantEcho", !actif)} />
+      </label>
+      <label className="module-ligne">
+        <span><b>Petites choses sans demander</b><small>Echo ajoute, déplace et coche tes choses tout seul, et tu as 10 secondes pour annuler. Effacer, et toucher aux choses de l'autre, restent toujours demandés.</small></span>
+        <input type="checkbox" role="switch" className="interrupteur" checked={seul} disabled={!actif} onChange={() => poserReglage("echoSeul", !seul)} />
       </label>
       <label className="champ">Code Echo
         <input key={code} defaultValue={code} type="password" placeholder="Le code secret du foyer" autoComplete="off" onBlur={(e) => poserReglage("codeEcho", e.target.value.trim())} />
       </label>
       <p className="aide-champ">Pas besoin du code si ce téléphone est relié au foyer. Sinon, c'est le même code que pour la lecture de la fiche d'horaires. Il reste sur ce téléphone.</p>
+    </section>
+    <MemoireEcho />
+    <JournalEcho />
+    <ManquesEcho />
+  </>);
+}
+
+const REFUS_REGLAGES: Record<Refus, string> = { vide: "Écris d'abord ce qu'Echo doit savoir.", deja: "Echo le sait déjà.", pleine: `Echo retient ${MAX_SOUVENIRS} choses au plus : oublie d'abord celles qui ne servent plus.` };
+
+// La mémoire d'Echo, partagée au foyer : ce qu'il sait de vous. Chacun peut en ajouter ou en effacer.
+function MemoireEcho() {
+  const souvenirs = useLiveQuery(() => db.echo_memoire.orderBy("quand").reverse().toArray(), [], []);
+  const noms = useNoms();
+  const { proprio } = useProfil();
+  const [texte, setTexte] = useState("");
+  const [occupe, setOccupe] = useState(false);
+  const ajouter = async () => {
+    if (occupe) return;
+    setOccupe(true);
+    try {
+      const r = await retenir(texte, proprio ? noms[proprio] : "");
+      if (typeof r === "string") { toast(REFUS_REGLAGES[r]); return; }
+      setTexte("");
+    } catch { toast("Pas enregistré. Réessaie."); } finally { setOccupe(false); }
+  };
+  const effacer = (id: string) => oublier(id).catch(() => toast("Pas effacé. Réessaie."));
+  return (
+    <section className="g reglages">
+      <span className="lab">Ce qu'Echo sait de vous</span>
+      {souvenirs.length > MAX_SOUVENIRS && <p className="aide-champ">Echo ne voit que les {MAX_SOUVENIRS} plus récents : oublie ceux qui ne servent plus.</p>}
+      {!souvenirs.length ? <p>Rien pour l'instant. Dis à Echo « retiens que… » : il te propose de le garder. Vous le voyez tous les deux ici.</p> : (
+        <ul className="corbeille">
+          {souvenirs.map((m) => (
+            <li key={m.id}>
+              <span><b>{m.texte}</b><small>{m.par ? `noté par ${m.par} · ` : ""}{new Date(m.quand).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</small></span>
+              <button type="button" className="bouton-texte" onClick={() => effacer(m.id)}>Oublier</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="champ" onSubmit={(e) => { e.preventDefault(); ajouter(); }}>
+        <input value={texte} maxLength={MAX_SOUVENIR} disabled={occupe} placeholder="Ajouter : Sarah n'aime pas les champignons" onChange={(e) => setTexte(e.target.value)} />
+      </form>
+    </section>
+  );
+}
+
+// Ce qu'on a demandé à Echo et qu'il ne sait pas encore faire (outil signaler_manque) : pour savoir quel outil lui ajouter.
+function ManquesEcho() {
+  const brut = useReglage<unknown>("echoManques", []);
+  const manques = Array.isArray(brut) ? (brut as Manque[]) : [];
+  if (!manques.length) return null;
+  return (
+    <section className="g reglages">
+      <span className="lab">Ce qu'Echo aimerait savoir faire</span>
+      <ul className="corbeille">
+        {manques.slice(0, 15).map((m, i) => (
+          <li key={i}><span><b>{m.besoin}</b><small>{new Date(m.quand).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</small></span></li>
+        ))}
+      </ul>
+      <p className="aide-champ">Dis-le à Claude pour qu'il ajoute ces outils à Echo.</p>
+      <button type="button" className="bouton-texte" onClick={() => poserReglage("echoManques", [])}>Vider la liste</button>
+    </section>
+  );
+}
+
+// Le journal d'Echo : ce qu'il a fait, pour qui, et quand (partagé au foyer). Les 30 dernières lignes.
+function JournalEcho() {
+  const lignes = useLiveQuery(() => db.echo_journal.orderBy("quand").reverse().limit(30).toArray(), [], []);
+  const quand = (t: number) => new Date(t).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return (
+    <section className="g reglages">
+      <span className="lab">Ce qu'Echo a fait</span>
+      {!lignes.length ? <p>Rien pour l'instant. Chaque chose qu'Echo fait s'écrit ici, pour vous deux.</p> : (
+        <ul className="corbeille">
+          {lignes.map((l) => (
+            <li key={l.id}>
+              <span><b>{l.annule ? <s>{l.action}</s> : l.action}</b><small>{quand(l.quand)}{l.par ? ` · demandé par ${l.par}` : ""}{l.annule ? " · annulé" : ""}</small></span>
+            </li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }

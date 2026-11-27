@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { Noms, Personne, Tache } from "../lib/types";
+import type { Executant } from "../lib/echo/outils";
 
 // Le contrat d'un module. La base (accueil Aujourd'hui, menu, réglages, assistant plus tard)
 // ne connaît les modules que par ce contrat. Les modules ne se parlent pas entre eux.
@@ -29,6 +30,10 @@ export interface Module {
   Reglages?: ComponentType<ContexteModule>; // sa sous-page dans les Réglages (une ligne du sommaire à son nom)
   // Ce que le module sait faire d'une phrase écrite dans la barre d'Echo. null : ce n'est pas pour lui.
   comprendre?: (texte: string) => PourModule | null;
+  // Ce que l'assistant Echo peut faire dans ce module : nom de l'outil → ce que fait l'app.
+  // Chaque nom doit aussi être décrit (avec son genre lire / petit / gros) dans supabase/functions/_shared/echo-outils.ts,
+  // la liste fermée que le serveur donne à Claude. Voir docs/MODULES.md, « Echo qui agit ».
+  outils?: Record<string, Executant>;
   // Ses tables de données (préfixe <id>_) sont déclarées dans src/data/db.ts, et dans src/sync/genres.ts si elles partent au foyer.
-  // Plus tard : actions pour l'assistant IA, notifications.
+  // Plus tard : notifications.
 }

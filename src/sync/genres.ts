@@ -1,5 +1,7 @@
 import type { Table } from "dexie";
 import { db } from "../data/db";
+import { nettoyerJournal } from "../lib/echo/journal";
+import { nettoyerSouvenir } from "../lib/echo/memoire";
 import { nettoyerArticle, nettoyerGouts, nettoyerHabitude, nettoyerProduit, nettoyerRepas, nettoyerTicket } from "../modules/cuisine/donnees";
 
 // Les données des modules qui partent au foyer : un « genre » par table, une ligne par clé.
@@ -13,5 +15,7 @@ export const GENRES: Record<string, Genre> = {
   stock: { table: db.cuisine_stock, cle: "id", nettoyer: nettoyerProduit },
   ticket: { table: db.cuisine_tickets, cle: "id", nettoyer: nettoyerTicket },
   gout: { table: db.cuisine_gouts, cle: "qui", nettoyer: nettoyerGouts, naturelle: true },
+  journal: { table: db.echo_journal, cle: "id", nettoyer: nettoyerJournal },
+  memoire: { table: db.echo_memoire, cle: "id", nettoyer: nettoyerSouvenir },
 };
 export const TABLES_MODULES = Object.values(GENRES).map((g) => g.table);

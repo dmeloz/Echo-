@@ -11,7 +11,7 @@ import { MenuGlissant } from "./components/MenuGlissant";
 import { MiseAJour } from "./components/MiseAJour";
 import type { Compris } from "./lib/comprendre";
 import type { Tache } from "./lib/types";
-import { premierLancement, viderVieilleCorbeille } from "./data/actions";
+import { premierLancement, viderVieilleCorbeille, viderVieuxJournal } from "./data/actions";
 import { baseOuverte, db, garderLesDonnees } from "./data/db";
 import { initialeDe, poserReglage, useMaintenant, useNoms, useProfil, useReglage, useTaches } from "./data/hooks";
 import { Bienvenue } from "./components/Bienvenue";
@@ -100,7 +100,7 @@ export default function App() {
 
   const [baseOk, setBaseOk] = useState(true);
   useEffect(() => {
-    baseOuverte().then((ok) => { setBaseOk(ok); if (ok) { premierLancement().catch(() => {}); garderLesDonnees(); viderVieilleCorbeille().catch(() => {}); suivre(); demarrerIcloud(); } });
+    baseOuverte().then((ok) => { setBaseOk(ok); if (ok) { premierLancement().catch(() => {}); garderLesDonnees(); viderVieilleCorbeille().catch(() => {}); viderVieuxJournal().catch(() => {}); suivre(); demarrerIcloud(); } });
   }, []);
   useEffect(() => {
     const suivre = () => setPage(depuisAdresse());
