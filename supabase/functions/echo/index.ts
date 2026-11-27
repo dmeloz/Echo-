@@ -8,7 +8,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { garder } from "../_shared/garde.ts";
-import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SITUATION, OUTILS_ECHO, PRIX, demandeTour } from "../_shared/echo-outils.ts";
+import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SITUATION, OUTILS_ECHO, RESERVE_PLAN, coutMicro, demandeTour } from "../_shared/echo-outils.ts";
 
 const ORIGINES = ["https://dmeloz.github.io", "http://localhost:5173", "http://localhost:4173"];
 const MAX_TEXTE = 1000;
@@ -171,12 +171,7 @@ const budgetJour = (source: "membre" | "code") => {
   const total = Number.isFinite(b) && b > 0 ? b : 1;
   return source === "code" ? total / 5 : total;
 };
-// Le coût d'un tour en micro-dollars, selon le modèle (PRIX, en dollars le million = micro-dollars le jeton).
-// Cache écrit 1,25 fois l'entrée, cache lu un dixième. Un modèle inconnu (repli après un refus) est compté au prix de Sonnet.
-const coutMicro = (modele: string, u: Anthropic.Beta.BetaUsage) => {
-  const p = PRIX[modele] ?? PRIX["claude-sonnet-5-5"];
-  return Math.ceil(((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) * 1.25 + (u.cache_read_input_tokens ?? 0) * 0.1) * p.entree + (u.output_tokens ?? 0) * p.sortie);
-};
+// Le coût d'un tour : coutMicro (../_shared/echo-outils.ts), au prix du modèle qui a vraiment répondu.
 
 
 function base() {
@@ -214,11 +209,12 @@ async function tourAgent(d: DemandeAgent, source: "membre" | "code", origine: st
   const db = base();
   const { data: depense, error: errDepense } = await db.rpc("depense_echo_du_jour", { p_source: source });
   if (errDepense) { console.error("[echo] depense", errDepense.message); return repondre({ erreur: "service" }, 502, origine); }
-  if (Number(depense ?? 0) >= budgetJour(source) * 1e6) return repondre({ erreur: "budget" }, 429, origine);
+  const reste = budgetJour(source) * 1e6 - Number(depense ?? 0);
+  if (reste <= 0) return repondre({ erreur: "budget" }, 429, origine);
 
   const client = new Anthropic();
   try {
-    const demande = demandeTour(situation, messages, outils);
+    const demande = demandeTour(situation, messages, outils, { sansPlan: reste < RESERVE_PLAN });
     const r = await client.beta.messages.create({ ...demande, messages: messages as Anthropic.Beta.BetaMessageParam[] });
     const { error: errNote } = await db.rpc("noter_depense_echo", { p_source: source, p_micro: coutMicro(r.model ?? demande.model, r.usage) });
     if (errNote) console.error("[echo] noter_depense", errNote.message);

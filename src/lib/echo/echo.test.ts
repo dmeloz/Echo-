@@ -7,7 +7,7 @@ vi.stubGlobal("navigator", {});
 import { db } from "../../data/db";
 import { plusJours } from "../dates";
 import type { Tache } from "../types";
-import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, MODELE_ECHO, MODELE_PLAN, OUTILS_ECHO, demandeTour, estPlan, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, MODELE_ECHO, MODELE_PLAN, OUTILS_ECHO, coutMicro, demandeTour, estPlan, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
 import { executer, lancerEcho, type Appeler, type Bloc, type Message, type Tour } from "./boucle";
 import { OUTILS_BASE, type ContexteEcho } from "./outils";
 import { nettoyerJournal } from "./journal";
@@ -67,6 +67,23 @@ describe("le choix du modèle", () => {
     ]);
     expect(suite.model).toBe(MODELE_PLAN);
     expect(suite).toMatchObject({ fallbacks: "default" });
+  });
+  it("une réponse à un plan reste avec Sonnet ; budget presque fini : Haiku ; un repli garde l'en-tête", () => {
+    const plan = { role: "user", content: "demain je dois aller à Landi et chez Fileman" };
+    const rep = [{ type: "text", text: "Voici ton programme." }];
+    const apres = [plan, { role: "assistant", content: rep }, { role: "user", content: "mets plutôt Landi l'après-midi" }];
+    expect(demandeTour("Aujourd'hui : x", apres).model).toBe(MODELE_PLAN);
+    expect(demandeTour("Aujourd'hui : x", apres, undefined, { sansPlan: true }).model).toBe(MODELE_ECHO);
+    const repli = [{ role: "user", content: "salut" }, { role: "assistant", content: [{ type: "fallback" }, ...rep] }, { role: "user", content: "merci" }];
+    expect(demandeTour("Aujourd'hui : x", repli)).toMatchObject({ model: MODELE_ECHO, betas: ["server-side-fallback-2026-07-01"] });
+    expect(estPlan("range la vaisselle et sors la poubelle")).toBe(false);
+    expect(estPlan("dentiste demain et pharmacie")).toBe(false);
+  });
+  it("le coût suit le vrai modèle, même avec un nom daté", () => {
+    const u = { input_tokens: 1000, output_tokens: 1000, cache_read_input_tokens: 10000 };
+    expect(coutMicro("claude-haiku-5-5-20261101", u)).toBe(Math.ceil(1000 * 0.1 + 1000 * 0.1 + 1000 * 0.5));
+    expect(coutMicro("claude-sonnet-5-5", u)).toBe(Math.ceil((1000 + 1000) * 2 + 1000 * 10));
+    expect(coutMicro("autre-modele", u)).toBeGreaterThan(coutMicro("claude-sonnet-5-5", u));
   });
 });
 

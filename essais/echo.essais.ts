@@ -14,7 +14,7 @@ import type { Horaire } from "../src/lib/horaires";
 import type { Tache } from "../src/lib/types";
 import { lancerEcho, type Appeler, type ResultatEcho, type Tour } from "../src/lib/echo/boucle";
 import { OUTILS_BASE, type Action, type ContexteEcho } from "../src/lib/echo/outils";
-import { PRIX, demandeTour } from "../supabase/functions/_shared/echo-outils";
+import { coutMicro, demandeTour } from "../supabase/functions/_shared/echo-outils";
 
 const cle = process.env.ANTHROPIC_API_KEY;
 const client = cle ? new Anthropic() : null;
@@ -23,8 +23,7 @@ let micro = 0;
 const appeler: Appeler = async ({ situation, messages }) => {
   const d = demandeTour(situation, messages);
   const r = await client!.beta.messages.create({ ...d, messages: messages as Anthropic.Beta.BetaMessageParam[] });
-  const p = PRIX[d.model];
-  micro += (r.usage.input_tokens + (r.usage.cache_creation_input_tokens ?? 0) * 1.25 + (r.usage.cache_read_input_tokens ?? 0) * 0.1) * p.entree + r.usage.output_tokens * p.sortie;
+  micro += coutMicro(r.model ?? d.model, r.usage);
   return { content: r.content, stop_reason: r.stop_reason ?? "" } as Tour;
 };
 

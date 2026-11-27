@@ -191,25 +191,40 @@ export const genreDe = (nom: string): GenreOutil | undefined => OUTILS_ECHO.find
 export const MODELE_ECHO = "claude-haiku-5-5";
 export const MODELE_PLAN = "claude-sonnet-5-5";
 // Prix en dollars par million de jetons (entrée, sortie). Le cache lu coûte un dixième de l'entrée, le cache écrit 1,25 fois.
-export const PRIX: Record<string, { entree: number; sortie: number }> = {
+const PRIX: Record<string, { entree: number; sortie: number }> = {
   [MODELE_ECHO]: { entree: 0.1, sortie: 0.5 },
   [MODELE_PLAN]: { entree: 2, sortie: 10 },
 };
+// L'API peut répondre avec un nom daté (« claude-haiku-5-5-2026… ») : on compare le début.
+// Un modèle inconnu (repli après un refus) est compté au prix le plus haut possible.
+export const prixDe = (modele: string) =>
+  Object.entries(PRIX).find(([nom]) => modele.startsWith(nom))?.[1] ?? { entree: 5, sortie: 25 };
+// Le coût d'un tour en micro-dollars (dollars le million = micro-dollars le jeton). Le même calcul sert au serveur et aux essais.
+export function coutMicro(modele: string, u: { input_tokens?: number | null; output_tokens?: number | null; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null }) {
+  const p = prixDe(modele);
+  return Math.ceil(((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) * 1.25 + (u.cache_read_input_tokens ?? 0) * 0.1) * p.entree + (u.output_tokens ?? 0) * p.sortie);
+}
+// Un tour de Sonnet coûte au plus environ 0,10 $ : en dessous de ce reste dans le budget du jour, Echo organise avec Haiku.
+export const RESERVE_PLAN = 100_000;
 
-// La dernière phrase de la personne, sans les notes de l'app.
-function dernierePhrase(messages: unknown[]) {
+// Les phrases de la personne (de la plus récente à la plus ancienne), sans les notes de l'app (une note par ligne, voir boucle.ts).
+function phrases(messages: unknown[]) {
+  const r: string[] = [];
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i] as { role?: string; content?: unknown };
-    if (m.role === "user" && typeof m.content === "string") return m.content.replace(/\[Note de l'app :[^\]]*\]\n?/g, "").trim();
+    if (m.role === "user" && typeof m.content === "string") r.push(m.content.split("\n").filter((l) => !l.startsWith("[Note de l'app :")).join("\n").trim());
   }
-  return "";
+  return r;
 }
-// Une demande à organiser : plusieurs choses, une journée, une semaine.
-const MOTS_PLAN = /\b(demain|semaine|week-end|weekend|journ[ée]e|planifi|organis|programme|plan|je dois|j'ai [àa] faire|tout ce que|cale|place[rz]?|range[rz]?)\b/i;
+// Une demande à organiser. Mots forts (« je dois », « organise ») : dès deux choses. Mots faibles (« demain ») : il en faut plus.
+const MOTS_FORTS = /\b(planifi\w*|organis\w*|programme|je dois|j'ai [àa] faire|tout ce que)\b/i;
+const MOTS_FAIBLES = /\b(demain|semaine|week-end|weekend|journ[ée]e)\b/i;
 export function estPlan(phrase: string) {
   const t = phrase.toLowerCase();
   const choses = (t.match(/,| et | puis | aussi /g) ?? []).length;
-  return t.length >= 160 || (MOTS_PLAN.test(t) && (choses >= 1 || t.length >= 60));
+  if (t.length >= 160) return true;
+  if (MOTS_FORTS.test(t)) return choses >= 1 || t.length >= 60;
+  return MOTS_FAIBLES.test(t) && (choses >= 2 || t.length >= 60);
 }
 // Les tours déjà faits pour la dernière phrase (depuis le dernier message texte de la personne).
 export function toursDepuisPhrase(messages: unknown[]) {
@@ -221,15 +236,21 @@ export function toursDepuisPhrase(messages: unknown[]) {
   }
   return n;
 }
-export function demandeTour(situation: string, messages: unknown[], outils?: string[]) {
+// sansPlan : le budget du jour est presque épuisé, Haiku fait tout.
+export function demandeTour(situation: string, messages: unknown[], outils?: string[], o: { sansPlan?: boolean } = {}) {
   const tours = toursDepuisPhrase(messages);
-  const plan = estPlan(dernierePhrase(messages));
+  // Une réponse à un plan (« mets plutôt le garage samedi ») reste avec Sonnet : même qualité, même cache.
+  const [derniere = "", avant = ""] = phrases(messages);
+  const plan = !o.sansPlan && (estPlan(derniere) || estPlan(avant));
+  // Un repli après un refus laisse un bloc « fallback » dans la discussion : l'API le relit seulement avec l'en-tête.
+  const repli = messages.some((m) => Array.isArray((m as { content?: unknown }).content) && ((m as { content: { type?: string }[] }).content).some((b) => b?.type === "fallback"));
   return {
     model: plan ? MODELE_PLAN : MODELE_ECHO,
-    max_tokens: plan ? 16000 : 8000,
+    max_tokens: 8000,
     output_config: { effort: "medium" as const }, // il réfléchit vraiment (plan de la semaine), sans traîner
     // Sonnet : si une réponse est refusée par prudence, l'API la refait elle-même sur un autre modèle.
-    ...(plan ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
+    ...(plan || repli ? { betas: ["server-side-fallback-2026-07-01"] } : {}),
+    ...(plan ? { fallbacks: "default" as const } : {}),
     // La consigne et les outils ne changent jamais : mis en cache d'une phrase à l'autre. La conversation aussi, d'un tour à l'autre.
     cache_control: { type: "ephemeral" as const },
     system: [{ type: "text" as const, text: CONSIGNE_AGENT, cache_control: { type: "ephemeral" as const } }, { type: "text" as const, text: situation }],
