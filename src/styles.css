@@ -107,7 +107,7 @@ button { cursor: pointer; }
 .point { position: absolute; right: 0; top: 0; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: var(--bleu); box-shadow: 0 0 12px 2px rgb(47 107 255 / .45); pointer-events: none;
   transition: transform var(--ressort-duree, .6s) var(--ressort, cubic-bezier(.34, 1.4, .64, 1)), opacity .2s; }
 .pied { display: flex; flex-direction: row-reverse; gap: 22px; }
-.pied a { color: var(--discret); text-decoration: none; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+.pied a { color: var(--discret); text-decoration: none; font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; min-height: 44px; }
 
 /* ---------- La page : elle devient une carte quand le menu s'ouvre ---------- */
 .scene { position: fixed; inset: 0; z-index: 2; overflow: hidden; transform-origin: 100% 50%; will-change: transform; contain: layout paint;
@@ -115,7 +115,7 @@ button { cursor: pointer; }
   box-shadow: 0 0 0 1px rgb(255 255 255 / .8), 30px 0 80px -10px rgb(20 60 100 / .28); }
 .scene.en-carte { border-radius: 40px; }
 .defile { height: 100%; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
-  padding: calc(env(safe-area-inset-top, 0px) + 22px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 120px) max(16px, env(safe-area-inset-left, 0px)); }
+  padding: calc(env(safe-area-inset-top, 0px) + 22px) max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 150px) max(16px, env(safe-area-inset-left, 0px)); } /* 150 : la capsule (≈ 132 px) ne cache jamais la fin de la page */
 .cadre { max-width: 560px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
 .ombrage { position: absolute; inset: 0; z-index: 3; border: 0; padding: 0; background: rgb(18 40 58 / .04); cursor: pointer; visibility: hidden; touch-action: none; }
 .menu-ouvert .ombrage { visibility: visible; }
@@ -598,7 +598,7 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 
 /* ---------- La recherche : la loupe de l'en-tête s'allonge en barre ---------- */
 .entete-droite { display: flex; align-items: center; gap: 8px; flex: none; }
-.loupe-ouvrir { width: 40px; height: 40px; border-radius: 50%; border: 1px solid var(--bord); background: var(--verre-fort); color: var(--encre); display: grid; place-items: center; box-shadow: 0 6px 16px var(--ombre); }
+.loupe-ouvrir { width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--bord); background: var(--verre-fort); color: var(--encre); display: grid; place-items: center; box-shadow: 0 6px 16px var(--ombre); }
 .loupe-ouvrir:active { scale: .9; }
 .loupe { flex: 1; display: flex; align-items: center; gap: 6px; height: 48px; padding: 0 5px 0 14px; border-radius: 24px; background: var(--verre-fort); animation: loupe-ouvre .45s var(--ressort, var(--douce)); transform-origin: 100% 50%; }
 @keyframes loupe-ouvre { from { scale: .2 1; opacity: 0; } }
@@ -1073,3 +1073,18 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 /* Agenda : le petit lien vers la sous-page « Mes horaires », et le retour. */
 .lien-horaires, .retour-agenda { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 0; background: rgb(255 255 255 / .7); border-radius: 999px; padding: 7px 12px; font-size: 14px; font-weight: 700; color: var(--bleu); }
 .lien-horaires { align-self: flex-end; margin-bottom: -4px; }
+
+/* « Réduire la transparence » ou « Augmenter le contraste » (Réglages de l'iPhone → Accessibilité) :
+   le verre devient opaque et les bords plus nets. Le reste du style ne change pas. */
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  :root { --verre: #fbfdfe; --verre-fort: #ffffff; --bord: rgb(18 40 58 / .14); }
+  .g, .capsule, .loupe-ouvrir, .barre-bas, .message, .resume, .feuille { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  .lumiere { display: none; }
+}
+@media (prefers-contrast: more) {
+  :root { --discret: #3d4c59; --trait: rgb(18 40 58 / .22); }
+}
+.sommaire-groupe { margin: var(--e4) 0 calc(-1 * var(--e2)) var(--e6); }
+/* Le questionnaire des goûts vit dans la page (sous la capsule) : la capsule s'efface tant qu'il est ouvert, pour ne pas cacher « Enregistrer ». */
+:root:has(.gouts) .capsule { opacity: 0; scale: .8; pointer-events: none; }
+:root:has(.gouts) .astuce { visibility: hidden; }

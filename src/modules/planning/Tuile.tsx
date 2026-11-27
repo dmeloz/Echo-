@@ -14,7 +14,7 @@ export function TuilePlanning({ now, aller }: ContexteModule) {
     <a className="tuile" href="#planning" onClick={(e) => { e.preventDefault(); aller("planning"); }}>
       <span className="tuile-icone" aria-hidden="true"><CalendarDays size={18} strokeWidth={1.8} animated={false} /></span>
       <b>Agenda</b>
-      <span>{demain ? `Demain : ${demain} chose${demain > 1 ? "s" : ""}` : semaine ? `${semaine} chose${semaine > 1 ? "s" : ""} cette semaine` : "Semaine libre"}</span>
+      <span>{demain ? `Demain : ${demain} chose${demain > 1 ? "s" : ""}` : semaine ? `${semaine} chose${semaine > 1 ? "s" : ""} cette semaine` : "Rien après aujourd'hui"}</span>
     </a>
   );
 }

@@ -29,7 +29,8 @@ const s = (n: number) => (n > 1 ? "s" : "");
 // puis trois lignes, le stock d'abord. Chaque partie s'ouvre en page, avec un retour.
 export function PageCuisine(ctx: ContexteModule) {
   const { proprio, now } = ctx;
-  const [partie, setPartie] = useState<Partie | null>(null);
+  // Le vendredi et le samedi (jours de courses), Cuisine s'ouvre directement sur les courses ; le retour mène à l'entrée.
+  const [partie, setPartie] = useState<Partie | null>(() => ([5, 6].includes(now.getDay()) ? "courses" : null));
   const [lieu, setLieu] = useState<Lieu | null>(null); // l'endroit du stock ouvert
   const [magasin, setMagasin] = useState(false);
   const [ticket, setTicket] = useState<LectureTicket | null>(null);

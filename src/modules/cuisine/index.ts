@@ -1,7 +1,7 @@
+import { lazy } from "react";
 import type { Module } from "../contrat";
 import { ajouterArticles } from "./actions";
 import { lireDemande } from "./donnees";
-import { PageCuisine } from "./Page";
 import { ReglagesCuisine } from "./ReglagesCuisine";
 import { TuileCuisine } from "./Tuile";
 import { OUTILS_CUISINE } from "./outilsEcho";
@@ -12,7 +12,7 @@ export const cuisine: Module = {
   resume: "Courses, repas de la semaine, stock",
   etat: "construit",
   prevu: [],
-  Page: PageCuisine,
+  Page: lazy(() => import("./Page").then((m) => ({ default: m.PageCuisine }))), // chargée à la première ouverture
   Tuile: TuileCuisine,
   Reglages: ReglagesCuisine,
   outils: OUTILS_CUISINE,

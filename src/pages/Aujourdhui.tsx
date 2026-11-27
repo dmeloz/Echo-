@@ -108,8 +108,9 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
 
       {(resteTout.length > 0 || faites.length > 0) && (
         <section className="g journee" aria-labelledby="lab-journee">
-          <div className="taches-tete"><span className="lab" id="lab-journee">Ensuite</span><span className="compte">{faites.length} sur {total} faites</span></div>
-          <div className="barre" aria-hidden="true"><i style={{ width: pct + "%" }} /></div>
+          <div className="taches-tete"><span className="lab" id="lab-journee">Ensuite</span>{faites.length > 0 && <span className="compte">{faites.length} sur {total} faites</span>}</div>
+          {/* La barre n'arrive qu'avec la première chose faite : au réveil, pas de « 0 sur 6 » qui pèse. */}
+          {faites.length > 0 && <div className="barre" aria-hidden="true"><i style={{ width: pct + "%" }} /></div>}
           {resteTout.length > 0 && (
             <div className="puces filtre-qui" role="group" aria-label="Montrer les tâches de">
               {([["tout", "Tout"], ["moi", "Moi"], ["autre", noms[lautre]]] as Array<[Filtre, string]>).map(([k, l]) => (
