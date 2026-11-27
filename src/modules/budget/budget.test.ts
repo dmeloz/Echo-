@@ -277,6 +277,9 @@ describe("à payer : ce que le module Maison passe au Budget", () => {
     expect(await ajouterAPayer({ ...ligne, echeance: "31.12.2026" })).toBeNull();
     expect(await ajouterAPayer({ ...ligne, titre: " " })).toBeNull();
   });
+  it("prend la ligne telle que Maison la donne (« montant »)", async () => {
+    expect(await ajouterAPayer({ id: "papier:p1", titre: "Facture Swisscom", emetteur: "Swisscom", montant: 8_990, echeance: "2026-12-15", repete: "mois", dossier: "abonnements", papier: "p1", paye: false })).toMatchObject({ c: 8_990, paye: false });
+  });
 });
 
 describe("écrire et lire un montant", () => {

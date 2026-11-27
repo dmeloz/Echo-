@@ -131,8 +131,10 @@ export async function noterSolde(compte: CompteSolde, c: number, now = new Date(
 
 // Maison garde le papier ; dès qu'il y a un montant à payer, il le passe ici. Le même id deux fois ne crée pas de doublon :
 // la ligne est mise à jour, sans défaire un paiement déjà noté. Rend la ligne gardée, ou null si elle n'a pas la bonne forme.
-export async function ajouterAPayer(ligne: Omit<APayer, "cree" | "paye"> & { paye?: false | string }): Promise<APayer | null> {
-  const propreLigne = nettoyerAPayer({ ...ligne, paye: ligne.paye ?? false, cree: Date.now() });
+// Le montant s'appelle « montant » dans la forme convenue avec Maison (des centimes entiers) ; « c » est accepté aussi.
+export type LigneAPayer = Omit<APayer, "cree" | "paye" | "c"> & { c?: number; montant?: number; paye?: false | string };
+export async function ajouterAPayer(ligne: LigneAPayer): Promise<APayer | null> {
+  const propreLigne = nettoyerAPayer({ ...ligne, c: ligne.c ?? ligne.montant, paye: ligne.paye ?? false, cree: Date.now() });
   if (!propreLigne) return null;
   return db.transaction("rw", db.budget_apayer, async () => {
     const la = await db.budget_apayer.get(propreLigne.id);
