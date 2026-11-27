@@ -19,7 +19,7 @@ export async function ajouterCorvees(nouvelles: NouvelleCorvee[], silencieux = f
     for (const [i, n] of nouvelles.entries()) {
       const nom = n.nom.replace(/\s+/g, " ").trim().slice(0, 80);
       if (!nom || [...la, ...ajoutees].some((c) => memeNom(c.nom, nom))) continue;
-      ajoutees.push({ id: nouvelId() + i, nom, piece: n.piece ?? "", tous: Math.min(365, Math.max(1, Math.round(n.tous))), taille: n.taille ?? 2, qui: n.qui ?? "tour", fait: null, ...(n.entretien ? { entretien: true } : {}), ...(n.appareil ? { appareil: n.appareil } : {}), cree: cree + i });
+      ajoutees.push({ id: nouvelId() + i, nom, piece: n.piece ?? "", tous: Math.min(365, Math.max(1, Math.round(n.tous))), taille: n.taille ?? 2, qui: n.qui ?? "libre", fait: null, ...(n.entretien ? { entretien: true } : {}), ...(n.appareil ? { appareil: n.appareil } : {}), cree: cree + i });
     }
     await db.maison_corvees.bulkAdd(ajoutees);
   });

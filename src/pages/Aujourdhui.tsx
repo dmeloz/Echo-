@@ -134,6 +134,9 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
         </section>
       )}
 
+      {/* Ce que les modules ont pour toi aujourd'hui (les corvées de Maison) : une ligne calme chacun. */}
+      {modules.filter((m) => m.Journee && m.etat === "construit").map((m) => { const J = m.Journee!; return <J key={m.id} noms={noms} proprio={proprio} now={now} aller={onAller} ouvrir={onOuvrir} />; })}
+
       {pourDemain.length > 0 && (
         <section className="g demain" aria-labelledby="lab-demain">
           <div className="taches-tete"><span className="lab" id="lab-demain"><CalendarClock size={15} strokeWidth={1.5} animated={false} /> Demain</span><span className="compte">{pourDemain.length}</span></div>

@@ -11,14 +11,14 @@ import { db } from "../../data/db";
 import { lireFile } from "../../sync/file";
 import { appliquer } from "../../sync/moteur";
 import { ajouterAppareil, ajouterContact, ajouterCorvees, ajouterReparation, cocherCorvee, etatReparation, faireCorvee, rangerFaits, rangerReparations, reporterCorvee, retirerCorvee } from "./actions";
-import { aFaire, besoin, deborde, ditFait, equilibre, gestesPour, jourDu, lireContact, lireCorvee, nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation, nomRythme, parts, pour, texteGarantie, trouverCorvees, type Corvee } from "./donnees";
+import { aFaire, besoin, deborde, ditFait, equilibre, gestesPour, jourDu, lireContact, lireCorvee, nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation, nomRythme, parts, pour, pourMoi, texteGarantie, trouverCorvees, type Corvee } from "./donnees";
 import { maison } from "./index";
 import { OUTILS_MAISON } from "./outilsEcho";
 
 const J = 86_400_000;
 const midi = (jour: string) => new Date(jour + "T12:00:00");
 const NOW = midi("2026-11-27");
-const corvee = (x: Partial<Corvee> = {}): Corvee => ({ id: "c1", nom: "Passer l'aspirateur", piece: "Salon", tous: 7, taille: 2, qui: "tour", fait: null, cree: midi("2026-11-20").getTime(), ...x });
+const corvee = (x: Partial<Corvee> = {}): Corvee => ({ id: "c1", nom: "Passer l'aspirateur", piece: "Salon", tous: 7, taille: 2, qui: "libre", fait: null, cree: midi("2026-11-20").getTime(), ...x });
 const ctx = { noms: { moi: "Dany", elle: "Sarah" }, proprio: "moi" as const, now: NOW };
 const annuler = () => (toast.mock.calls.at(-1)![1] as { action: { onClick: () => Promise<unknown> } }).action.onClick();
 
@@ -51,15 +51,13 @@ describe("quand une corvée revient", () => {
 });
 
 describe("qui, et l'équilibre", () => {
-  it("chacun son tour : l'autre que la dernière fois", () => {
-    const e = { moi: 0, elle: 0 };
-    expect(pour(corvee({ par: "elle" }), e)).toBe("moi");
-    expect(pour(corvee({ par: "moi" }), e)).toBe("elle");
-    expect(pour(corvee({ qui: "elle", par: "elle" }), e)).toBe("elle");
-  });
-  it("Echo choisit : celui qui en a le moins fait", () => {
-    expect(pour(corvee({ qui: "echo", par: "elle" }), { moi: 60, elle: 20 })).toBe("elle");
-    expect(pour(corvee({ qui: "echo", par: "elle" }), { moi: 20, elle: 20 })).toBe("moi");
+  it("libre par défaut, ou donnée à une personne", () => {
+    expect(pour(corvee({ par: "elle" }))).toBeNull();
+    expect(pour(corvee({ qui: "elle" }))).toBe("elle");
+    expect(pour(corvee({ qui: "tour" as never }))).toBeNull(); // les anciennes « chacun son tour » deviennent libres
+    expect(pourMoi(corvee(), "moi")).toBe(true);
+    expect(pourMoi(corvee({ qui: "moi" }), "moi")).toBe(true);
+    expect(pourMoi(corvee({ qui: "elle" }), "moi")).toBe(false);
   });
   it("compte les minutes des 4 dernières semaines", () => {
     const f = (par: "moi" | "elle", jours: number, min: number) => ({ id: par + jours, corvee: "c", nom: "x", par, quand: NOW.getTime() - jours * J, min });
@@ -161,7 +159,7 @@ describe("la barre d'Echo et les outils", () => {
     await db.maison_corvees.bulkAdd([corvee({ fait: midi("2026-11-19").getTime(), par: "elle" }), corvee({ id: "c2", nom: "Draps", tous: 14, fait: NOW.getTime() - J, par: "moi", qui: "elle" })]);
     const r = (await OUTILS_MAISON.voir_maison.lire!({}, ctx)) as { corvees: Array<Record<string, string>> };
     expect(r.corvees).toMatchObject([
-      { nom: "Passer l'aspirateur", etat: "à faire aujourd'hui", pour: "Dany", revient: "chaque semaine", derniereFois: "il y a 8 jours par Sarah" },
+      { nom: "Passer l'aspirateur", etat: "à faire aujourd'hui", pour: "libre (celui qui la fait)", revient: "chaque semaine", derniereFois: "il y a 8 jours par Sarah" },
       { nom: "Draps", etat: "peut attendre", pour: "Sarah" },
     ]);
   });
@@ -180,8 +178,8 @@ describe("la barre d'Echo et les outils", () => {
   });
   it("ajouter_corvee refuse un doublon et un rythme faux", async () => {
     await db.maison_corvees.add(corvee());
-    expect(await OUTILS_MAISON.ajouter_corvee.preparer!({ nom: "passer l'aspirateur", tousLesJours: 7, taille: "moyen", qui: "tour", piece: "" }, ctx)).toContain("déjà");
-    expect(await OUTILS_MAISON.ajouter_corvee.preparer!({ nom: "Litière", tousLesJours: 0, taille: "vite", qui: "tour", piece: "" }, ctx)).toContain("entre 1 et 365");
+    expect(await OUTILS_MAISON.ajouter_corvee.preparer!({ nom: "passer l'aspirateur", tousLesJours: 7, taille: "moyen", qui: "libre", piece: "" }, ctx)).toContain("déjà");
+    expect(await OUTILS_MAISON.ajouter_corvee.preparer!({ nom: "Litière", tousLesJours: 0, taille: "vite", qui: "libre", piece: "" }, ctx)).toContain("entre 1 et 365");
     const a = await OUTILS_MAISON.ajouter_corvee.preparer!({ nom: "litière du chat", tousLesJours: 2, taille: "vite", qui: "elle", piece: "" }, ctx);
     if (typeof a === "string") throw new Error(a);
     const defaire = await a.faire();
@@ -193,7 +191,7 @@ describe("la barre d'Echo et les outils", () => {
 
 describe("le foyer", () => {
   it("ne garde que les formes attendues", () => {
-    expect(nettoyerCorvee({ id: "a", nom: " Vitres ", tous: 90, taille: 9, qui: "x", fait: 0, report: "demain", cree: 5 })).toEqual({ id: "a", nom: "Vitres", piece: "", tous: 90, taille: 2, qui: "tour", fait: null, cree: 5 });
+    expect(nettoyerCorvee({ id: "a", nom: " Vitres ", tous: 90, taille: 9, qui: "x", fait: 0, report: "demain", cree: 5 })).toEqual({ id: "a", nom: "Vitres", piece: "", tous: 90, taille: 2, qui: "libre", fait: null, cree: 5 });
     expect(nettoyerCorvee({ id: "a", nom: "Vitres", tous: 0 })).toBeNull();
     expect(nettoyerCorvee({ id: "a", nom: "", tous: 7 })).toBeNull();
     expect(nettoyerFait({ id: "f", corvee: "a", nom: "Vitres", par: "elle", quand: 10, min: 40 })).toEqual({ id: "f", corvee: "a", nom: "Vitres", par: "elle", quand: 10, min: 40 });

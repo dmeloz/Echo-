@@ -138,7 +138,7 @@ export const OUTILS_ECHO: OutilEcho[] = [
         nom: { type: "string", description: "court, commence par un verbe ou le nom de la chose (« Litière du chat »)" },
         tousLesJours: { type: "integer", description: "le rythme en jours : 1 chaque jour, 7 chaque semaine, 14, 30 chaque mois, 90" },
         taille: { type: "string", enum: ["vite", "moyen", "gros"], description: "vite = 5 min, moyen = 15 min, gros = 40 min ou plus" },
-        qui: { type: "string", enum: ["moi", "elle", "tour", "echo"], description: "une place du foyer, « tour » = chacun son tour (sans précision), « echo » = tu choisis celui qui en a le moins fait" },
+        qui: { type: "string", enum: ["moi", "elle", "libre"], description: "« libre » (sans précision) : celui qui la fait la coche ; ou une place du foyer si on la donne à quelqu'un" },
         piece: { type: "string", description: "la pièce si elle est dite, sinon \"\"" },
       },
     },

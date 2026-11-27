@@ -4,8 +4,8 @@ import { autre, type Personne } from "../../lib/types";
 // Les données du module Maison et tout ce qui se calcule sans toucher à la base.
 // Une corvée n'a pas de date fixe : elle revient « tous les N jours » à partir de la dernière fois où elle a été faite.
 
-// Qui s'en occupe : une personne, chacun son tour, ou Echo choisit (celui qui en a le moins fait ces 4 semaines).
-export type QuiCorvee = Personne | "tour" | "echo";
+// Qui s'en occupe : libre (celui qui la fait la coche, l'app retient qui), ou donnée à une personne (choix de Dany, 2026-11-27).
+export type QuiCorvee = Personne | "libre";
 export type Taille = 1 | 2 | 3;
 export const TAILLES: Array<{ id: Taille; nom: string; min: number }> = [
   { id: 1, nom: "Vite fait", min: 5 }, { id: 2, nom: "Moyen", min: 15 }, { id: 3, nom: "Un gros morceau", min: 40 },
@@ -89,12 +89,10 @@ export function equilibre(faits: Fait[], now = Date.now()): Equilibre {
   for (const f of faits) if (f.quand >= now - QUATRE_SEMAINES) e[f.par] += f.min;
   return e;
 }
-// Pour qui est la corvée aujourd'hui. Chacun son tour : l'autre que la dernière fois. Echo choisit : celui qui en a le moins fait.
-export function pour(c: Corvee, e: Equilibre): Personne {
-  if (c.qui === "moi" || c.qui === "elle") return c.qui;
-  if (c.qui === "echo" && e.moi !== e.elle) return e.moi < e.elle ? "moi" : "elle";
-  return c.par ? autre(c.par) : "moi";
-}
+// Pour qui est la corvée : une personne, ou null si elle est libre (les anciennes « chacun son tour » et « Echo choisit » aussi).
+export const pour = (c: Corvee): Personne | null => (c.qui === "moi" || c.qui === "elle" ? c.qui : null);
+// Ce que la personne qui tient le téléphone peut faire : ce qui est à elle, et ce qui est libre.
+export const pourMoi = (c: Corvee, proprio: Personne) => pour(c) !== autre(proprio);
 // La part de chacun, en pour cent (50/50 tant que rien n'est noté).
 export function parts(e: Equilibre): Equilibre {
   const total = e.moi + e.elle;
@@ -200,7 +198,7 @@ export function nettoyerCorvee(x: unknown): Corvee | null {
   const o = obj(x), id = txt(o.id, 80), nom = txt(o.nom, 80).trim(), tous = nb(o.tous), report = txt(o.report, 10);
   if (!id || !nom || tous === null || !Number.isInteger(tous) || tous < 1 || tous > 365) return null;
   const taille = ([1, 2, 3] as const).find((t) => t === o.taille) ?? 2;
-  const qui = (["moi", "elle", "tour", "echo"] as const).find((q) => q === o.qui) ?? "tour";
+  const qui = o.qui === "moi" || o.qui === "elle" ? o.qui : "libre";
   const fait = nb(o.fait);
   return { id, nom, piece: txt(o.piece, 30).trim(), tous, taille, qui, fait: fait && fait > 0 ? fait : null,
     ...(personne(o.par) ? { par: o.par } : {}), ...(JOUR_ISO.test(report) ? { report } : {}),

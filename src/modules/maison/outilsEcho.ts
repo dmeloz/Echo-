@@ -8,7 +8,7 @@ import { ETATS_REPARATION, besoin, depuis, equilibre, nomRythme, parts, pour, tr
 const court = (s: unknown, n: number) => (typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, n) : "");
 const ETATS = ["", "peut attendre", "bientôt", "à faire aujourd'hui"];
 const TAILLES: Record<string, Taille> = { vite: 1, moyen: 2, gros: 3 };
-const QUIS: QuiCorvee[] = ["moi", "elle", "tour", "echo"];
+const QUIS: QuiCorvee[] = ["moi", "elle", "libre"];
 
 export const OUTILS_MAISON: Record<string, Executant> = {
   voir_maison: {
@@ -17,7 +17,7 @@ export const OUTILS_MAISON: Record<string, Executant> = {
       const e = equilibre(await db.maison_faits.toArray(), ctx.now.getTime()), p = parts(e);
       return {
         corvees: corvees.map((c) => ({
-          nom: c.nom, ...(c.entretien ? { entretien: true } : {}), ...(c.piece ? { piece: c.piece } : {}), etat: ETATS[besoin(c, ctx.now)], pour: ctx.noms[pour(c, e)], revient: nomRythme(c.tous).toLowerCase(),
+          nom: c.nom, ...(c.entretien ? { entretien: true } : {}), ...(c.piece ? { piece: c.piece } : {}), etat: ETATS[besoin(c, ctx.now)], pour: pour(c) ? ctx.noms[pour(c)!] : "libre (celui qui la fait)", revient: nomRythme(c.tous).toLowerCase(),
           ...(c.fait ? { derniereFois: [depuis(c, ctx.now), c.par ? `par ${ctx.noms[c.par]}` : ""].filter(Boolean).join(" ") } : {}),
         })),
         aReparer: (await db.maison_reparations.toArray()).filter((r) => r.etat < 3).map((r) => ({ nom: r.nom, etat: ETATS_REPARATION[r.etat - 1].nom.toLowerCase(), ...(r.note ? { note: r.note } : {}) })),
@@ -55,7 +55,7 @@ export const OUTILS_MAISON: Record<string, Executant> = {
       if (!nom) return "Donne le nom de la corvée.";
       if (!Number.isInteger(tous) || tous < 1 || tous > 365) return "tousLesJours : un nombre de jours entre 1 et 365.";
       if ((await db.maison_corvees.toArray()).some((c) => memeNom(c.nom, nom))) return `« ${nom} » est déjà dans les corvées.`;
-      const qui = QUIS.find((q) => q === e.qui) ?? "tour";
+      const qui = QUIS.find((q) => q === e.qui) ?? "libre";
       return {
         outil: "ajouter_corvee", genre: "petit", libelle: `Corvée : ${nom}`, details: [nomRythme(tous).toLowerCase()],
         faire: async () => {
