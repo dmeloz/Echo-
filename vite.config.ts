@@ -41,7 +41,13 @@ export default defineConfig({
           { src: "icon-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" },
         ],
       },
-      workbox: { globPatterns: ["**/*.{js,css,html,svg,png,woff2,wasm}"], importScripts: ["push.js"] }, // push.js : les rappels
+      workbox: {
+        // Le lecteur de code-barres (≈ 1 Mo, .wasm) n'est pas gardé d'avance : il se télécharge au premier scan,
+        // puis reste sur le téléphone (cache « code-barres ») pour marcher hors ligne ensuite.
+        globPatterns: ["**/*.{js,css,html,svg,png,woff2}"],
+        runtimeCaching: [{ urlPattern: /\.wasm$/, handler: "CacheFirst", options: { cacheName: "code-barres", expiration: { maxEntries: 4 } } }],
+        importScripts: ["push.js"], // push.js : les rappels
+      },
     }),
   ],
 });

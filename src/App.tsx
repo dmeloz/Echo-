@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { BarreAjout } from "./components/BarreAjout";
 import { BoutonEcho } from "./components/BoutonEcho";
@@ -164,7 +164,7 @@ export default function App() {
           ) : <Secours key={vue.id}>
           <div className="cadre arrivee">
             {!baseOk ? <BaseFermee /> : taches === undefined ? <Squelette />
-              : module ? (module.Page && module.etat === "construit" ? <module.Page noms={noms} proprio={proprio} now={now} aller={aller} ouvrir={(t) => ouvrir(t)} /> : <Bientot module={module} onAller={aller} />)
+              : module ? (module.Page && module.etat === "construit" ? <Suspense fallback={<Squelette />}><module.Page noms={noms} proprio={proprio} now={now} aller={aller} ouvrir={(t) => ouvrir(t)} /></Suspense> : <Bientot module={module} onAller={aller} />)
               : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} proprio={proprio} onGuide={() => setGuideFerme(false)} onRelier={() => setRelier(true)} />
               : <Aujourdhui taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} />}
           </div>
