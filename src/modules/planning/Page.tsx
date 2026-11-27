@@ -8,6 +8,8 @@ import type { ContexteModule } from "../contrat";
 import { charge, duJour, faitesDuJour, joursAVenir, proposerDeplacement, proposerRepos } from "./semaine";
 import { CODES, heuresDe, phraseDe, type Code } from "../../lib/horaires";
 import { VueMois } from "./Mois";
+import { PageHoraires } from "../horaires/PageHoraires";
+import { CalendarClock, ChevronLeft } from "pulsoicon-react";
 import { vibrer } from "../../lib/gestes";
 
 type Vue = "jour" | "semaine" | "mois";
@@ -21,7 +23,8 @@ const classeQui = (t: Tache) => (t.qui === "nous" ? "nous" : t.qui);
 export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
   const taches = useTaches() ?? [];
   const choix = useReglage<string>("planningVue", "jour");
-  const vue: Vue = choix === "semaine" || choix === "mois" ? choix : "jour"; // « Mes horaires » est maintenant à part
+  const vue: Vue = choix === "semaine" || choix === "mois" ? choix : "jour";
+  const [sousPage, setSousPage] = useState(false); // « Mes horaires » : une sous-page de l'Agenda
   const [jour, setJour] = useState(() => auJour(0, now));
   const [refusees, setRefusees] = useState<string[]>([]);
   const jours = joursAVenir(now);
@@ -35,8 +38,16 @@ export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
   const travail = new Map(horaires.filter((h) => h.qui === proprio).map((h) => [h.jour, h.code]));
   const choisirJour = (j: string) => { setJour(j); poserReglage("planningVue", "jour"); };
 
+  if (sousPage) return (
+    <>
+      <button type="button" className="retour-agenda" onClick={() => setSousPage(false)}><ChevronLeft size={18} strokeWidth={2} animated={false} /> Agenda</button>
+      <PageHoraires noms={noms} proprio={proprio} now={now} aller={() => {}} ouvrir={ouvrir} />
+    </>
+  );
+
   return (
     <>
+      <button type="button" className="lien-horaires" onClick={() => setSousPage(true)}><CalendarClock size={16} strokeWidth={1.8} animated={false} /> Mes horaires</button>
       <div className="vue-choix" role="group" aria-label="Vue">
         {(["jour", "semaine", "mois"] as Vue[]).map((v) => (
           <button key={v} type="button" aria-pressed={vue === v} onClick={() => poserReglage("planningVue", v)}>{NOM_VUE[v]}</button>
