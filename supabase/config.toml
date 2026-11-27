@@ -14,3 +14,6 @@ verify_jwt = false
 
 [functions.cuisine]
 verify_jwt = false
+
+[functions.lire-ticket]
+verify_jwt = false

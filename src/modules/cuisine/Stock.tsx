@@ -5,14 +5,16 @@ import { db } from "../../data/db";
 import { auJour, libelleJour } from "../../lib/dates";
 import type { ContexteModule } from "../contrat";
 import { ajouterProduit, retirerProduit } from "./actions";
-import { LIEUX, type Lieu, type Produit } from "./donnees";
+import { LIEUX, montant, type LectureTicket, type Lieu, type Produit } from "./donnees";
+import { PhotoTicket } from "./Ticket";
 
 const ICONES: Record<Lieu, typeof House> = { frigo: Refrigerator, congelateur: Snowflake, placard: Package, maison: House };
 
-// Le stock, forme simple du lot 1 : ce qu'il faut manger vite, puis quatre endroits. On ajoute à la main.
-// (Le ticket de caisse et le code-barres arrivent avec le lot 4.)
-export function Stock({ now }: ContexteModule) {
+// Le stock : ce qu'il faut manger vite, puis quatre endroits. On le remplit avec la photo du ticket de caisse, ou à la main.
+// (Le code-barres arrive plus tard.)
+export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: LectureTicket) => void }) {
   const produits = useLiveQuery(() => db.cuisine_stock.toArray(), [], [] as Produit[]);
+  const dernier = useLiveQuery(async () => (await db.cuisine_tickets.toArray()).sort((a, b) => b.cree - a.cree)[0], [], undefined);
   const [lieu, setLieu] = useState<Lieu | null>(null);
   const today = auJour(0, now), limite = auJour(3, now);
   const vite = produits.filter((p) => p.avant && p.avant <= limite).sort((a, b) => a.avant!.localeCompare(b.avant!));
@@ -58,6 +60,7 @@ export function Stock({ now }: ContexteModule) {
 
   return (
     <>
+      <PhotoTicket onLu={onTicket} />
       {vite.length > 0 && (
         <section className="g manger-vite">
           <span className="lab">À manger vite</span>
@@ -75,7 +78,7 @@ export function Stock({ now }: ContexteModule) {
           );
         })}
       </div>
-      <p className="note-donnees">Pas besoin de tout noter : mets ici ce que tu veux suivre. Bientôt, la photo du ticket de caisse remplira le stock toute seule.</p>
+      <p className="note-donnees">{dernier ? `Dernier ticket : ${[dernier.magasin, libelleJour(dernier.date, now).toLowerCase(), dernier.total ? montant(dernier.total, dernier.monnaie) : ""].filter(Boolean).join(", ")}.` : "Pas besoin de tout noter : la photo du ticket remplit le stock, et tu peux ajouter à la main ce que tu veux suivre."}</p>
     </>
   );
 }
