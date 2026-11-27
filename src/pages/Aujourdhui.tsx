@@ -64,13 +64,21 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
   const debut = prochainDebut(codeDuJour, nowMin);
   const trajets = useReglage<unknown>("trajets", null);
   const [depart, setDepart] = useState<{ pour: string; heure: string } | null>(null);
+  const [essai, setEssai] = useState(0);
   useEffect(() => {
+    setDepart(null); // un réglage changé : l'ancienne heure ne vaut plus
     if (!debut) return;
-    let vivant = true;
-    departTravail(today, debut).then((d) => { if (vivant && typeof d !== "string") setDepart({ pour: `${today} ${debut}`, heure: d.depart }); }).catch(() => {});
-    return () => { vivant = false; };
-  }, [today, debut, trajets]);
-  const pars = debut && depart?.pour === `${today} ${debut}` ? depart.heure : null;
+    let vivant = true, minuteur = 0;
+    departTravail(today, debut).then((d) => {
+      if (!vivant) return;
+      if (typeof d !== "string") setDepart({ pour: `${today} ${debut}`, heure: d.depart });
+      // Pas de réseau, ou la session pas encore prête : on réessaie un peu plus tard (4 fois au plus).
+      else if (d === "service" && essai < 4) minuteur = window.setTimeout(() => setEssai((n) => n + 1), 60_000);
+    }).catch(() => {});
+    return () => { vivant = false; clearTimeout(minuteur); };
+  }, [today, debut, trajets, essai]);
+  // Plus affichée une fois l'heure de départ passée (ou si elle tombe la veille).
+  const pars = debut && depart?.pour === `${today} ${debut}` && depart.heure < debut && minutes(depart.heure) > nowMin ? depart.heure : null;
   // Poser une ligne ailleurs : devant une voisine, tout en haut (elle passe « En premier ») ou après la dernière ligne montrée.
   const poserLigne = (t: Tache, avantId: string | null) => {
     const apresDerniere = () => { const sans = liste.filter((x) => x.id !== t.id); const d = montres.filter((x) => x.id !== t.id).at(-1); return d ? sans[sans.indexOf(d) + 1]?.id ?? null : null; };

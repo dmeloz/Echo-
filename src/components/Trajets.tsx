@@ -1,15 +1,19 @@
-import { useState } from "react";
-import { poserReglage, useReglage } from "../data/hooks";
-import { TRAJETS_DEFAUT, heureDepart, type Trajets } from "../lib/trajet";
+import { useRef, useState } from "react";
+import { useReglage } from "../data/hooks";
+import { TRAJETS_DEFAUT, heureDepart, lireTrajets, poserTrajets, type Trajets } from "../lib/trajet";
 import { auJour, heureFr } from "../lib/dates";
 
 // Réglages → Agenda → Trajets : d'où on part, où on travaille, et comment. L'accueil dit alors « pars à 7 h 30 ».
 export function SectionTrajets() {
   const t = { ...TRAJETS_DEFAUT, ...useReglage<Partial<Trajets>>("trajets", {}) };
-  const poser = (x: Partial<Trajets>) => poserReglage("trajets", { ...t, ...x });
+  // Les enregistrements se suivent ; « Essayer » attend le dernier.
+  const file = useRef<Promise<unknown>>(Promise.resolve());
+  const poser = (x: Partial<Trajets>) => { file.current = file.current.then(() => poserTrajets(x)).catch(() => {}); };
   const [essai, setEssai] = useState("");
   const essayer = async () => {
     setEssai("Je calcule…");
+    await file.current;
+    const t = await lireTrajets();
     const d = await heureDepart({ de: t.maison, a: t.travail, jour: auJour(1), arrivee: "08:00", mode: t.moyen });
     if (d === "adresses") setEssai("Écris d'abord les deux adresses.");
     else if (d === "introuvable") setEssai("Je ne trouve pas ce trajet. Écris l'adresse avec la rue et la ville.");
@@ -31,7 +35,7 @@ export function SectionTrajets() {
           <option value="transports">Transports publics</option>
         </select>
       </label>
-      <p className="aide-champ">Les jours de travail, l'accueil te dit à quelle heure partir. Les adresses restent sur ce téléphone.</p>
+      <p className="aide-champ">Les jours de travail, l'accueil te dit à quelle heure partir. Les adresses sont gardées sur ce téléphone et servent seulement à calculer le trajet.</p>
       <button type="button" className="bouton-texte" onClick={essayer}>Essayer</button>
       {essai && <p className="aide-champ" role="status">{essai}</p>}
     </section>

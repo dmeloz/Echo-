@@ -4,7 +4,7 @@ import type { Mode } from "../../supabase/functions/_shared/trajet-calcul";
 
 // L'heure de départ : « pars à 7 h 30 » pour arriver au travail (ou à un rendez-vous) à l'heure.
 // Le calcul se fait sur le serveur (fonction « trajet » : route pour la moto, horaires CFF pour les transports).
-// Les adresses restent sur ce téléphone (Réglages → Agenda → Trajets) ; elles ne partent au serveur que pour ce calcul.
+// Les adresses sont gardées sur ce téléphone (Réglages → Agenda → Trajets, hors sauvegarde) ; elles ne sont envoyées que pour ce calcul.
 
 export const ADRESSE_TRAJET = "https://ewqvgayhptfwbpkxsaij.supabase.co/functions/v1/trajet";
 export interface Trajets { maison: string; travail: string; moyen: Mode }
@@ -36,7 +36,7 @@ function garder(cle: string, d: Depart, now = Date.now()) {
 }
 
 // Quand partir de « de » pour être à « a » à l'heure dite. mode : la moto, ou les transports (s'il neige).
-export async function heureDepart(p: { de: string; a: string; jour: string; arrivee: string; mode: Mode; code?: string }): Promise<Depart | Refus> {
+export async function heureDepart(p: { de: string; a: string; jour: string; arrivee: string; mode: Mode }): Promise<Depart | Refus> {
   const de = p.de.trim(), a = p.a.trim();
   if (!de || !a) return "adresses";
   const cle = cleDe(de, a, p.jour, p.arrivee, p.mode);
@@ -45,7 +45,8 @@ export async function heureDepart(p: { de: string; a: string; jour: string; arri
   let r: Response;
   try {
     r = await fetch(ADRESSE_TRAJET, {
-      method: "POST", headers: await entetesIA(p.code ?? ""),
+      // Le code Echo, pour un téléphone pas encore relié au foyer.
+      method: "POST", headers: await entetesIA(String((await db.reglages.get("codeEcho"))?.valeur ?? "").trim()),
       body: JSON.stringify({ de, a, jour: p.jour, arrivee: p.arrivee, mode: p.mode }), signal: AbortSignal.timeout(15000),
     });
   } catch { return "service"; }
@@ -57,7 +58,9 @@ export async function heureDepart(p: { de: string; a: string; jour: string; arri
 }
 
 // Pour aller au travail : les adresses des réglages. null si elles ne sont pas remplies.
-export async function departTravail(jour: string, arrivee: string, code = ""): Promise<Depart | Refus> {
+export async function departTravail(jour: string, arrivee: string): Promise<Depart | Refus> {
   const t = await lireTrajets();
-  return heureDepart({ de: t.maison, a: t.travail, jour, arrivee, mode: t.moyen, code });
+  return heureDepart({ de: t.maison, a: t.travail, jour, arrivee, mode: t.moyen });
 }
+// Un réglage changé : relu dans la base au moment même (deux champs quittés coup sur coup ne s'écrasent pas).
+export async function poserTrajets(x: Partial<Trajets>) { await db.reglages.put({ cle: "trajets", valeur: { ...(await lireTrajets()), ...x } }); }

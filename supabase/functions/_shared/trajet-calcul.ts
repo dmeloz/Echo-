@@ -38,7 +38,7 @@ export function departMoto(arrivee: string, secondes: number) {
   return { depart: versHeure(depart), minutes };
 }
 
-// Transports : la correspondance qui arrive le plus tard sans être en retard. Les heures du service sont locales
+// Transports : parmi les correspondances qui arrivent à l'heure, celle qui part le plus tard. Les heures du service sont locales
 // (« 2026-11-28T07:34:00+0100 ») : on garde l'heure telle qu'écrite.
 // deno-lint-ignore no-explicit-any
 export function departTransports(r: any, jour: string, arrivee: string) {
@@ -46,7 +46,7 @@ export function departTransports(r: any, jour: string, arrivee: string) {
   const bonnes = (Array.isArray(r?.connections) ? r.connections : [])
     .map((c: any) => ({ part: heureDe(c?.from?.departure), arrive: heureDe(c?.to?.arrival), ligne: c?.products?.[0] ?? "", gare: c?.from?.station?.name ?? "" }))
     .filter((c: { part: string; arrive: string }) => c.part && c.arrive && c.arrive <= arrivee)
-    .sort((x: { arrive: string }, y: { arrive: string }) => (x.arrive < y.arrive ? 1 : -1));
+    .sort((x: { part: string; arrive: string }, y: { part: string; arrive: string }) => y.part.localeCompare(x.part) || x.arrive.localeCompare(y.arrive));
   const c = bonnes[0];
   if (!c) return null;
   return { depart: versHeure(versMin(c.part) - MARGE_TRANSPORTS), minutes: versMin(arrivee) - versMin(c.part) + MARGE_TRANSPORTS, train: c.part, ligne: String(c.ligne), gare: String(c.gare) };

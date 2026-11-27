@@ -17,6 +17,8 @@ describe("l'heure de départ", () => {
     const c = (part: string, arrive: string) => ({ from: { departure: `2026-11-28T${part}:00+0100`, station: { name: "Renens VD" } }, to: { arrival: `2026-11-28T${arrive}:00+0100` }, products: ["S1"] });
     const r = { connections: [c("07:12", "07:40"), c("07:27", "07:55"), c("07:42", "08:10")] };
     expect(departTransports(r, "2026-11-28", "08:00")).toEqual({ depart: "07:22", minutes: 38, train: "07:27", ligne: "S1", gare: "Renens VD" });
+    // Un trajet lent qui arrive plus tard ne fait pas partir plus tôt : on garde le départ le plus tardif.
+    expect(departTransports({ connections: [c("07:05", "07:58"), c("07:27", "07:55")] }, "2026-11-28", "08:00")?.train).toBe("07:27");
     expect(departTransports({ connections: [c("07:42", "08:10")] }, "2026-11-28", "08:00")).toBeNull();
     expect(urlCorrespondances("Renens VD", "Lausanne", "2026-11-28", "08:00")).toContain("isArrivalTime=1");
   });

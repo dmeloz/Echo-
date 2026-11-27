@@ -34,7 +34,10 @@ async function lieu(q: string) {
   const k = q.toLowerCase();
   if (lieux.has(k)) return lieux.get(k)!;
   const p = lireLieu(await lireJson(urlLieu(q)));
-  if (p) lieux.set(k, p);
+  if (p) {
+    if (lieux.size >= 100) lieux.delete(lieux.keys().next().value!);
+    lieux.set(k, p);
+  }
   return p;
 }
 
@@ -54,7 +57,9 @@ Deno.serve(async (req) => {
       const r = departTransports(await lireJson(urlCorrespondances(de, a, d.jour, d.arrivee)), d.jour, d.arrivee);
       return r ? repondre({ mode, ...r }, 200, origine) : repondre({ erreur: "introuvable" }, 404, origine);
     }
-    const [p1, p2] = await Promise.all([lieu(de), lieu(a)]);
+    // L'une après l'autre : le service d'adresses n'accepte qu'une demande à la fois.
+    const p1 = await lieu(de);
+    const p2 = await lieu(a);
     if (!p1 || !p2) return repondre({ erreur: "adresse" }, 404, origine);
     const s = lireRoute(await lireJson(urlRoute(p1, p2)));
     if (!s) return repondre({ erreur: "introuvable" }, 404, origine);
