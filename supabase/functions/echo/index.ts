@@ -8,7 +8,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { garder } from "../_shared/garde.ts";
-import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SITUATION, OUTILS_ECHO, RESERVE_PLAN, coutMicro, demandeTour } from "../_shared/echo-outils.ts";
+import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHOTO, MAX_PHRASE, MAX_RESULTAT, MAX_SITUATION, OUTILS_ECHO, RESERVE_PLAN, coutMicro, demandeTour, photoDe, tailleConversation } from "../_shared/echo-outils.ts";
 
 const ORIGINES = ["https://dmeloz.github.io", "http://localhost:5173", "http://localhost:4173"];
 const MAX_TEXTE = 1000;
@@ -110,6 +110,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(origine) });
   if (req.method !== "POST") return repondre({ erreur: "methode" }, 405, origine);
 
+  // Rien de plus gros qu'une discussion entière avec sa photo n'est lu.
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_CONVERSATION * 2 + MAX_PHOTO) return repondre({ erreur: "requete" }, 413, origine);
   let d: Demande & DemandeAgent;
   try { d = await req.json(); } catch { return repondre({ erreur: "requete" }, 400, origine); }
   // Un tour de boucle compte comme un appel : jusqu'à 6 par phrase, d'où une limite plus large en mode agent.
@@ -192,11 +194,22 @@ const phraseValide = (c: any) => typeof c === "string" && !!c.trim() && c.length
 // deno-lint-ignore no-explicit-any
 function conversationValide(m: any): m is Anthropic.Beta.BetaMessageParam[] {
   if (!Array.isArray(m) || m.length < 1 || m.length > MAX_MESSAGES || m.length % 2 === 0) return false;
-  if (JSON.stringify(m).length > MAX_CONVERSATION) return false;
-  if (m[0]?.role !== "user" || !phraseValide(m[0].content)) return false;
+  if (tailleConversation(m) > MAX_CONVERSATION) return false;
+  // Une photo au plus, en JPEG, avec la dernière phrase de la personne (aucune autre phrase après elle).
+  // deno-lint-ignore no-explicit-any
+  const photos = m.map((x: any, i: number) => (x?.role === "user" && photoDe(x.content) ? i : -1)).filter((i: number) => i >= 0);
+  if (photos.length > 1) return false;
+  // deno-lint-ignore no-explicit-any
+  const photoValide = (c: any, i: number) => {
+    const p = photoDe(c);
+    return !!p && phraseValide(p.texte) && p.donnee.length > 0 && p.donnee.length <= MAX_PHOTO && /^[A-Za-z0-9+/]+=*$/.test(p.donnee)
+      // deno-lint-ignore no-explicit-any
+      && !m.slice(i + 1).some((x: any) => x?.role === "user" && typeof x.content === "string");
+  };
+  if (m[0]?.role !== "user" || !(phraseValide(m[0].content) || photoValide(m[0].content, 0))) return false;
   return m.every((x, i) => i % 2
     ? x?.role === "assistant" && Array.isArray(x.content) && x.content.length > 0 && x.content.every(blocClaudeValide)
-    : x?.role === "user" && (phraseValide(x.content) || (Array.isArray(x.content) && x.content.length > 0 && x.content.every(resultatValide))));
+    : x?.role === "user" && (phraseValide(x.content) || photoValide(x.content, i) || (Array.isArray(x.content) && x.content.length > 0 && x.content.every(resultatValide))));
 }
 
 async function tourAgent(d: DemandeAgent, source: "membre" | "code", origine: string | null) {

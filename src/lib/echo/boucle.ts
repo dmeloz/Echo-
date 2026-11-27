@@ -1,6 +1,6 @@
 import { db } from "../../data/db";
 import { auJour, nouvelId, z } from "../dates";
-import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SITUATION, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SITUATION, MAX_TOURS, photoDe, tailleConversation } from "../../../supabase/functions/_shared/echo-outils";
 import { genreFinal, type Action, type ContexteEcho, type Executant } from "./outils";
 import { garderRetours, oublierRetours, suivre } from "./retour";
 import { lireMemoire, memoirePourEcho, type Souvenir } from "./memoire";
@@ -16,7 +16,14 @@ export type Bloc =
   | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
   | { type: string; [k: string]: unknown }; // la réflexion de Claude, renvoyée telle quelle
 export interface ResultatOutil { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }
-export type Message = { role: "user"; content: string | ResultatOutil[] } | { role: "assistant"; content: Bloc[] };
+// Une phrase avec sa photo (JPEG en base64) : seulement le temps de cette phrase, jamais gardée dans la discussion.
+export type PhrasePhoto = [{ type: "image"; source: { type: "base64"; media_type: "image/jpeg"; data: string } }, { type: "text"; text: string }];
+export type Message = { role: "user"; content: string | ResultatOutil[] | PhrasePhoto } | { role: "assistant"; content: Bloc[] };
+// Ce qu'Echo lit avec la photo : il ne la reverra pas, il doit donc écrire ce qu'il y a lu.
+export const NOTE_PHOTO = "une photo accompagne cette phrase, pour cette fois seulement : ensuite tu ne la verras plus, écris dans ta réponse ce que tu y lis d'utile.";
+// La discussion à garder : la photo s'en va, la phrase (avec sa note) reste.
+const sansPhoto = (messages: Message[]): Message[] =>
+  messages.map((m) => { const p = m.role === "user" ? photoDe(m.content) : null; return p ? { role: "user", content: p.texte } : m; });
 export interface Tour { content: Bloc[]; stop_reason: string }
 export type Appeler = (corps: { mode: "agent"; situation: string; messages: Message[]; outils: string[] }, enDirect?: (texte: string) => void) => Promise<Tour>;
 
@@ -47,7 +54,7 @@ function avecNotes(notes: string[], phrase: string) {
   return avant + p;
 }
 function reprendre(avant: Message[], phrase: string, notes: string[]): Message[] {
-  const place = avant.length + 1 + 2 * MAX_TOURS <= MAX_MESSAGES && JSON.stringify(avant).length < TAILLE_MAX;
+  const place = avant.length + 1 + 2 * MAX_TOURS <= MAX_MESSAGES && tailleConversation(avant) < TAILLE_MAX;
   if (!avant.length || place) return [...avant, { role: "user", content: avecNotes(notes, phrase) }];
   const dernier = [...avant].reverse().find((m) => m.role === "assistant");
   const rappel = dernier ? texteDe(dernier.content as Bloc[]).slice(0, 600) : "";
@@ -85,10 +92,17 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
   // La discussion jusque-là (Echo se souvient de ce qui a été dit), et la note de l'app sur la proposition précédente.
   discussion?: Message[];
   note?: string;
+  // Une photo jointe à la phrase (JPEG en base64, voir photo.ts) : Echo la regarde pour cette phrase.
+  photo?: string;
   // La réponse d'Echo pendant qu'il l'écrit (le texte du tour en cours ; "" quand un nouveau tour commence).
   enDirect?: (texte: string) => void;
 }): Promise<ResultatEcho> {
-  const messages: Message[] = reprendre(o.discussion ?? [], phrase, [maintenant(ctx), o.note ?? ""]);
+  // Une discussion gardée ne porte jamais de photo (le serveur n'en accepte qu'une, avec la dernière phrase).
+  const messages: Message[] = reprendre(sansPhoto(o.discussion ?? []), phrase, [maintenant(ctx), o.photo ? NOTE_PHOTO : "", o.note ?? ""]);
+  if (o.photo) {
+    const der = messages[messages.length - 1];
+    messages[messages.length - 1] = { role: "user", content: [{ type: "image", source: { type: "base64", media_type: "image/jpeg", data: o.photo } }, { type: "text", text: der.content as string }] };
+  }
   const outils = Object.keys(o.outils);
   const sit = situation(ctx, await lireMemoire());
   const aConfirmer: Action[] = [];
@@ -97,7 +111,7 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
 
   for (let tour = 0; tour < MAX_TOURS; tour++) {
     // Les résultats d'outils ont trop rempli la conversation : on s'arrête avec ce qu'on a (le serveur la refuserait).
-    if (JSON.stringify(messages).length > MAX_CONVERSATION - 10_000) break;
+    if (tailleConversation(messages) > MAX_CONVERSATION - 10_000) break;
     o.enDirect?.("");
     const r = await o.appeler({ mode: "agent", situation: sit, messages, outils }, o.enDirect);
     const blocs = Array.isArray(r.content) ? r.content : [];
@@ -106,7 +120,7 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
     dernierTexte = texteDe(blocs);
     const demandes = blocs.filter(estOutil);
     // La discussion ne se garde que si elle finit par une vraie réponse (le serveur refuse une réponse vide ou un outil sans résultat).
-    if (r.stop_reason !== "tool_use" || !demandes.length) return { reponse: dernierTexte, aConfirmer, faites, suite: blocs.length && !demandes.length ? messages : null };
+    if (r.stop_reason !== "tool_use" || !demandes.length) return { reponse: dernierTexte, aConfirmer, faites, suite: blocs.length && !demandes.length ? sansPhoto(messages) : null };
 
     // Tous les résultats d'un tour partent ensemble, dans un seul message.
     const resultats: ResultatOutil[] = [];
