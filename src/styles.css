@@ -783,7 +783,7 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .rayons::-webkit-scrollbar, .carrousel::-webkit-scrollbar { display: none; }
 .ray { flex: none; min-height: 40px; border: 1px solid var(--bord); border-radius: 999px; padding: 8px 14px; background: var(--verre-fort); color: var(--encre); font-weight: 600; font-size: 14px; white-space: nowrap; transition: background var(--m-onglet) var(--douce), color var(--m-onglet); }
 .ray b { font-variant-numeric: tabular-nums; opacity: .65; margin-left: 2px; }
-.ray[aria-selected="true"] { background: var(--encre); color: #fff; border-color: var(--encre); }
+.ray[aria-selected="true"], .ray[aria-pressed="true"] { background: var(--encre); color: #fff; border-color: var(--encre); }
 .carrousel { display: flex; align-items: flex-start; gap: var(--e5); overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
   margin: 0 -16px -14px; padding: 4px 16px 26px; scroll-padding-left: 16px; }
 .carrousel::after { content: ""; flex: none; width: calc(16% - var(--e5)); }
@@ -909,6 +909,26 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .stock-plus .aide-champ { margin: 0; }
 /* Les jours passés s'effacent un peu : l'œil va à ce qui vient. */
 .jour-repas.passe, .jour-bloc.passe:not(.ouvert) > .jour-repas { opacity: .55; }
+/* L'entrée de Cuisine : la carte « Ce soir », puis une ligne par partie. */
+.ce-soir { display: flex; flex-direction: column; gap: var(--e3); }
+.ce-soir .lab { color: var(--accent); }
+.ce-soir h2 { margin: 0; font-size: var(--t-carte); font-weight: 800; letter-spacing: -.02em; line-height: 1.2; text-wrap: balance; }
+.ce-soir p { margin: 0; display: flex; align-items: flex-start; gap: var(--e3); font-size: 15px; line-height: 1.35; color: color-mix(in oklab, var(--encre) 82%, transparent); }
+.ce-soir p svg { flex: none; margin-top: 2px; color: var(--discret); }
+.ce-soir p.vite, .ce-soir p.vite svg { color: var(--turquoise-texte); font-weight: 600; }
+.ce-soir-vide { align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; font-size: 17px; font-weight: 700; color: var(--accent); text-align: left; }
+.parties { display: flex; flex-direction: column; gap: var(--e4); }
+.partie-tete { display: flex; flex-direction: column; gap: var(--e2); }
+/* Le scanner de codes-barres : la caméra dans un cadre, un trait qui balaie tant qu'elle cherche. */
+.viseur { position: relative; aspect-ratio: 4 / 3; border-radius: 24px; overflow: hidden; background: #0d1b26; }
+.viseur video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.viseur i { position: absolute; left: 12%; right: 12%; top: 50%; height: 2px; border-radius: 2px; background: #fff; opacity: 0; box-shadow: 0 0 12px rgb(255 255 255 / .8); }
+.viseur.actif i { opacity: .9; animation: balaie 1.8s var(--douce) infinite alternate; }
+@keyframes balaie { from { transform: translateY(-60px); } to { transform: translateY(60px); } }
+@media (prefers-reduced-motion: reduce) { .viseur.actif i { animation: none; } }
+.fiche-scan { display: flex; flex-direction: column; gap: var(--e4); }
+.fiche-scan .rangee { align-items: center; }
+.scanner .ajout-stock { flex-wrap: wrap; }
 /* Une ligne qui ouvre une page (batch, livre de recettes). */
 .ligne-lien { display: flex; align-items: center; gap: var(--e5); width: 100%; min-height: 64px; padding: 10px 14px; text-align: left; color: var(--encre); }
 .ligne-lien > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }

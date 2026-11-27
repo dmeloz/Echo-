@@ -120,3 +120,10 @@ Donner des outils à un module :
 - **Accueil** : à partir de 17 h, la tuile dit « À sortir du congélateur » si le plat de demain en vient.
 - Avant la mise en ligne : migration `20261127200000_cuisine_batch_recettes.sql` (genres `batch` et `recette`), puis redéployer la fonction `cuisine`.
 
+
+## Cuisine · entrée « Ce soir », code-barres, plusieurs magasins (2026-11-27)
+
+- **Entrée de Cuisine** (`Page.tsx`, `Accueil`) : plus de barre d'onglets. La page s'ouvre sur la carte « Ce soir » (le repas, la boîte à sortir du congélateur pour demain, ce qu'il faut manger vite), puis trois lignes : Stock, Courses, Semaine. Chaque partie a son retour « Cuisine » (bouton, glisser vers la droite, ou rechoisir Cuisine dans le menu).
+- **Code-barres** (`Scanner.tsx`, `codeBarres.ts`) : Stock → « Scanner un code-barres ». La caméra lit le code (lecteur du téléphone s'il existe, sinon la bibliothèque `barcode-detector`, chargée seulement ici, avec son fichier `.wasm` servi par l'app). Le nom vient d'Open Food Facts : seul le numéro du code part sur internet. Un code inconnu se nomme à la main et reste dans `cuisine_codes` (table gardée sur le téléphone, pas envoyée au foyer). Le même produit scanné deux fois compte pour deux.
+- **Plusieurs magasins** : en rangeant un ticket, Echo note l'enseigne de chaque produit dans son habitude (`Habitude.ou`, `nomMagasin()` = premier mot du magasin). Dès que deux enseignes sont connues, le mode « Au magasin » propose de dire où l'on est : ce qui s'achète d'habitude ailleurs passe en bas, sous « D'habitude ailleurs ».
+- Rien à changer côté serveur pour ce lot.
