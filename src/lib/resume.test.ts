@@ -13,6 +13,11 @@ describe("le résumé du soir (demain)", () => {
     expect(r.sections.find((s) => s.id === "agenda")?.titre).toBe("Ton agenda de demain");
     expect(r.sections.find((s) => s.id === "important")?.phrase).not.toContain("retard");
     expect(r.texteLu.startsWith("Bonsoir Dany.")).toBe(true);
+    expect(r.phrase.startsWith("Demain, journée")).toBe(true);
+  });
+  it("le soir, les jours suivants portent leur nom (pas « demain »)", () => {
+    const r = construireResume([t({ titre: "Coiffeur", jour: "2026-11-29" })], noms, "moi", demainMatin, undefined, true);
+    expect(r.sections.find((s) => s.id === "semaine")?.lignes[0].heure).toBe("Dimanche");
   });
   it("le matin, rien ne change", () => {
     const r = construireResume([], noms, "moi", new Date("2026-11-28T08:00:00"));

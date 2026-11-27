@@ -59,16 +59,18 @@ export function construireResume(taches: Tache[], noms: Noms, proprio: Personne,
     const p = `${premiere.titre}${premiere.heure ? " à " + heureFr(premiere.heure) : ""}${siennes.length > 1 ? `, et ${siennes.length - 1} autre${siennes.length > 2 ? "s choses" : " chose"}` : ""}.`;
     sections.push({ id: "autre", titre: `${noms[lautre]} ${quand}`, phrase: p, lignes: [], dit: `${noms[lautre]} : ${p}` });
   }
+  // Le soir, « now » est demain matin : « demain » voudrait dire après-demain. On écrit alors le nom du jour.
+  const nomJour = (j: string) => demain ? new Date(j + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long" }).replace(/^./, (c) => c.toUpperCase()) : libelleJour(j, now);
   if (semaine.length) sections.push({
     id: "semaine", titre: demain ? "Ensuite" : "Cette semaine",
-    lignes: semaine.slice(0, 4).map((t) => ({ heure: libelleJour(t.jour, now) + (t.heure ? " " + heureFr(t.heure) : ""), texte: t.titre })),
-    dit: "Cette semaine : " + semaine.slice(0, 4).map((t) => `${t.titre}, ${libelleJour(t.jour, now).toLowerCase()}`).join(" ; ") + ".",
+    lignes: semaine.slice(0, 4).map((t) => ({ heure: nomJour(t.jour) + (t.heure ? " " + heureFr(t.heure) : ""), texte: t.titre })),
+    dit: (demain ? "Ensuite : " : "Cette semaine : ") + semaine.slice(0, 4).map((t) => `${t.titre}, ${nomJour(t.jour).toLowerCase()}`).join(" ; ") + ".",
   });
 
   let phrase: string;
   if (!miennes.length && !siennes.length) phrase = `Rien de prévu ${quand}. Profite.`;
   else if (!miennes.length) phrase = `Rien pour toi ${quand}.`;
-  else phrase = `Journée ${miennes.length <= 3 ? "plutôt calme" : "bien remplie"} : ${pluriel(miennes.length, "chose")} pour toi${agenda.length ? `, dont ${agenda.length} rendez-vous` : ""}${agenda[0] ? `, le premier à ${heureFr(agenda[0].heure)}` : ""}.`;
+  else phrase = `${demain ? "Demain, journée" : "Journée"} ${miennes.length <= 3 ? "plutôt calme" : "bien remplie"} : ${pluriel(miennes.length, "chose")} pour toi${agenda.length ? `, dont ${agenda.length} rendez-vous` : ""}${agenda[0] ? `, le premier à ${heureFr(agenda[0].heure)}` : ""}.`;
   if (travail === "VAC") phrase = (demain ? "Demain, tu es en vacances. " : "Tu es en vacances. ") + phrase;
   else if (plages.length) phrase = `${demain ? "Demain, tu travailles" : "Tu travailles"} ${plages.map(([a, b]) => `de ${hh(a)} à ${hh(b)}`).join(" puis ")}. ` + phrase;
   else if (travail && CODES[travail].travail) phrase = `${demain ? "Demain" : "Aujourd'hui"} : ${CODES[travail].libelle.toLowerCase()}. ` + phrase;
