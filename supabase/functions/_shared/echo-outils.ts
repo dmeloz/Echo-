@@ -191,7 +191,7 @@ Comment travailler :
 - Une contrainte dite pour l'autre personne (« Sarah est occupée de 10 h à 11 h ») : tiens-en compte dans le plan. Ne l'ajoute à son agenda que si on te le demande.
 - S'il manque une chose qui change vraiment le plan (« Vous y allez ensemble ? », « Tu as la voiture ? »), pose UNE question courte avant de proposer. Sinon, propose et dis ce que tu as supposé.
 - Les actions sont montrées à la personne, qui dit oui ou non. Ne refais pas une action déjà proposée dans le même tour.
-- Les lignes « [Note de l'app : …] » viennent de l'app : elles disent ce qui a été fait (oui) ou pas (non) après tes propositions. Tiens-en compte.
+- Les lignes « [Note de l'app : …] » viennent de l'app : la date et l'heure du moment (la plus récente compte), et ce qui a été fait (oui) ou pas (non) après tes propositions. Tiens-en compte.
 - N'invente rien : pas d'id, pas de date, pas de tâche qui n'est pas demandée. S'il manque une chose indispensable, pose UNE question courte au lieu de deviner. Si tout est clair, ne pose pas de question.
 - Les corvées de la maison (ménage, lessive, poubelles : ce qui revient) ne sont pas des tâches. « J'ai passé l'aspirateur » : corvee_faite si tu as cet outil (regarde les noms avec voir_maison). « Qu'est-ce que j'ai à faire à la maison ? », « qui en a fait le plus ? » : voir_maison.
 - Une tâche n'est jamais effacée sans que la personne l'ait demandé clairement.
@@ -205,7 +205,7 @@ Ta mémoire (donnée dans la situation) :
 - Ne retiens pas les tâches, ni ce qui ne vaut qu'une fois.
 
 Règles pour les tâches :
-- jour : AAAA-MM-JJ, calculé depuis la date du jour donnée. Sans jour dit et sans plan à faire : aujourd'hui. Un jour de la semaine sans précision = le prochain (si c'est aujourd'hui et que l'heure est passée, la semaine suivante).
+- jour : AAAA-MM-JJ, calculé depuis la date du jour (la note de l'app la plus récente). Sans jour dit et sans plan à faire : aujourd'hui. Un jour de la semaine sans précision = le prochain (si c'est aujourd'hui et que l'heure est passée, la semaine suivante).
 - heure : HH:MM sur 24 h, ou "". « ce matin » 09:00, « midi » 12:00, « cet après-midi » 14:00, « ce soir » 19:00. Mets une heure si elle est dite, si c'est un rendez-vous, ou si tu organises une journée.
 - qui : "moi", "elle" ou "nous" selon les places données dans la situation. Sans précision : la personne qui écrit. « nous », « ensemble », « tous les deux » : "nous".
 - Les horaires de travail : un jour « Repos », « Vacances », « Congé » ou « Férié » est libre ; un jour de travail donne ses heures.
@@ -261,11 +261,16 @@ export function demandeTour(situation: string, messages: unknown[], outils?: str
     model: plan ? MODELE_PLAN : MODELE_ECHO,
     max_tokens: 8000,
     output_config: { effort: "medium" as const }, // il réfléchit vraiment (plan de la semaine), sans traîner
+    // La réflexion d'Echo est liée à la discussion qui l'a produite. Si ce qui précède a changé (sa mémoire, la consigne,
+    // le modèle, une ancienne discussion reprise), l'API écarte cette réflexion au lieu de refuser toute la discussion.
+    thinking: { type: "adaptive" as const, block_binding: { prefix_mismatch_behavior: "drop_block" as const } },
     // Sonnet : si une réponse est refusée par prudence, l'API la refait elle-même sur un autre modèle.
-    ...(plan || repli ? { betas: ["server-side-fallback-2026-07-01"] } : {}),
+    betas: ["thinking-binding-controls-2026-08-01", ...(plan || repli ? ["server-side-fallback-2026-07-01"] : [])],
     ...(plan ? { fallbacks: "default" as const } : {}),
     // La consigne et les outils ne changent jamais : mis en cache d'une phrase à l'autre. La conversation aussi, d'un tour à l'autre.
     cache_control: { type: "ephemeral" as const },
+    // La situation (le foyer, la mémoire) change rarement ; la date et l'heure partent avec chaque phrase (note de l'app),
+    // pour que le début de la discussion reste le même d'une phrase à l'autre.
     system: [{ type: "text" as const, text: CONSIGNE_AGENT, cache_control: { type: "ephemeral" as const } }, { type: "text" as const, text: situation }],
     tools: outilsPourClaude(outils),
     // Dernier tour permis : Echo doit répondre avec ce qu'il a, sans nouvel outil.

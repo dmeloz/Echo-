@@ -200,7 +200,7 @@ function conversationValide(m: any): m is Anthropic.Beta.BetaMessageParam[] {
 }
 
 async function tourAgent(d: DemandeAgent, source: "membre" | "code", origine: string | null) {
-  const situation = typeof d.situation === "string" && d.situation.length <= MAX_SITUATION && d.situation.startsWith("Aujourd'hui :") ? d.situation : "";
+  const situation = typeof d.situation === "string" && d.situation.length <= MAX_SITUATION && (d.situation.startsWith("Le foyer :") || d.situation.startsWith("Aujourd'hui :")) ? d.situation : ""; // « Aujourd'hui : » : les apps pas encore à jour
   if (!situation || !conversationValide(d.messages)) return repondre({ erreur: "requete" }, 400, origine);
   const messages = d.messages;
   // Les outils que l'app sait faire (selon ses modules allumés) : des noms de la liste, sinon tous.

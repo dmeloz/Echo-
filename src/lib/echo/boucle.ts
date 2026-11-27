@@ -45,25 +45,27 @@ function avecNotes(notes: string[], phrase: string) {
   }
   return avant + p;
 }
-function reprendre(avant: Message[], phrase: string, note: string): Message[] {
+function reprendre(avant: Message[], phrase: string, notes: string[]): Message[] {
   const place = avant.length + 1 + 2 * MAX_TOURS <= MAX_MESSAGES && JSON.stringify(avant).length < TAILLE_MAX;
-  if (!avant.length || place) return [...avant, { role: "user", content: avecNotes([note], phrase) }];
+  if (!avant.length || place) return [...avant, { role: "user", content: avecNotes(notes, phrase) }];
   const dernier = [...avant].reverse().find((m) => m.role === "assistant");
   const rappel = dernier ? texteDe(dernier.content as Bloc[]).slice(0, 600) : "";
-  return [{ role: "user", content: avecNotes([rappel && `la discussion a été raccourcie. Ta dernière réponse : « ${rappel} »`, note], phrase) }];
+  const [date, ...autres] = notes;
+  return [{ role: "user", content: avecNotes([date, rappel && `la discussion a été raccourcie. Ta dernière réponse : « ${rappel} »`, ...autres], phrase) }];
 }
 
-// Ce qu'Echo sait de la situation : la date, l'heure, qui écrit, sa mémoire. Une fois par phrase (la conversation reste en cache).
+// Ce qu'Echo sait du foyer : qui écrit, sa mémoire. Elle ne change presque jamais d'une phrase à l'autre : le début de la
+// discussion reste ainsi le même, et Echo garde sa réflexion d'une phrase à l'autre (elle est liée à ce qui la précède).
 export function situation(ctx: ContexteEcho, memoire: Souvenir[] = []) {
-  const today = auJour(0, ctx.now);
-  const jour = ctx.now.toLocaleDateString("fr-FR", { weekday: "long" });
   const { moi, elle } = ctx.noms;
-  const tete = [
-    `Aujourd'hui : ${jour} ${today}, il est ${z(ctx.now.getHours())}:${z(ctx.now.getMinutes())}.`,
-    `Places du foyer : "moi" = ${moi}, "elle" = ${elle}. La personne qui écrit est ${ctx.noms[ctx.proprio]} (place "${ctx.proprio}").`,
-  ].join("\n");
+  const tete = `Le foyer : "moi" = ${moi}, "elle" = ${elle}. La personne qui écrit est ${ctx.noms[ctx.proprio]} (place "${ctx.proprio}").`;
   // La mémoire prend la place qui reste sous la limite du serveur (les souvenirs les plus récents d'abord).
   return `${tete}\n${memoirePourEcho(memoire, MAX_SITUATION - tete.length - 100)}`;
+}
+// La date et l'heure : elles partent avec chaque phrase (une note de l'app), là où elles ne changent plus ensuite.
+export function maintenant(ctx: ContexteEcho) {
+  const jour = ctx.now.toLocaleDateString("fr-FR", { weekday: "long" });
+  return `aujourd'hui : ${jour} ${auJour(0, ctx.now)}, il est ${z(ctx.now.getHours())}:${z(ctx.now.getMinutes())}.`;
 }
 
 const texteDe = (blocs: Bloc[]) =>
@@ -83,7 +85,7 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
   discussion?: Message[];
   note?: string;
 }): Promise<ResultatEcho> {
-  const messages: Message[] = reprendre(o.discussion ?? [], phrase, o.note ?? "");
+  const messages: Message[] = reprendre(o.discussion ?? [], phrase, [maintenant(ctx), o.note ?? ""]);
   const outils = Object.keys(o.outils);
   const sit = situation(ctx, await lireMemoire());
   const aConfirmer: Action[] = [];
