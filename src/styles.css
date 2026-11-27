@@ -907,6 +907,37 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .stock-restes { display: flex; flex-wrap: wrap; gap: var(--e3); }
 .stock-restes .puce { min-height: 40px; }
 .stock-plus .aide-champ { margin: 0; }
+/* Les jours passés s'effacent un peu : l'œil va à ce qui vient. */
+.jour-repas.passe, .jour-bloc.passe:not(.ouvert) > .jour-repas { opacity: .55; }
+/* Une ligne qui ouvre une page (batch, livre de recettes). */
+.ligne-lien { display: flex; align-items: center; gap: var(--e5); width: 100%; min-height: 64px; padding: 10px 14px; text-align: left; color: var(--encre); }
+.ligne-lien > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ligne-lien b { font-size: 16px; font-weight: 700; }
+.ligne-lien span span { font-size: 14px; color: var(--discret); }
+.ligne-lien .signe { flex: none; color: var(--discret); }
+.ligne-lien:active { scale: .98; }
+/* Le pouce après le repas. */
+.avis { display: flex; align-items: center; gap: var(--e4); margin-top: var(--e3); }
+.avis > span { flex: 1; font-size: 14px; font-weight: 600; color: var(--discret); }
+.avis .rond-champ[aria-pressed="true"] { background: var(--encre); color: #fff; border-color: var(--encre); }
+/* Le batch : des étapes à lire de loin, les mains prises. */
+.etape-batch { display: flex; align-items: flex-start; gap: var(--e5); width: 100%; min-height: 60px; padding: 14px 16px; border: 0; border-top: 1px solid var(--trait); background: transparent; text-align: left; font-size: 17px; font-weight: 500; line-height: 1.4; color: var(--encre); }
+.liste-magasin h2 + .etape-batch { border-top: 0; }
+.etape-batch .case { flex: none; width: 28px; height: 28px; border-radius: 9px; margin-top: -2px; }
+.etape-batch .art-nom { flex: 1; min-width: 0; min-height: 0; font: inherit; }
+.etape-batch .qte { flex: none; font-size: var(--t-petit); font-weight: 700; color: var(--discret); white-space: nowrap; padding-top: 2px; }
+.etape-batch.fait .art-nom { color: var(--discret); text-decoration: line-through; }
+.etape-batch:active:not(:disabled) { background: rgb(255 255 255 / .55); }
+.astuce-batch { margin: 0; padding: 12px 16px 14px; border-top: 1px solid var(--trait); font-size: 14.5px; line-height: 1.4; color: var(--turquoise-texte); font-weight: 600; }
+.boites, .servis { display: flex; flex-direction: column; gap: var(--e5); }
+.boites > div { display: grid; grid-template-columns: auto 1fr; column-gap: var(--e5); align-items: center; }
+.boites .tuile-icone { grid-row: span 2; }
+.boites b, .servis b { font-size: 16px; font-weight: 700; }
+.boites div > span:last-child { font-size: 14px; color: var(--discret); }
+.servis > div { display: flex; flex-direction: column; gap: var(--e3); }
+.servis b i { font-style: normal; font-weight: 500; color: var(--discret); }
+.servis .aide-champ { margin: 0; }
+.bouton-texte.centre { align-self: center; }
 /* Le ticket de caisse : ce qu'Echo a lu, à vérifier avant de ranger. */
 .lien-ticket { display: inline-flex; align-items: center; gap: 6px; }
 .lien-ticket:disabled { color: var(--discret); }

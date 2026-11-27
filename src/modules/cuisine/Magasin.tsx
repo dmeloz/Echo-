@@ -1,7 +1,7 @@
 import { X } from "pulsoicon-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { vibrer } from "../../lib/gestes";
+import { useEcranAllume, vibrer } from "../../lib/gestes";
 import { cocherArticle, rangerFaits } from "./actions";
 import { Coche } from "./Courses";
 import { parRayon, type Article, type Rayon } from "./donnees";
@@ -16,17 +16,7 @@ export function Magasin({ courses, onQuitter }: { courses: Article[]; onQuitter:
   const ici = ouverts.find((g) => g.rayon === choisi) ?? ouverts[0];
   const suivant = ouverts[(ouverts.indexOf(ici) + 1) % Math.max(1, ouverts.length)];
 
-  // Garder l'écran allumé tant qu'on est dans le magasin (si le téléphone le permet).
-  useEffect(() => {
-    let verrou: { release: () => Promise<void> } | null = null, parti = false;
-    const prendre = () => (navigator as Navigator & { wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> } }).wakeLock
-      ?.request("screen").then((v) => { if (parti) v.release(); else verrou = v; }).catch(() => {});
-    const retour = () => { if (!document.hidden) prendre(); };
-    prendre();
-    document.addEventListener("visibilitychange", retour);
-    document.querySelector(".defile")?.scrollTo(0, 0);
-    return () => { parti = true; verrou?.release().catch(() => {}); document.removeEventListener("visibilitychange", retour); };
-  }, []);
+  useEcranAllume();
 
   const finir = async () => {
     const n = await rangerFaits(true);

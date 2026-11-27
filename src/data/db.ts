@@ -1,7 +1,7 @@
 import Dexie, { type EntityTable } from "dexie";
 import type { Noms, Tache } from "../lib/types";
 import type { Horaire } from "../lib/horaires";
-import type { Article, Gouts, Habitude, Produit, Repas, Ticket } from "../modules/cuisine/donnees";
+import type { Article, Gouts, Habitude, Batch, Produit, Recette, Repas, Ticket } from "../modules/cuisine/donnees";
 import type { LigneJournal } from "../lib/echo/journal";
 import type { Souvenir } from "../lib/echo/memoire";
 
@@ -24,6 +24,8 @@ export const db = new Dexie("echo") as Dexie & {
   cuisine_stock: EntityTable<Produit, "id">;
   cuisine_gouts: EntityTable<Gouts, "qui">;
   cuisine_tickets: EntityTable<Ticket, "id">;
+  cuisine_batch: EntityTable<Batch, "semaine">;
+  cuisine_recettes: EntityTable<Recette, "cle">;
   // Le journal d'Echo : ce que l'assistant a fait, partagé au foyer.
   echo_journal: EntityTable<LigneJournal, "id">;
   echo_memoire: EntityTable<Souvenir, "id">;
@@ -36,6 +38,7 @@ db.version(5).stores({ cuisine_courses: "id", cuisine_habitudes: "cle", cuisine_
 db.version(6).stores({ cuisine_tickets: "id" }); // les tickets de caisse lus par photo
 db.version(7).stores({ echo_journal: "id, quand" });
 db.version(8).stores({ echo_memoire: "id, quand" }); // la mémoire d'Echo
+db.version(9).stores({ cuisine_batch: "semaine", cuisine_recettes: "cle" }); // le plan du batch par semaine, le livre de recettes
 
 export const NOMS_DEFAUT: Noms = { moi: "Dany", elle: "Sarah" };
 
