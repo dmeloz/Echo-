@@ -12,11 +12,13 @@ export function JourneeBudget({ now, aller, jour }: ContexteModule) {
   const dues = d ? echeancesDu(vu, today, d.apayer, d.postes) : [];
   if (!dues.length) return null;
   const total = dues.reduce((s, e) => s + e.c, 0);
-  const quoi = dues.length === 1 ? `${dues[0].titre}, ${chf(total)}` : `${dues.length} choses à payer, ${chf(total)} en tout`;
+  const retards = dues.filter((e) => e.retard).length;
+  const debut = retards === dues.length ? "en retard : " : "à payer : ";
+  const quoi = dues.length === 1 ? `${dues[0].titre}, ${chf(total)}` : `${dues.length} choses, ${chf(total)} en tout${retards && retards < dues.length ? `, dont ${retards} en retard` : ""}`;
   return (
     <a className="ligne-journee" href="#budget" onClick={(ev) => { ev.preventDefault(); aller("budget"); }}>
       <span className="tuile-icone" aria-hidden="true"><Wallet size={16} strokeWidth={1.8} animated={false} /></span>
-      <span><b>Budget</b> · {dues.some((e) => e.retard) ? "en retard : " : "à payer : "}{quoi}</span>
+      <span><b>Budget</b> · {debut}{quoi}</span>
       <ChevronRight size={16} strokeWidth={2.2} animated={false} aria-hidden="true" />
     </a>
   );

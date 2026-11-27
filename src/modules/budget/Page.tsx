@@ -11,7 +11,7 @@ import type { ContexteModule } from "../contrat";
 import { commencer, payer, payeurDuTicket, rembourser, retirerDepense } from "./actions";
 import { FeuilleChanger, FeuilleDepense, FeuillePoste, FeuilleSolde, type Nouveau } from "./Feuilles";
 import {
-  aRemplir, avances, avancee, avecTickets, bilan, chf, duA, estTicket, dernierSolde, duMois, enveloppes, jourLong, moisDe, nomMois, parMois, periode, plusMoisB, resteAPayer, toutesCategories, valeurDe, vivants,
+  aRemplir, avances, avancee, avecTickets, bilan, chf, debutBudget, duA, estTicket, dernierSolde, duMois, enveloppes, jourLong, moisDe, nomMois, parMois, periode, plusMoisB, resteAPayer, toutesCategories, valeurDe, vivants,
   type APayer, type Bilan, type Categorie, type CompteSolde, type Depense, type Poste, type Payeur, type Solde,
 } from "./donnees";
 
@@ -309,7 +309,7 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
 
   if (!donnees) return null;
   const { postes, categories, soldes, apayer } = donnees;
-  const depenses = avecTickets(donnees.depenses, donnees.tickets);
+  const depenses = avecTickets(donnees.depenses, donnees.tickets, debutBudget(postes));
   const du = duA(depenses), aRendre = du.moi + du.elle;
   if (!postes.length) return <Depart />;
 

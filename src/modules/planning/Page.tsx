@@ -202,7 +202,7 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail, proprio, all
       <h2 className="jour-titre" id="lab-jour">{libelleJour(jour, now)}</h2>
       {travail && <BandeauTravail code={travail} />}
       {!liste.length && !faites.length && (
-        <div className="vide-jour"><b>Rien de prévu ce jour-là</b><span>La journée est libre.</span>{creer && jour >= today && <button type="button" className="bouton-texte" onClick={() => creer({ jour })}>Ajouter ce jour-là</button>}</div>
+        <div className="vide-jour"><b>Rien de prévu ce jour-là</b><span>Aucune tâche, aucun rendez-vous.</span>{creer && jour >= today && <button type="button" className="bouton-texte" onClick={() => creer({ jour })}>Ajouter ce jour-là</button>}</div>
       )}
       {(avecHeure.length > 0 || libres.length > 0) && (
         <ol className="ligne-temps">

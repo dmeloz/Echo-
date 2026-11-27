@@ -203,6 +203,7 @@ export function FeuilleDepense({ categories, noms, proprio, onFermer }: { catego
           {([["commun", "Compte commun"], [proprio, noms[proprio]], [autre, noms[autre]]] as Array<[Payeur, string]>).map(([id, n]) =>
             <button key={id} type="button" className={`puce${id === "elle" ? " p-elle" : ""}`} aria-pressed={qui === id} onClick={() => { vibrer(4); setQui(id); }}>{n}</button>)}
         </div>
+        {qui !== "commun" && <p className="aide-champ">Payé avec {qui === proprio ? "ton argent" : `l'argent de ${noms[qui]}`} : c'est noté dans Entre nous, pour que le compte commun le rende.</p>}
       </div>
       <Pied onFermer={onFermer} libelle="Ajouter" pret={pret} />
     </Feuille>

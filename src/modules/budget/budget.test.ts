@@ -9,10 +9,9 @@ vi.stubGlobal("localStorage", { getItem: (k: string) => stock.get(k) ?? null, se
 
 import { db } from "../../data/db";
 import { GENRES } from "../../sync/genres";
-import { payeurDuTicket, rembourser } from "./actions";
-import { ajouterAPayer, ajouterCategorie, ajouterDepense, ajouterPoste, arreterPoste, changerValeur, commencer, estPaye, marquerPaye, noterSolde, payer, recalculerVirements, retirerDerniereValeur } from "./actions";
+import { ajouterAPayer, ajouterCategorie, ajouterDepense, ajouterPoste, arreterPoste, changerValeur, commencer, estPaye, marquerPaye, noterSolde, payer, payeurDuTicket, recalculerVirements, rembourser, retirerDerniereValeur } from "./actions";
 import {
-  DEPART, aRemplir, avancee, avances, avecTickets, bilan, depenseDuTicket, duA, echeancesDu, bornes, changer, chf, cleCategorie, dernierSolde, duMois, effets, enveloppes, historique, lireMontant, moisDe, nettoyerAPayer, nettoyerCategorie, nettoyerDepense, nettoyerPoste,
+  DEPART, aRemplir, avancee, avances, avecTickets, bilan, debutBudget, depenseDuTicket, duA, echeancesDu, bornes, changer, chf, cleCategorie, dernierSolde, duMois, effets, enveloppes, historique, lireMontant, moisDe, nettoyerAPayer, nettoyerCategorie, nettoyerDepense, nettoyerPoste,
   nettoyerSolde, nomMois, parMois, periode, plusMoisB, posteRempli, proposerVirements, toutesCategories, valeurDe, type Depense, type Poste,
 } from "./donnees";
 import { budget } from "./index";
@@ -305,6 +304,25 @@ describe("lot 2 : les tickets de Cuisine, Entre nous, les échéances du jour", 
     await payeurDuTicket(dep({}), "elle"); // une dépense à la main n'est pas un ticket : rien
     expect(await db.budget_depenses.count()).toBe(0);
   });
+  it("un ticket d'avant le budget, ou déjà noté à la main, n'est pas compté", () => {
+    expect(debutBudget(FOYER)).toBe("2026-10-25"); // les valeurs d'essai valent à partir de novembre
+    expect(debutBudget([])).toBeNull();
+    expect(avecTickets([], [ticket({ date: "2026-10-24" }), ticket({ id: "t2" })], "2026-10-25").map((d) => d.id)).toEqual(["ticket:t2"]);
+    const main = dep({ id: "m", jour: "2026-11-26", c: 5_340, cat: "courses", qui: "commun" });
+    expect(avecTickets([main], [ticket()])).toEqual([main]); // la même course : une seule fois
+    expect(avecTickets([{ ...main, cat: "plaisir" }], [ticket()])).toHaveLength(2);
+  });
+  it("toucher le payeur déjà choisi ne rouvre pas une dette rendue ; Annuler respecte un changement fait depuis", async () => {
+    const [d] = avecTickets([], [ticket()]);
+    await payeurDuTicket(d, "elle");
+    const premier = toast.mock.calls.at(-1)![1] as { action: { onClick: () => Promise<unknown> } };
+    await rembourser("elle", await db.budget_depenses.toArray(), new Date("2026-11-28T12:00:00"));
+    const rendue = (await db.budget_depenses.get(d.id))!;
+    await payeurDuTicket(rendue, "elle");
+    expect((await db.budget_depenses.get(d.id))!.rembourse).toBe("2026-11-28");
+    await premier.action.onClick(); // l'Annuler du premier geste arrive trop tard : la ligne a changé depuis
+    expect((await db.budget_depenses.get(d.id))!.rembourse).toBe("2026-11-28");
+  });
   it("Entre nous : ce que chacun a avancé, jusqu'à ce que ce soit rendu", async () => {
     await db.budget_depenses.bulkAdd([dep({}), dep({ id: "d2", c: 1_000, qui: "moi", jour: "2026-11-20" }), dep({ id: "d3", qui: "commun" }), dep({ id: "d4", qui: "elle", c: 500 })]);
     let toutes = await db.budget_depenses.toArray();
@@ -331,6 +349,17 @@ describe("lot 2 : les tickets de Cuisine, Entre nous, les échéances du jour", 
     expect(echeancesDu("2026-11-27", "2026-11-27", apayer, postes).map((e) => [e.cle, !!e.retard])).toEqual([["hier", true], ["jour", false]]);
     expect(echeancesDu("2026-11-28", "2026-11-27", apayer, postes)).toEqual([{ cle: "demain", titre: "demain", c: 10_000 }, { cle: "assurance-voiture", titre: "assurance-voiture", c: 120_000 }]);
     expect(echeancesDu("2026-11-29", "2026-11-27", apayer, postes)).toEqual([]);
+    // Vue d'un jour passé : la facture restée impayée est bien dite en retard.
+    expect(echeancesDu("2026-11-26", "2026-11-27", apayer, postes)).toEqual([{ cle: "hier", titre: "hier", c: 10_000, retard: true }]);
+    // La même facture déjà suivie dans « À payer » (même jour, même montant) : pas dite deux fois, même payée.
+    expect(echeancesDu("2026-11-28", "2026-11-27", [{ ...f("papier", "2026-11-28", "2026-11-28"), c: 120_000 }], postes)).toEqual([]);
+    // Un 29 février tombe le 28 les années sans 29.
+    const bissextile = [{ ...FOYER[9], echeance: "02-29" }];
+    expect(echeancesDu("2027-02-28", "2026-11-27", [], bissextile)).toHaveLength(1);
+    expect(echeancesDu("2028-02-28", "2026-11-27", [], bissextile)).toHaveLength(0);
+    expect(echeancesDu("2028-02-29", "2026-11-27", [], bissextile)).toHaveLength(1);
+    // Un poste arrêté au mois de budget suivant est encore annoncé le jour où sa facture tombe.
+    expect(echeancesDu("2026-11-28", "2026-11-27", [], [{ ...FOYER[9], echeance: "11-28", fin: "2026-12" }])).toHaveLength(1);
   });
 });
 

@@ -195,11 +195,19 @@ export function depenseDuTicket(t: TicketLu): Depense | null {
   if (t.monnaie !== "CHF" || !Number.isInteger(c) || c <= 0 || c > MAX || !JOUR_ISO.test(t.date)) return null;
   return { id: ID_TICKET + t.id, jour: t.date, c, quoi: t.magasin || "Ticket de caisse", cat: "courses", qui: "commun", cree: t.cree };
 }
+// Le premier jour du budget du foyer : rien n'est compté avant (les tickets scannés avant que le Budget existe, par exemple).
+export function debutBudget(postes: Poste[]): string | null {
+  const premier = postes.flatMap((p) => p.valeurs.map((v) => v.des)).sort()[0];
+  return premier ? bornes(premier).du : null;
+}
 // Toutes les dépenses : celles notées à la main, et une par ticket. Un ticket retouché dans le Budget (qui a payé) a sa ligne à lui, qui passe devant ;
-// si le ticket est retiré de Cuisine, sa ligne retouchée ne compte plus.
-export function avecTickets(depenses: Depense[], tickets: TicketLu[]): Depense[] {
+// si le ticket est retiré de Cuisine, sa ligne retouchée ne compte plus. Un ticket n'est pas compté s'il date d'avant le budget (depuis),
+// ni si la même course a déjà été notée à la main (même jour, même montant, catégorie Courses).
+export function avecTickets(depenses: Depense[], tickets: TicketLu[], depuis: string | null = null): Depense[] {
   const la = new Set(tickets.map((t) => ID_TICKET + t.id)), retouches = new Set(depenses.filter(estTicket).map((d) => d.id));
-  return [...depenses.filter((d) => !estTicket(d) || la.has(d.id)), ...tickets.map(depenseDuTicket).filter((d): d is Depense => !!d && !retouches.has(d.id))];
+  const main = new Set(depenses.filter((d) => !estTicket(d) && d.cat === "courses").map((d) => `${d.jour}|${d.c}`));
+  const lus = tickets.map(depenseDuTicket).filter((d): d is Depense => !!d && !retouches.has(d.id) && (!depuis || d.jour >= depuis) && !main.has(`${d.jour}|${d.c}`));
+  return [...depenses.filter((d) => !estTicket(d) || la.has(d.id)), ...lus];
 }
 
 /* ---------- Entre nous : ce que chacun a avancé pour le foyer ---------- */
@@ -211,13 +219,21 @@ export const duA = (depenses: Depense[]): Record<Personne, number> => ({ moi: so
 /* ---------- Les échéances d'un jour, pour la journée et l'Agenda ---------- */
 
 export interface Echeance { cle: string; titre: string; c: number; retard?: boolean }
+// Le jour de l'année (MM-JJ) où tombe une date notée : un 29 février tombe le 28 les années qui n'en ont pas.
+const tombeLe = (echeance: string, jour: string) => echeance === jour.slice(5) || (echeance === "02-29" && jour.slice(5) === "02-28" && new Date(Number(jour.slice(0, 4)), 1, 29).getMonth() !== 1);
 // Ce qui tombe ce jour-là : les factures à payer (celles en retard aussi, si le jour est aujourd'hui) et les charges à l'année dont la date est notée.
+// Une charge à l'année dont la facture est déjà suivie dans « À payer » (même jour, même montant, payée ou non) n'est pas dite deux fois.
 export function echeancesDu(jour: string, today: string, apayer: APayer[], postes: Poste[]): Echeance[] {
-  const mois = moisDe(jour);
   const factures = resteAPayer(apayer).filter((l) => l.echeance === jour || (jour === today && l.echeance < today))
-    .map((l) => ({ cle: l.id, titre: l.titre, c: l.c, ...(l.echeance < jour ? { retard: true } : {}) }));
-  const annuelles = postes.filter((p) => p.sorte === "foyer" && p.rythme === "an" && p.echeance === jour.slice(5) && (valeurDe(p, mois) ?? 0) > 0)
-    .map((p) => ({ cle: p.id, titre: p.nom, c: valeurDe(p, mois)! }));
+    .map((l) => ({ cle: l.id, titre: l.titre, c: l.c, ...(l.echeance < today ? { retard: true } : {}) }));
+  const suivies = new Set(apayer.filter((l) => l.echeance === jour).map((l) => l.c));
+  const annuelles: Echeance[] = [];
+  for (const p of postes) {
+    if (p.sorte !== "foyer" || p.rythme !== "an" || !p.echeance || !tombeLe(p.echeance, jour)) continue;
+    // Le montant du mois de budget où tombe le jour, sinon celui du mois du calendrier (un poste qui s'arrête au mois de budget suivant).
+    const c = valeurDe(p, moisDe(jour)) ?? valeurDe(p, jour.slice(0, 7)) ?? 0;
+    if (c > 0 && !suivies.has(c)) annuelles.push({ cle: p.id, titre: p.nom, c });
+  }
   return [...factures, ...annuelles];
 }
 

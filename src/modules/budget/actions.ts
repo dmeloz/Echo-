@@ -106,21 +106,31 @@ export async function retirerDepense(d: Depense) {
   toast(`${d.quoi || "Dépense"} : retiré`, annuler(() => db.budget_depenses.put(d)));
 }
 // Un ticket de caisse est compté pour le compte commun ; dire que c'est l'un des deux qui a payé garde une ligne à part pour ce ticket.
+const pareille = (a: Depense | undefined, b: Depense) => !!a && a.qui === b.qui && a.c === b.c && a.rembourse === b.rembourse;
 export async function payeurDuTicket(d: Depense, qui: Payeur) {
-  if (!estTicket(d)) return;
+  if (!estTicket(d) || d.qui === qui) return; // le même payeur : rien ne change (un remboursement déjà noté reste noté)
   const avant = await db.budget_depenses.get(d.id);
-  const { rembourse: _r, ...sans } = d;
-  await db.budget_depenses.put({ ...sans, qui });
-  toast(qui === "commun" ? `${d.quoi} : payé par le compte commun` : `${d.quoi} : noté dans Entre nous`, annuler(() => (avant ? db.budget_depenses.put(avant) : db.budget_depenses.delete(d.id))));
+  const apres: Depense = { id: d.id, jour: d.jour, c: d.c, quoi: d.quoi, cat: d.cat, qui, cree: d.cree };
+  await db.budget_depenses.put(apres);
+  // « Annuler » ne remet l'état d'avant que si la ligne n'a pas rechangé entre-temps.
+  toast(qui === "commun" ? `${d.quoi} : payé par le compte commun` : `${d.quoi} : noté dans Entre nous`, annuler(async () => {
+    if (!pareille(await db.budget_depenses.get(d.id), apres)) return;
+    await (avant ? db.budget_depenses.put(avant) : db.budget_depenses.delete(d.id));
+  }));
 }
 // Entre nous : le compte commun a rendu à quelqu'un tout ce qu'il avait avancé. Les lignes venues d'un ticket sont gardées avec leur date de remboursement.
 export async function rembourser(qui: Personne, toutes: Depense[], now = new Date()): Promise<number> {
   const dues = avances(toutes, qui), jour = auJour(0, now);
   if (!dues.length) return 0;
   const avant = await db.budget_depenses.bulkGet(dues.map((d) => d.id));
-  await db.budget_depenses.bulkPut(dues.map((d) => ({ ...d, rembourse: jour })));
+  const rendues = dues.map((d) => ({ ...d, rembourse: jour }));
+  await db.budget_depenses.bulkPut(rendues);
+  // « Annuler » ne touche qu'aux lignes restées telles que ce geste les a laissées.
   toast(`${chf(somme(dues))} CHF rendus`, annuler(() => db.transaction("rw", db.budget_depenses, async () => {
-    for (const [i, d] of dues.entries()) { if (avant[i]) await db.budget_depenses.put(avant[i]!); else await db.budget_depenses.delete(d.id); }
+    for (const [i, d] of rendues.entries()) {
+      if (!pareille(await db.budget_depenses.get(d.id), d)) continue;
+      if (avant[i]) await db.budget_depenses.put(avant[i]!); else await db.budget_depenses.delete(d.id);
+    }
   })));
   return dues.length;
 }
