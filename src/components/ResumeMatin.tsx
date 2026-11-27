@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { auJour } from "../lib/dates";
 import { construireResume, type SectionResume } from "../lib/resume";
+import { meteo, phraseMeteo, type Meteo } from "../lib/meteo";
 import type { Noms, Personne, Tache } from "../lib/types";
 import { poserReglage, useHoraires, useReglage } from "../data/hooks";
 
@@ -25,6 +26,9 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
   const soir = now.getHours() >= 18;
   const jourResume = soir ? auJour(1, now) : today;
   const travail = useHoraires().find((h) => h.qui === proprio && h.jour === jourResume)?.code;
+  // Le temps qu'il fait, lu à l'ouverture (rien si on ne l'a pas).
+  const [ciel, setCiel] = useState<Meteo | null>(null);
+  useEffect(() => { if (!ouvert) return; let vivant = true; meteo().then((m) => { if (vivant) setCiel(m); }); return () => { vivant = false; }; }, [ouvert]);
 
   useEffect(() => {
     if (!ouvert) return;
@@ -38,7 +42,7 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
 
   if (!actif) return null;
   const demainMatin = new Date(now); demainMatin.setDate(now.getDate() + 1); demainMatin.setHours(6, 0, 0, 0);
-  const r = construireResume(taches, noms, proprio, soir ? demainMatin : now, travail, soir);
+  const r = construireResume(taches, noms, proprio, soir ? demainMatin : now, travail, soir, phraseMeteo(ciel, jourResume, soir ? 0 : now.getHours()));
 
   function terminer() {
     if (parle()) speechSynthesis.cancel();
