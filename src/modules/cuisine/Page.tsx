@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { CalendarDays, ChevronLeft, ChevronRight, Clock, Refrigerator, ShoppingBasket, Snowflake } from "pulsoicon-react";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState } from "react";
 import { db } from "../../data/db";
 import { poserReglage } from "../../data/hooks";
 import type { ContexteModule } from "../contrat";
@@ -15,6 +15,9 @@ import { Semaine } from "./Semaine";
 import { Stock } from "./Stock";
 import { ApercuTicket } from "./Ticket";
 import type { Article, LectureTicket, Lieu } from "./donnees";
+
+// Le scanner (et sa bibliothèque de lecture) n'est chargé que quand on l'ouvre.
+const Scanner = lazy(() => import("./Scanner").then((m) => ({ default: m.Scanner })));
 
 type Partie = "stock" | "courses" | "semaine";
 const PARTIES: Array<{ id: Partie; nom: string; Icone: typeof Refrigerator }> = [
@@ -37,6 +40,8 @@ export function PageCuisine(ctx: ContexteModule) {
   const [prochaine, setProchaine] = useState(() => [5, 6, 0].includes(now.getDay()));
   const fermerBatch = useCallback(() => setBatch(null), []);
   const fermerLivre = useCallback(() => setLivre(false), []);
+  const [scanner, setScanner] = useState(false);
+  const fermerScanner = useCallback(() => setScanner(false), []);
   const courses = useLiveQuery(() => db.cuisine_courses.toArray(), [], undefined);
   // Le questionnaire des goûts : une fois par personne, tant qu'il n'a été ni rempli ni remis à plus tard.
   const aDemander = useLiveQuery(async () => !(await db.reglages.get("cuisineGoutsVu"))?.valeur && !(await db.cuisine_gouts.get(proprio)), [proprio], false);
@@ -48,7 +53,7 @@ export function PageCuisine(ctx: ContexteModule) {
   useEffect(() => { rangerBoites(hier).catch(() => {}); }, [hier]);
   // Le retour (glisser vers la droite, ou rechoisir Cuisine dans le menu) ramène à l'entrée. Une page plus profonde
   // (un endroit du stock, le livre, le ticket, le batch) gère son propre retour.
-  const profond = !!lieu || livre || !!ticket || !!batch || magasin;
+  const profond = !!lieu || livre || !!ticket || !!batch || magasin || scanner;
   useEffect(() => {
     if (!partie || profond) return;
     const retour = () => setPartie(null);
@@ -58,6 +63,7 @@ export function PageCuisine(ctx: ContexteModule) {
   useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie]);
 
   if (ticket) return <ApercuTicket lu={ticket} now={now} onFini={fermerTicket} />;
+  if (scanner) return <Suspense fallback={null}><Scanner onQuitter={fermerScanner} /></Suspense>;
   if (batch) return <PageBatch {...ctx} semaine={batch} onQuitter={fermerBatch} />;
   if (magasin && courses) return <Magasin courses={courses} onQuitter={() => setMagasin(false)} />;
   const retour = !profond && partie && (
@@ -72,7 +78,7 @@ export function PageCuisine(ctx: ContexteModule) {
       {!partie && <Accueil {...ctx} courses={courses} versPartie={setPartie} />}
       {partie === "courses" && <Courses {...ctx} courses={courses} onMagasin={() => setMagasin(true)} onTicket={setTicket} />}
       {partie === "semaine" && (livre ? <Livre {...ctx} onQuitter={fermerLivre} /> : <Semaine {...ctx} prochaine={prochaine} setProchaine={setProchaine} onBatch={setBatch} onLivre={() => setLivre(true)} />)}
-      {partie === "stock" && <Stock {...ctx} lieu={lieu} setLieu={setLieu} onTicket={setTicket} />}
+      {partie === "stock" && <Stock {...ctx} lieu={lieu} setLieu={setLieu} onTicket={setTicket} onScanner={() => setScanner(true)} />}
       {aDemander && <PopupGouts {...ctx} onFini={() => poserReglage("cuisineGoutsVu", true)} />}
     </>
   );

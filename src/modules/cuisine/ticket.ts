@@ -4,7 +4,7 @@ import { auJour, nouvelId, plusJours } from "../../lib/dates";
 import { preparerPhoto } from "../../lib/lecture";
 import type { Personne } from "../../lib/types";
 import { entetesIA } from "../../sync/client";
-import { cleDe, lireQuantite, nettoyerLecture, type Article, type LectureTicket, type LigneTicket, type Produit, type Ticket } from "./donnees";
+import { cleDe, devinerRayon, lireQuantite, nettoyerLecture, nomMagasin, type Article, type Habitude, type LectureTicket, type LigneTicket, type Produit, type Ticket } from "./donnees";
 
 // Le ticket de caisse en photo : la photo part vers la fonction « lire-ticket » du projet Supabase, qui la fait lire
 // par Claude (la photo n'est pas gardée). On vérifie la lecture à l'écran, puis « Ranger » remplit le stock,
@@ -64,8 +64,9 @@ export interface Bilan { stock: number; coches: number }
 export async function rangerTicket(lu: LectureTicket, gardees: LigneTicket[], now = new Date()): Promise<Bilan> {
   const jour = jourDuTicket(lu, now), quand = now.getTime();
   const neufs: Produit[] = [], anciens: Produit[] = [], coches: Article[] = [];
+  const appris = new Map<string, Habitude | undefined>(); // les habitudes touchées, comme elles étaient avant
   let ticket: Ticket | undefined;
-  await db.transaction("rw", db.cuisine_stock, db.cuisine_courses, db.cuisine_tickets, db.reglages, async () => {
+  await db.transaction("rw", [db.cuisine_stock, db.cuisine_courses, db.cuisine_tickets, db.cuisine_habitudes, db.reglages], async () => {
     const par = ((await db.reglages.get("proprio"))?.valeur as Personne | undefined) ?? "moi";
     const stock = await db.cuisine_stock.toArray();
     for (const [i, l] of gardees.entries()) {
@@ -98,11 +99,22 @@ export async function rangerTicket(lu: LectureTicket, gardees: LigneTicket[], no
     ticket = { id: nouvelId(), magasin: lu.magasin, date: jour, total: lu.total || somme(lu.lignes), monnaie: lu.monnaie,
       lignes: gardees.map(({ nom, qte, prix }) => ({ nom, qte, prix })), par, cree: quand };
     await db.cuisine_tickets.add(ticket);
+    // Echo retient dans quel magasin chaque produit a été acheté (pour le mode « Au magasin »).
+    const magasin = nomMagasin(lu.magasin);
+    for (const l of magasin ? gardees : []) {
+      const nom = l.course || l.nom, cle = cleDe(nom);
+      if (!cle || appris.has(cle)) continue;
+      const h = await db.cuisine_habitudes.get(cle);
+      appris.set(cle, h);
+      const ou = { ...h?.ou, [magasin]: (h?.ou?.[magasin] ?? 0) + 1 };
+      await db.cuisine_habitudes.put(h ? { ...h, ou } : { cle, nom, qte: "", rayon: devinerRayon(nom), achats: [], refus: 0, ou });
+    }
   });
   const t = ticket!;
   const bouts = [neufs.length ? `${neufs.length} produit${neufs.length > 1 ? "s" : ""} au stock` : "", coches.length ? `${coches.length} article${coches.length > 1 ? "s" : ""} coché${coches.length > 1 ? "s" : ""}` : ""].filter(Boolean);
-  toast(bouts.length ? `Ticket rangé : ${bouts.join(", ")}.` : "Ticket gardé.", { duration: 8000, action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_stock, db.cuisine_courses, db.cuisine_tickets, async () => {
+  toast(bouts.length ? `Ticket rangé : ${bouts.join(", ")}.` : "Ticket gardé.", { duration: 8000, action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_stock, db.cuisine_courses, db.cuisine_tickets, db.cuisine_habitudes, async () => {
     await db.cuisine_tickets.delete(t.id);
+    for (const [cle, h] of appris) { if (h) await db.cuisine_habitudes.put(h); else await db.cuisine_habitudes.delete(cle); }
     await db.cuisine_stock.bulkDelete(neufs.map((p) => p.id));
     for (const p of anciens) if (await db.cuisine_stock.get(p.id)) await db.cuisine_stock.put(p);
     // On ne décoche que ce que le ticket avait coché, et seulement si l'article est encore dans la liste.

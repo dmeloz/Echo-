@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { ChevronLeft, House, Minus, Package, Plus, Refrigerator, Snowflake } from "pulsoicon-react";
+import { ChevronLeft, ChevronRight, House, ScanBarcode, Minus, Package, Plus, Refrigerator, Snowflake } from "pulsoicon-react";
 import { useEffect, useState } from "react";
 import { db } from "../../data/db";
 import { auJour, libelleJour } from "../../lib/dates";
@@ -19,7 +19,7 @@ function Jauge({ reste }: { reste?: Reste }) {
 
 // Le stock : ce qu'il faut manger vite, puis quatre endroits. On le remplit avec la photo du ticket de caisse, ou à la main.
 // (Le code-barres arrive plus tard.)
-export function Stock({ now, lieu, setLieu, onTicket }: ContexteModule & { lieu: Lieu | null; setLieu: (l: Lieu | null) => void; onTicket: (lu: LectureTicket) => void }) {
+export function Stock({ now, lieu, setLieu, onTicket, onScanner }: ContexteModule & { lieu: Lieu | null; setLieu: (l: Lieu | null) => void; onTicket: (lu: LectureTicket) => void; onScanner: () => void }) {
   const produits = useLiveQuery(() => db.cuisine_stock.toArray(), [], [] as Produit[]);
   const dernier = useLiveQuery(async () => (await db.cuisine_tickets.toArray()).sort((a, b) => b.cree - a.cree)[0], [], undefined);
   const [ouvert, setOuvert] = useState<string | null>(null);
@@ -95,6 +95,11 @@ export function Stock({ now, lieu, setLieu, onTicket }: ContexteModule & { lieu:
   return (
     <>
       <PhotoTicket onLu={onTicket} />
+      <button type="button" className="g ligne-lien" onClick={onScanner}>
+        <span className="tuile-icone" aria-hidden="true"><ScanBarcode size={18} strokeWidth={1.8} animated={false} /></span>
+        <span><b>Scanner un code-barres</b><span>Pour ajouter un produit sans ticket</span></span>
+        <ChevronRight size={18} strokeWidth={2.2} className="signe" animated={false} />
+      </button>
       {vite.length > 0 && (
         <section className="g manger-vite">
           <span className="lab">À manger vite</span>
