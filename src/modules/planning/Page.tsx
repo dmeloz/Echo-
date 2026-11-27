@@ -176,10 +176,12 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail, proprio, all
   const sansHeure = liste.filter((t) => !t.heure || t.jour !== jour);
   const faites = faitesDuJour(taches, jour);
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const iMaintenant = jour === today ? avecHeure.findIndex((t) => minutes(t.heure) > nowMin) : -1;
   // Les trous de la journée, rangés entre les choses à heure. Pas pour un jour passé, ni sans moyen de créer.
   const libres = creer && jour >= today && liste.length > 0 ? trous(avecHeure, jour === today ? nowMin : 0) : [];
-  const rangs = [...avecHeure.map((t, i) => ({ m: minutes(t.heure), t, i, libre: null as null | { de: number; a: number } })), ...libres.map((l) => ({ m: l.de, t: null as Tache | null, i: -1, libre: l }))].sort((a, b) => a.m - b.m);
+  const rangs = [...avecHeure.map((t) => ({ m: minutes(t.heure), t, libre: null as null | { de: number; a: number } })), ...libres.map((l) => ({ m: l.de, t: null as Tache | null, libre: l }))].sort((a, b) => a.m - b.m);
+  // Le trait « maintenant » se pose avant la première chose à venir (un trou commence toujours à maintenant ou après).
+  const iMaintenant = jour === today ? rangs.findIndex((r) => (r.libre ? r.m >= nowMin : r.m > nowMin)) : -1;
+  const trait = <span className="maintenant-p" aria-label={`Il est ${heureFr(hm(nowMin))}`} />;
   const ligne = (t: Tache) => (
     <li key={t.id}>
       <button className={`bloc-p ${classeQui(t)}${t.fait ? " fait" : ""}${t.evt ? " evt" : ""}`} onClick={() => ouvrir(t)}>
@@ -198,14 +200,15 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail, proprio, all
       )}
       {(avecHeure.length > 0 || libres.length > 0) && (
         <ol className="ligne-temps">
-          {rangs.map((r) => r.libre ? (
+          {rangs.map((r, i) => r.libre ? (
             <li key={"libre-" + r.libre.de} className="lt-rang lt-libre">
+              {i === iMaintenant && trait}
               <span className="lt-heure">{heureFr(hm(r.libre.de))}</span>
               <button type="button" onClick={() => creer!({ jour, heure: hm(r.libre!.de) })}>Libre jusqu'à {heureFr(hm(r.libre.a))} <b>Ajouter</b></button>
             </li>
           ) : (
             <li key={r.t!.id} className="lt-rang">
-              {r.i === iMaintenant && <span className="maintenant-p" aria-label={`Il est ${heureFr(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`)}`} />}
+              {i === iMaintenant && trait}
               <span className="lt-heure">{heureFr(r.t!.heure)}</span>
               <BlocGlissable t={r.t!}>{ligne(r.t!)}</BlocGlissable>
             </li>
