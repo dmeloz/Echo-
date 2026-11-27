@@ -1,13 +1,15 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronRight, House } from "pulsoicon-react";
 import { db } from "../../data/db";
+import { auJour } from "../../lib/dates";
 import type { ContexteModule } from "../contrat";
 import { aFaire, minutesDe, pourMoi } from "./donnees";
 
 // La ligne de la journée : « Maison · 2 corvées à faire, 20 min » (les libres et les miennes). Elle ouvre Maison. Rien à faire : rien ne s'affiche.
-export function JourneeMaison({ proprio, now, aller }: ContexteModule) {
+export function JourneeMaison({ proprio, now, aller, jour }: ContexteModule) {
   const d = useLiveQuery(async () => ({ corvees: await db.maison_corvees.toArray() }), [], undefined);
-  if (!d?.corvees.length) return null;
+  // Les corvées n'ont pas de date fixe : la ligne ne vaut que pour aujourd'hui.
+  if (!d?.corvees.length || (jour && jour !== auJour(0, now))) return null;
   const miennes = d.corvees.filter((c) => aFaire(c, now) && pourMoi(c, proprio));
   if (!miennes.length) return null;
   const min = miennes.reduce((n, c) => n + minutesDe(c.taille), 0);

@@ -1,5 +1,6 @@
 import { lazy } from "react";
 import type { Module } from "../contrat";
+import { JourneeBudget } from "./Journee";
 import { TuileBudget } from "./Tuile";
 
 // Le budget partagé du foyer (lot 1, sans Echo) : ce qui reste à chacun, les charges, les comptes.
@@ -12,4 +13,5 @@ export const budget: Module = {
   prevu: [],
   Page: lazy(() => import("./Page").then((m) => ({ default: m.PageBudget }))), // chargée à la première ouverture
   Tuile: TuileBudget,
+  Journee: JourneeBudget,
 };
