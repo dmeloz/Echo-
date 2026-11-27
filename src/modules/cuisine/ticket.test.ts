@@ -188,4 +188,17 @@ describe("compter les unités d'un produit", () => {
     await toast.mock.calls.at(-1)![1].action.onClick();
     expect((await db.cuisine_stock.get(p.id))!.nb).toBe(1);
   });
+  it("deux lignes du même produit sur un ticket s'additionnent, et Annuler revient au départ", async () => {
+    await db.cuisine_stock.add({ id: "c", nom: "Crème demi-écrémée", lieu: "frigo", nb: 1, cree: 1 });
+    const l = { nom: "Crème demi-écrémée", qte: "6 x 25 cl", prix: 5.4, lieu: "frigo", jours: 0, course: "", sur: true };
+    const lu = nettoyerLecture({ ...brut, lignes: [l, l, { ...l, nom: "Yaourts" }, { ...l, nom: "Yaourts" }] }, []);
+    await rangerTicket(lu, lu.lignes, NOW);
+    expect((await db.cuisine_stock.toArray()).map((x) => [x.nom, x.nb]).sort()).toEqual([["Crème demi-écrémée", 13], ["Yaourts", 12]]);
+    await toast.mock.calls.at(-1)![1].action.onClick();
+    expect(await db.cuisine_stock.toArray()).toEqual([{ id: "c", nom: "Crème demi-écrémée", lieu: "frigo", nb: 1, cree: 1 }]);
+  });
+  it("ajoute plusieurs produits d'un coup à la main", async () => {
+    await ajouterProduit("sel, poivre, 4 yaourts", "placard");
+    expect((await db.cuisine_stock.toArray()).map((x) => [x.nom, x.nb ?? 0])).toEqual(expect.arrayContaining([["Sel", 0], ["Poivre", 0], ["Yaourts", 4]]));
+  });
 });

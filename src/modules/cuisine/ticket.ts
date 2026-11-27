@@ -77,11 +77,15 @@ export async function rangerTicket(lu: LectureTicket, gardees: LigneTicket[], no
       if (!present) neufs.push({ id: nouvelId(), nom: l.nom, lieu: l.lieu, ...(avant ? { avant } : {}), ...q, cree: quand + i });
       // Déjà là : c'est du neuf, il est de nouveau plein et l'ancienne date ne vaut plus (remplacée par l'estimation, ou retirée).
       // Un produit qui se compte gagne les unités achetées.
-      else if (!neufs.includes(present)) {
+      // (Deux lignes du même produit sur un ticket : la seconde part de ce que la première a laissé.)
+      else {
         const nb = present.nb || q.nb ? Math.min(99, (present.nb ?? 1) + (q.nb ?? 1)) : undefined;
+        if (neufs.includes(present)) { if (nb) present.nb = nb; continue; }
         if (present.avant === avant && !present.reste && present.nb === nb) continue;
-        anciens.push({ ...present });
-        await db.cuisine_stock.update(present.id, { avant, reste: undefined, nb, ...(q.qte && !present.qte ? { qte: q.qte } : {}) });
+        if (!anciens.some((a) => a.id === present.id)) anciens.push({ ...present });
+        const qte = present.qte ?? q.qte;
+        await db.cuisine_stock.update(present.id, { avant, reste: undefined, nb, ...(qte ? { qte } : {}) });
+        Object.assign(present, { avant, reste: undefined, nb, qte });
       }
     }
     await db.cuisine_stock.bulkAdd(neufs);
