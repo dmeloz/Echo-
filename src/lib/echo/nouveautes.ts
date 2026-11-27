@@ -4,6 +4,13 @@ export interface Nouveaute { jour: string; titre: string; points: string[] }
 
 export const NOUVEAUTES: Nouveaute[] = [
   {
+    jour: "2026-11-27", titre: "Le temps qu'il fait",
+    points: [
+      "Le résumé du matin et le petit mot d'Echo disent le temps en quelques mots.",
+      "À moto, s'il neige ou si la route gèle à l'heure de partir, l'accueil propose les transports. Ça se règle dans Réglages → Agenda → Trajets.",
+    ],
+  },
+  {
     jour: "2026-11-27", titre: "Echo regarde une photo",
     points: [
       "Touche l'appareil photo dans la barre d'Echo et montre-lui un courrier, une facture, le frigo ou une liste écrite à la main.",

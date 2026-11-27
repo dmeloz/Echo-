@@ -94,11 +94,12 @@ export async function arreterPoste(p: Poste, mois: string) {
 /* ---------- Les dépenses et les catégories ---------- */
 
 export interface NouvelleDepense { c: number; quoi: string; cat: string; qui: Payeur; jour?: string }
-export async function ajouterDepense(n: NouvelleDepense, now = new Date()): Promise<Depense | null> {
+// sansBruit : pour Echo, qui montre lui-même ce qu'il a fait et sait l'annuler.
+export async function ajouterDepense(n: NouvelleDepense, now = new Date(), sansBruit = false): Promise<Depense | null> {
   if (!Number.isInteger(n.c) || n.c <= 0) return null;
   const d: Depense = { id: nouvelId(), jour: n.jour ?? auJour(0, now), c: n.c, quoi: propre(n.quoi, 80), cat: n.cat || "divers", qui: n.qui, cree: Date.now() };
   await db.budget_depenses.add(d);
-  toast(`${d.quoi || "Dépense"} : ${chf(d.c)} CHF`, annuler(() => db.budget_depenses.delete(d.id)));
+  if (!sansBruit) toast(`${d.quoi || "Dépense"} : ${chf(d.c)} CHF`, annuler(() => db.budget_depenses.delete(d.id)));
   return d;
 }
 export async function retirerDepense(d: Depense) {

@@ -1,15 +1,25 @@
 import { db } from "../data/db";
 import { entetesIA } from "../sync/client";
 import type { Mode } from "../../supabase/functions/_shared/trajet-calcul";
+import { lieuMeteo, meteoVite, routeGlissante, type Glisse } from "./meteo";
 
 // L'heure de départ : « pars à 7 h 30 » pour arriver au travail (ou à un rendez-vous) à l'heure.
 // Le calcul se fait sur le serveur (fonction « trajet » : route pour la moto, horaires CFF pour les transports).
 // Les adresses sont gardées sur ce téléphone (Réglages → Agenda → Trajets, hors sauvegarde) ; elles ne sont envoyées que pour ce calcul.
 
 export const ADRESSE_TRAJET = "https://ewqvgayhptfwbpkxsaij.supabase.co/functions/v1/trajet";
-export interface Trajets { maison: string; travail: string; moyen: Mode }
-export const TRAJETS_DEFAUT: Trajets = { maison: "", travail: "", moyen: "moto" };
-export const lireTrajets = async (): Promise<Trajets> => ({ ...TRAJETS_DEFAUT, ...(((await db.reglages.get("trajets"))?.valeur as Partial<Trajets> | undefined) ?? {}) });
+// moyen : à moto (s'il neige ou si la route gèle, Echo propose les transports), en voiture, ou en transports publics.
+// ville : pour la météo, si l'adresse de départ ne suffit pas à la trouver (src/lib/meteo.ts).
+export type Moyen = "moto" | "voiture" | "transports";
+export interface Trajets { maison: string; travail: string; moyen: Moyen; ville: string }
+export const TRAJETS_DEFAUT: Trajets = { maison: "", travail: "", moyen: "moto", ville: "" };
+export const MOYENS: Moyen[] = ["moto", "voiture", "transports"];
+// Pour le calcul, la voiture prend la même route que la moto.
+export const modeDe = (m: Moyen): Mode => (m === "transports" ? "transports" : "moto");
+export const lireTrajets = async (): Promise<Trajets> => {
+  const t = { ...TRAJETS_DEFAUT, ...(((await db.reglages.get("trajets"))?.valeur as Partial<Trajets> | undefined) ?? {}) };
+  return { ...t, moyen: MOYENS.includes(t.moyen) ? t.moyen : "moto", ville: typeof t.ville === "string" ? t.ville : "" };
+};
 
 export interface Depart { depart: string; minutes: number; mode: Mode; train?: string; ligne?: string; gare?: string }
 export type Refus = "adresses" | "introuvable" | "service";
@@ -58,9 +68,31 @@ export async function heureDepart(p: { de: string; a: string; jour: string; arri
 }
 
 // Pour aller au travail : les adresses des réglages. null si elles ne sont pas remplies.
-export async function departTravail(jour: string, arrivee: string): Promise<Depart | Refus> {
+// À moto, s'il neige ou si la route gèle à l'heure de partir : glisse dit pourquoi, et autrement donne le départ en
+// transports publics quand il existe (Echo le propose, la personne choisit). Sans météo, rien ne change.
+// aRevoir : la météo ou les transports n'ont pas répondu à temps, la réponse peut encore s'enrichir (l'accueil redemande).
+export type DepartTravail = Depart & { glisse?: Glisse; autrement?: Depart; aRevoir?: boolean };
+export async function departTravail(jour: string, arrivee: string, now = Date.now()): Promise<DepartTravail | Refus> {
   const t = await lireTrajets();
-  return heureDepart({ de: t.maison, a: t.travail, jour, arrivee, mode: t.moyen });
+  const d = await heureDepart({ de: t.maison, a: t.travail, jour, arrivee, mode: modeDe(t.moyen) });
+  if (typeof d === "string" || t.moyen !== "moto") return d;
+  // La moto s'affiche sans attendre la météo : si elle tarde, on la relira au prochain essai.
+  const ciel = await meteoVite(now);
+  if (!ciel) return (await lieuMeteo()) ? { ...d, aRevoir: true } : d;
+  const glisse = routeGlissante(ciel, jour, d.depart);
+  if (!glisse) return d;
+  const train = await heureDepart({ de: t.maison, a: t.travail, jour, arrivee, mode: "transports" });
+  return { ...d, glisse, ...(typeof train === "string" ? (train === "service" ? { aRevoir: true } : {}) : { autrement: train }) };
+}
+// La ligne de l'accueil : « pars à 7 h 30 », ou, quand ça glisse, les transports proposés (ou la prudence s'il n'y en a pas).
+// maintenant (HH:MM) : un départ déjà passé n'est plus proposé ; "" quand plus aucun ne vaut.
+export function phraseDepart(d: DepartTravail, heure: (h: string) => string, maintenant = ""): string {
+  const moto = d.depart > maintenant, train = !!d.autrement && d.autrement.depart > maintenant;
+  if (!moto && !train) return "";
+  if (!d.glisse) return `pars à ${heure(d.depart)}`;
+  const quoi = d.glisse === "neige" ? "neige" : "route gelée";
+  if (!train) return `${quoi} : prudence à moto, pars à ${heure(d.depart)}`;
+  return `${quoi} : plutôt les transports, pars à ${heure(d.autrement!.depart)}${moto ? ` (à moto : ${heure(d.depart)})` : ""}`;
 }
 // Un réglage changé : relu dans la base au moment même (deux champs quittés coup sur coup ne s'écrasent pas).
 export async function poserTrajets(x: Partial<Trajets>) { await db.reglages.put({ cle: "trajets", valeur: { ...(await lireTrajets()), ...x } }); }
