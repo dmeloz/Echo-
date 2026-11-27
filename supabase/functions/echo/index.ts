@@ -3,7 +3,7 @@
 //    par du texte ou par des demandes d'outils (liste fermée : ../_shared/echo-outils.ts). C'est l'app qui exécute les outils
 //    sur ses données et qui demande l'accord de la personne : ici on ne touche à aucune donnée du foyer.
 // 2. L'ancienne façon (une phrase → des tâches proposées), gardée pour les téléphones qui n'ont pas encore la mise à jour.
-// Modèle : Claude Haiku 5.5 (rapide et peu cher), Claude Sonnet 5.5 pour organiser une journée ou une semaine (mode agent). La clé reste ici (secret ANTHROPIC_API_KEY), jamais dans l'app.
+// Modèle : Claude Sonnet 5.5 pour toute la discussion (mode agent), Haiku 5.5 quand le budget du jour est presque fini et pour l'ancienne façon. La clé reste ici (secret ANTHROPIC_API_KEY), jamais dans l'app.
 // Qui peut l'appeler : un membre connecté d'un foyer, ou le code secret du foyer (voir ../_shared/garde.ts). Appels comptés.
 import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
 import { createClient } from "npm:@supabase/supabase-js@2";

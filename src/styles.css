@@ -783,7 +783,7 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .rayons::-webkit-scrollbar, .carrousel::-webkit-scrollbar { display: none; }
 .ray { flex: none; min-height: 40px; border: 1px solid var(--bord); border-radius: 999px; padding: 8px 14px; background: var(--verre-fort); color: var(--encre); font-weight: 600; font-size: 14px; white-space: nowrap; transition: background var(--m-onglet) var(--douce), color var(--m-onglet); }
 .ray b { font-variant-numeric: tabular-nums; opacity: .65; margin-left: 2px; }
-.ray[aria-selected="true"] { background: var(--encre); color: #fff; border-color: var(--encre); }
+.ray[aria-selected="true"], .ray[aria-pressed="true"] { background: var(--encre); color: #fff; border-color: var(--encre); }
 .carrousel { display: flex; align-items: flex-start; gap: var(--e5); overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch;
   margin: 0 -16px -14px; padding: 4px 16px 26px; scroll-padding-left: 16px; }
 .carrousel::after { content: ""; flex: none; width: calc(16% - var(--e5)); }
@@ -909,6 +909,26 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .stock-plus .aide-champ { margin: 0; }
 /* Les jours passés s'effacent un peu : l'œil va à ce qui vient. */
 .jour-repas.passe, .jour-bloc.passe:not(.ouvert) > .jour-repas { opacity: .55; }
+/* L'entrée de Cuisine : la carte « Ce soir », puis une ligne par partie. */
+.ce-soir { display: flex; flex-direction: column; gap: var(--e3); }
+.ce-soir .lab { color: var(--accent); }
+.ce-soir h2 { margin: 0; font-size: var(--t-carte); font-weight: 800; letter-spacing: -.02em; line-height: 1.2; text-wrap: balance; }
+.ce-soir p { margin: 0; display: flex; align-items: flex-start; gap: var(--e3); font-size: 15px; line-height: 1.35; color: color-mix(in oklab, var(--encre) 82%, transparent); }
+.ce-soir p svg { flex: none; margin-top: 2px; color: var(--discret); }
+.ce-soir p.vite, .ce-soir p.vite svg { color: var(--turquoise-texte); font-weight: 600; }
+.ce-soir-vide { align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; font-size: 17px; font-weight: 700; color: var(--accent); text-align: left; }
+.parties { display: flex; flex-direction: column; gap: var(--e4); }
+.partie-tete { display: flex; flex-direction: column; gap: var(--e2); }
+/* Le scanner de codes-barres : la caméra dans un cadre, un trait qui balaie tant qu'elle cherche. */
+.viseur { position: relative; aspect-ratio: 4 / 3; border-radius: 24px; overflow: hidden; background: #0d1b26; }
+.viseur video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.viseur i { position: absolute; left: 12%; right: 12%; top: 50%; height: 2px; border-radius: 2px; background: #fff; opacity: 0; box-shadow: 0 0 12px rgb(255 255 255 / .8); }
+.viseur.actif i { opacity: .9; animation: balaie 1.8s var(--douce) infinite alternate; }
+@keyframes balaie { from { transform: translateY(-60px); } to { transform: translateY(60px); } }
+@media (prefers-reduced-motion: reduce) { .viseur.actif i { animation: none; } }
+.fiche-scan { display: flex; flex-direction: column; gap: var(--e4); }
+.fiche-scan .rangee { align-items: center; }
+.scanner .ajout-stock { flex-wrap: wrap; }
 /* Une ligne qui ouvre une page (batch, livre de recettes). */
 .ligne-lien { display: flex; align-items: center; gap: var(--e5); width: 100%; min-height: 64px; padding: 10px 14px; text-align: left; color: var(--encre); }
 .ligne-lien > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -975,6 +995,50 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .habituels small { display: block; font-size: var(--t-petit); color: var(--discret); }
 @media (prefers-reduced-motion: reduce) { .gouts, .art-plus, .coche-trait path { animation: none; } .carrousel { scroll-behavior: auto; } }
 
+/* Agenda · vue Mois : une grille calme, le code de travail et un point par chose. */
+.vue-mois { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.mois-grille { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.mg-jour .code-mini { padding: 2px 3px; max-width: 100%; overflow: hidden; text-overflow: clip; }
+.mg-nom { text-align: center; font-size: 13px; font-weight: 700; color: var(--discret); }
+.mg-jour { position: relative; min-width: 0; overflow: hidden; min-height: 56px; border: 0; border-radius: 12px; background: rgb(255 255 255 / .6); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.mg-jour b { font-size: 15px; }
+.mg-jour.passe { opacity: .5; }
+.mg-jour.auj { background: var(--bleu); color: #fff; }
+.mg-jour.auj .points i { background: #fff; }
+.points i.evt { background: var(--encre); }
+
+/* Glisser pour changer l'heure : le bloc suit le doigt par crans, la nouvelle heure s'affiche dessous. */
+.ligne-temps ul.glisse-heure { position: relative; z-index: 2; transition: transform .12s var(--ressort, ease); }
+.glisse-heure .bloc-p { box-shadow: 0 10px 24px var(--ombre); scale: 1.02; }
+.heure-glisse { position: absolute; right: 8px; top: -10px; padding: 2px 8px; border-radius: 999px; background: var(--encre); color: #fff; font-size: 13px; font-weight: 700; list-style: none; }
+.ligne-temps ul { touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* L'écran de discussion avec Echo, comme l'app Claude : au-dessus de la barre, jusqu'en haut de l'écran. */
+.echo-ecran { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px);
+  height: calc(100dvh - var(--clavier) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 58px - 17px - 8px - 14px);
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px; border-radius: 26px;
+  background: #f8fbfd; box-shadow: 0 10px 26px var(--ombre), 0 0 0 100vmax rgb(242 246 248 / .78); }
+.clavier-ouvert .echo-ecran { height: calc(100dvh - var(--clavier) - env(safe-area-inset-top, 0px) - 58px - 8px - 8px - 14px); }
+.echo-tete { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding: 0 2px; }
+.echo-tete > b { font-size: 17px; color: var(--bleu); }
+.echo-tete-actions { display: flex; align-items: center; gap: 4px; }
+.echo-fermer { width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgb(18 40 58 / .07); color: var(--encre); display: grid; place-items: center; }
+.echo-fil { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; padding: 2px; }
+.bulle-moi { margin: 6px 0 0; align-self: flex-end; max-width: 85%; background: var(--bleu-pale); color: var(--encre); padding: 8px 12px; border-radius: 18px 18px 4px 18px; font-size: 14.5px; white-space: pre-line; overflow-wrap: anywhere; }
+.echo-fil .echo-dit { align-self: flex-start; max-width: 100%; line-height: 1.45; overflow-wrap: anywhere; }
+.echo-action { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px; padding: 6px 10px; border-radius: 12px; background: rgb(18 40 58 / .04); }
+.echo-action .tag { flex: none; background: rgb(18 40 58 / .07); border-radius: 999px; padding: 2px 8px; font-size: 13px; font-weight: 600; }
+.echo-action .tag.imp { background: var(--bleu-pale); color: var(--bleu); }
+.echo-action.non, .echo-action.annule { opacity: .55; }
+.echo-fil .echo-pense { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--discret); }
+.echo-vide { margin: auto 0 0; color: var(--discret); font-size: 14px; }
+.echo-choix { padding-top: 8px; border-top: 1px solid rgb(18 40 58 / .08); }
+.echo-choix .echo-ok { margin-left: auto; padding: 8px 16px; min-height: 40px; }
+.echo-anciennes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.echo-anciennes button { width: 100%; text-align: left; border: 0; background: rgb(18 40 58 / .04); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; color: var(--encre); }
+.echo-anciennes span { font-size: 13px; color: var(--discret); }
+.echo-reprendre { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; }
+.barre-bas .ajout { position: relative; z-index: 1; } /* la barre reste au-dessus du voile de la discussion */
 /* ===== Maison : les corvées ===== */
 .corvees { display: flex; flex-direction: column; }
 .corvees > .lab { padding: 8px 0 2px; }
