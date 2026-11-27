@@ -224,6 +224,7 @@ async function tourAgent(d: DemandeAgent, source: "membre" | "code", origine: st
   if (d.direct === true) {
     const enc = new TextEncoder();
     const flux = client.beta.messages.stream({ ...demande, messages: messages as Anthropic.Beta.BetaMessageParam[] });
+    flux.on("error", () => {}); // l'erreur est lue dans la boucle ci-dessous ; sans ceci, elle remonterait sans être attrapée
     let ferme = false;
     const corps = new ReadableStream({
       async start(c) {
