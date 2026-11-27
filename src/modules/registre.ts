@@ -6,10 +6,9 @@ import { OUTILS_BASE, type Executant } from "../lib/echo/outils";
 import { cuisine } from "./cuisine";
 import { maison } from "./maison";
 import { planning } from "./planning";
-import { horaires } from "./horaires";
 
 // Tous les modules de l'app, dans l'ordre du menu. Pour en ajouter un, l'ajouter ici.
-export const MODULES: Module[] = [planning, horaires, cuisine, maison, budget];
+export const MODULES: Module[] = [planning, cuisine, maison, budget];
 
 // Chaque module peut être masqué dans les Réglages (il disparaît du menu et de l'accueil).
 export function useModulesActifs(): { actifs: Module[]; masques: string[] } {

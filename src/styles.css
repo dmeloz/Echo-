@@ -1019,3 +1019,7 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .echo-anciennes span { font-size: 13px; color: var(--discret); }
 .echo-reprendre { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; }
 .barre-bas .ajout { position: relative; z-index: 1; } /* la barre reste au-dessus du voile de la discussion */
+
+/* Agenda : le petit lien vers la sous-page « Mes horaires », et le retour. */
+.lien-horaires, .retour-agenda { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 0; background: rgb(255 255 255 / .7); border-radius: 999px; padding: 7px 12px; font-size: 14px; font-weight: 700; color: var(--bleu); }
+.lien-horaires { align-self: flex-end; margin-bottom: -4px; }
