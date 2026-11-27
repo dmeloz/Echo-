@@ -408,11 +408,18 @@ export function nettoyerBatch(x: unknown): Batch | null {
 /* ---------- Le livre de recettes ---------- */
 
 // Un plat noté après le repas (clé : son nom simplifié). dernier = le jour du dernier avis, precedent = celui d'avant (pour défaire). avis 1 = on a aimé (il entre dans le livre), -1 = Echo ne le repropose plus.
-export interface Recette { cle: string; plat: string; ingredients?: Lu[]; congele?: boolean; avis: 1 | -1; fois: number; dernier: string; precedent?: string; maj: number }
+export interface Recette { cle: string; plat: string; ingredients?: Lu[]; lien?: string; congele?: boolean; avis: 1 | -1; fois: number; dernier: string; precedent?: string; maj: number }
+// Un lien de recette : seulement http(s), pour ne jamais ouvrir autre chose qu'une page web.
+export function lienRecette(brut: string): string {
+  const s = brut.trim();
+  if (!s) return "";
+  try { const u = new URL(/^https?:\/\//i.test(s) ? s : "https://" + s); return (u.protocol === "https:" || u.protocol === "http:") && u.hostname.includes(".") ? u.href.slice(0, 300) : ""; } catch { return ""; }
+}
 export function nettoyerRecette(x: unknown): Recette | null {
   const o = obj(x), plat = txt(o.plat, 80).trim(), cle = txt(o.cle, 80), dernier = txt(o.dernier, 10), precedent = txt(o.precedent, 10), f = nb(o.fois);
   if (!plat || !cle || cle !== cleDe(plat) || (o.avis !== 1 && o.avis !== -1)) return null;
   const ingredients = (Array.isArray(o.ingredients) ? o.ingredients : []).slice(0, 20)
     .map((i) => ({ nom: txt(obj(i).nom, 60).trim(), qte: txt(obj(i).qte, 20).trim() })).filter((i) => i.nom);
-  return { cle, plat, ...(ingredients.length ? { ingredients } : {}), ...(o.congele === true ? { congele: true } : {}), avis: o.avis, fois: f !== null && f >= 1 ? Math.round(f) : 1, dernier: JOUR_ISO.test(dernier) ? dernier : "", ...(JOUR_ISO.test(precedent) ? { precedent } : {}), maj: nb(o.maj) ?? 0 };
+  const lien = lienRecette(txt(o.lien, 300));
+  return { cle, plat, ...(ingredients.length ? { ingredients } : {}), ...(lien ? { lien } : {}), ...(o.congele === true ? { congele: true } : {}), avis: o.avis, fois: f !== null && f >= 1 ? Math.round(f) : 1, dernier: JOUR_ISO.test(dernier) ? dernier : "", ...(JOUR_ISO.test(precedent) ? { precedent } : {}), maj: nb(o.maj) ?? 0 };
 }
