@@ -1,18 +1,19 @@
 import { Sparkles } from "pulsoicon-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { auJour, heureFr, libelleJour, minutes } from "../../lib/dates";
 import { autre, type Personne, type Tache } from "../../lib/types";
-import { deplacer } from "../../data/actions";
+import { changerHeure, deplacer } from "../../data/actions";
 import { initialeDe, nomDe, poserReglage, useHoraires, useReglage, useTaches } from "../../data/hooks";
 import type { ContexteModule } from "../contrat";
 import { charge, duJour, faitesDuJour, joursAVenir, proposerDeplacement, proposerRepos } from "./semaine";
 import { CODES, heuresDe, phraseDe, type Code } from "../../lib/horaires";
-import { VueHoraires } from "./Horaires";
-import { CarteVacances, HorairesFixes } from "./Vacances";
-import { aHorairesFixes } from "../../lib/fixes";
+import { VueMois } from "./Mois";
+import { PageHoraires } from "../horaires/PageHoraires";
+import { CalendarClock, ChevronLeft } from "pulsoicon-react";
+import { vibrer } from "../../lib/gestes";
 
-type Vue = "jour" | "semaine" | "horaires";
-const NOM_VUE: Record<Vue, string> = { jour: "Jour", semaine: "Semaine", horaires: "Mes horaires" };
+type Vue = "jour" | "semaine" | "mois";
+const NOM_VUE: Record<Vue, string> = { jour: "Jour", semaine: "Semaine", mois: "Mois" };
 const court = (jour: string) => new Date(jour + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "short" }).replace(".", "");
 const numero = (jour: string) => new Date(jour + "T12:00:00").getDate();
 const classeQui = (t: Tache) => (t.qui === "nous" ? "nous" : t.qui);
@@ -21,30 +22,42 @@ const classeQui = (t: Tache) => (t.qui === "nous" ? "nous" : t.qui);
 // Il lit les mêmes tâches que l'accueil (celles qui ont un jour, et une heure si on veut).
 export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
   const taches = useTaches() ?? [];
-  const vue = useReglage<Vue>("planningVue", "jour");
+  const choix = useReglage<string>("planningVue", "jour");
+  const vue: Vue = choix === "semaine" || choix === "mois" ? choix : "jour";
+  const [sousPage, setSousPage] = useState(false); // « Mes horaires » : une sous-page de l'Agenda
   const [jour, setJour] = useState(() => auJour(0, now));
   const [refusees, setRefusees] = useState<string[]>([]);
   const jours = joursAVenir(now);
   const today = jours[0];
-  const jourVu = jours.includes(jour) ? jour : today;
+  // Un jour choisi dans le mois peut être loin : la bande des jours part alors de lui.
+  const jourVu = jour < today ? today : jour;
+  const bande = jours.includes(jourVu) ? jours : joursAVenir(new Date(jourVu + "T12:00:00"));
   const lautre = autre(proprio);
   const horaires = useHoraires();
   // Le code de travail de celui qui tient le téléphone, jour par jour.
   const travail = new Map(horaires.filter((h) => h.qui === proprio).map((h) => [h.jour, h.code]));
   const choisirJour = (j: string) => { setJour(j); poserReglage("planningVue", "jour"); };
 
+  if (sousPage) return (
+    <>
+      <button type="button" className="retour-agenda" onClick={() => setSousPage(false)}><ChevronLeft size={18} strokeWidth={2} animated={false} /> Agenda</button>
+      <PageHoraires noms={noms} proprio={proprio} now={now} aller={() => {}} ouvrir={ouvrir} />
+    </>
+  );
+
   return (
     <>
+      <button type="button" className="lien-horaires" onClick={() => setSousPage(true)}><CalendarClock size={16} strokeWidth={1.8} animated={false} /> Mes horaires</button>
       <div className="vue-choix" role="group" aria-label="Vue">
-        {(["jour", "semaine", "horaires"] as Vue[]).map((v) => (
+        {(["jour", "semaine", "mois"] as Vue[]).map((v) => (
           <button key={v} type="button" aria-pressed={vue === v} onClick={() => poserReglage("planningVue", v)}>{NOM_VUE[v]}</button>
         ))}
       </div>
 
-      {vue === "horaires" ? <>{aHorairesFixes(noms, proprio) ? <HorairesFixes /> : <VueHoraires proprio={proprio} now={now} />}<CarteVacances noms={noms} now={now} /></> : <>
+      {vue === "mois" ? <VueMois taches={taches} travail={travail} today={today} onJour={choisirJour} /> : <>
 
       <div className="bande-jours" role="group" aria-label="Choisir le jour">
-        {jours.map((j) => {
+        {bande.map((j) => {
           const liste = duJour(taches, j, today);
           const nm = charge(liste, "moi"), ne = charge(liste, "elle");
           return (
@@ -92,6 +105,53 @@ function IdeeEcho({ taches, travail, proprio, lautre, noms, now, refusees, onRef
   );
 }
 
+// Glisser pour changer l'heure : garder le doigt une seconde sur une chose à heure, puis monter ou descendre
+// (un cran = 15 minutes). La page ne défile pas pendant ce geste ; un toucher simple ouvre toujours la feuille.
+const CRAN = 18, ATTENTE = 350;
+function BlocGlissable({ t, children }: { t: Tache; children: React.ReactNode }) {
+  const [decalage, setDecalage] = useState<number | null>(null);
+  const ref = useRef<HTMLUListElement>(null);
+  const geste = useRef<{ y: number; minuteur?: ReturnType<typeof setTimeout>; actif: boolean; crans: number }>({ y: 0, actif: false, crans: 0 });
+  const bloque = !t.heure || !!t.ical?.serie || !!t.fait;
+  const heureA = (crans: number) => {
+    const m = Math.min(23 * 60 + 45, Math.max(0, Math.round(minutes(t.heure) / 15) * 15 + crans * 15));
+    return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  };
+  // Pendant le geste, le défilement de la page est retenu (écouteur non passif).
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const retenir = (e: TouchEvent) => { if (geste.current.actif) e.preventDefault(); };
+    el.addEventListener("touchmove", retenir, { passive: false });
+    return () => el.removeEventListener("touchmove", retenir);
+  }, []);
+  const fin = () => { clearTimeout(geste.current.minuteur); geste.current.actif = false; setDecalage(null); };
+  return (
+    <ul ref={ref} className={decalage !== null ? "glisse-heure" : undefined} style={decalage !== null ? { transform: `translateY(${decalage * CRAN}px)` } : undefined}
+      onPointerDown={(e) => {
+        if (bloque) return;
+        geste.current = { y: e.clientY, actif: false, crans: 0, minuteur: setTimeout(() => { geste.current.actif = true; vibrer(8); setDecalage(0); }, ATTENTE) };
+      }}
+      onPointerMove={(e) => {
+        const g = geste.current;
+        if (!g.actif) { if (Math.abs(e.clientY - g.y) > 8) clearTimeout(g.minuteur); return; }
+        const crans = Math.round((e.clientY - g.y) / CRAN);
+        if (crans !== g.crans) { g.crans = crans; vibrer(4); setDecalage(crans); }
+      }}
+      onPointerUp={() => {
+        const g = geste.current;
+        if (g.actif && g.crans) void changerHeure(t, heureA(g.crans));
+        if (g.actif) { const bloquer = (ev: Event) => { ev.stopPropagation(); ev.preventDefault(); }; addEventListener("click", bloquer, { capture: true, once: true }); setTimeout(() => removeEventListener("click", bloquer, { capture: true }), 50); }
+        fin();
+      }}
+      onPointerCancel={fin}
+      onContextMenu={(e) => { if (!bloque) e.preventDefault(); }}>
+      {children}
+      {decalage !== null && <li className="heure-glisse" aria-live="polite">{heureFr(heureA(decalage))}</li>}
+    </ul>
+  );
+}
+
 // Le bandeau du jour de travail, en haut de la vue Jour.
 function BandeauTravail({ code }: { code: Code }) {
   const c = CODES[code];
@@ -132,7 +192,7 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail }: { taches: 
             <li key={t.id} className="lt-rang">
               {i === iMaintenant && <span className="maintenant-p" aria-label={`Il est ${heureFr(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`)}`} />}
               <span className="lt-heure">{heureFr(t.heure)}</span>
-              <ul>{ligne(t)}</ul>
+              <BlocGlissable t={t}>{ligne(t)}</BlocGlissable>
             </li>
           ))}
           {jour === today && iMaintenant === -1 && <li className="lt-rang fin"><span className="maintenant-p" aria-hidden="true" /></li>}
@@ -145,7 +205,7 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail }: { taches: 
         </>
       )}
       {faites.length > 0 && <details className="faites"><summary>{faites.length} fait{faites.length > 1 ? "s" : ""}</summary><ul className="sans-heure">{faites.map(ligne)}</ul></details>}
-      <p className="aide-champ">Touche une chose pour changer son jour, son heure ou qui s'en occupe.</p>
+      <p className="aide-champ">Touche une chose pour la changer. Garde le doigt dessus puis glisse vers le haut ou le bas pour changer son heure.</p>
     </section>
   );
 }

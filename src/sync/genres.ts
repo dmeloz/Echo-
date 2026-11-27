@@ -1,6 +1,7 @@
 import type { Table } from "dexie";
 import { db } from "../data/db";
 import { nettoyerJournal } from "../lib/echo/journal";
+import { nettoyerCorvee, nettoyerFait } from "../modules/maison/donnees";
 import { nettoyerSouvenir } from "../lib/echo/memoire";
 import { nettoyerArticle, nettoyerGouts, nettoyerHabitude, nettoyerBatch, nettoyerProduit, nettoyerRecette, nettoyerRepas, nettoyerTicket } from "../modules/cuisine/donnees";
 
@@ -17,6 +18,8 @@ export const GENRES: Record<string, Genre> = {
   batch: { table: db.cuisine_batch, cle: "semaine", nettoyer: nettoyerBatch, naturelle: true },
   recette: { table: db.cuisine_recettes, cle: "cle", nettoyer: nettoyerRecette, naturelle: true },
   gout: { table: db.cuisine_gouts, cle: "qui", nettoyer: nettoyerGouts, naturelle: true },
+  corvee: { table: db.maison_corvees, cle: "id", nettoyer: nettoyerCorvee },
+  corvee_faite: { table: db.maison_faits, cle: "id", nettoyer: nettoyerFait },
   journal: { table: db.echo_journal, cle: "id", nettoyer: nettoyerJournal },
   memoire: { table: db.echo_memoire, cle: "id", nettoyer: nettoyerSouvenir },
 };

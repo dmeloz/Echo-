@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { auJour, libelleJour, nouvelId } from "../lib/dates";
+import { auJour, heureFr, libelleJour, minutes, nouvelId } from "../lib/dates";
 import { NIVEAUX, niveau } from "../lib/importance";
 import type { Etape, Niveau, Noms, Personne, Qui, Repete, Tache } from "../lib/types";
 import { reordonner } from "../lib/ordre";
@@ -247,4 +247,14 @@ export async function changerVacances(jours: Array<[Personne, string]>, poser: b
       await db.horaires.bulkPut(avant.filter((h): h is Horaire => !!h));
     }) },
   });
+}
+
+// Glisser une chose dans la vue Jour : elle change d'heure (la fin d'un événement suit), avec « Annuler ».
+export async function changerHeure(t: Tache, heure: string) {
+  if (!t.heure || t.heure === heure) return;
+  const decale = (h: string, d: number) => { const m = Math.min(23 * 60 + 59, Math.max(0, minutes(h) + d)); return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`; };
+  const avant = { heure: t.heure, fin: t.fin };
+  const fin = t.fin ? decale(t.fin, minutes(heure) - minutes(t.heure)) : t.fin;
+  await db.taches.update(t.id, { heure, ...(t.fin ? { fin } : {}) });
+  toast(`À ${heureFr(heure)} maintenant`, { action: { label: "Annuler", onClick: () => db.taches.update(t.id, avant) } });
 }
