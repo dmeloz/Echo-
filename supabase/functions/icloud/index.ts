@@ -68,7 +68,10 @@ async function dossierCalendriers(auth: string): Promise<string> {
 async function calendriers(auth: string, urlMaison?: string): Promise<Calendrier[]> {
   urlMaison ??= await dossierCalendriers(auth);
   const r = await dav("PROPFIND", urlMaison, auth, pf("<d:prop><d:displayname/><d:resourcetype/><c:supported-calendar-component-set/></d:prop>"), { Depth: "1" });
+  // Une liste qui échoue n'est pas « aucun calendrier » : sinon l'app retirerait ses événements, ou créerait un calendrier en trop.
+  if (r.status !== 207 && !r.ok) { await r.body?.cancel(); console.warn("icloud: liste des calendriers refusée, statut", r.status); throw new Erreur("apple", 502); }
   const toutes = reponses(await r.text());
+  if (!toutes.length) { console.warn("icloud: liste des calendriers illisible, statut", r.status); throw new Erreur("apple", 502); }
   const cals = toutes.filter((x) => estCalendrierEvenements(x.corps))
     .map((x) => ({ href: absolu(x.href, urlMaison!), nom: prop(x.corps, "displayname") || "Calendrier" }));
   // Trace sans données personnelles : combien de dossiers, de quel type, combien gardés.
@@ -77,11 +80,11 @@ async function calendriers(auth: string, urlMaison?: string): Promise<Calendrier
 }
 // Le type d'un dossier iCloud, sans son nom ni son adresse (pour la trace).
 const resume = (corps: string) =>
-  (corps.match(/<(?:[\w-]+:)?resourcetype\b[\s\S]*?(?:\/>|<\/(?:[\w-]+:)?resourcetype>)/i)?.[0] ?? "?").replace(/xmlns(:\w+)?="[^"]*"/g, "").replace(/\s+/g, " ").slice(0, 120)
+  (corps.match(/<(?:[\w-]+:)?resourcetype\b[^>]*?(?:\/>|>[\s\S]*?<\/(?:[\w-]+:)?resourcetype>)/i)?.[0] ?? "?").replace(/\sxmlns(:\w+)?=(?:"[^"]*"|'[^']*')/g, "").replace(/\s+/g, " ").slice(0, 160)
   + " " + ((corps.match(/name=["']V\w+["']/gi) ?? []).join(",") || "-");
 
-// Aucun calendrier d'événements sur iCloud (tout est « Sur l'iPhone » ou ailleurs) : on crée le calendrier « Echo ».
-async function creerCalendrierEcho(auth: string): Promise<string> {
+// Le premier calendrier d'événements. S'il n'y en a aucun sur iCloud (liste lue sans erreur), on crée le calendrier « Echo ».
+async function calendrierPourEcrire(auth: string): Promise<string> {
   const urlMaison = await dossierCalendriers(auth);
   const deja = await calendriers(auth, urlMaison);
   if (deja[0]) return deja[0].href;
@@ -91,10 +94,12 @@ async function creerCalendrierEcho(auth: string): Promise<string> {
 </d:prop></d:set></c:mkcalendar>`;
   const r = await dav("MKCALENDAR", href, auth, corps);
   await r.body?.cancel();
-  console.log("icloud: calendrier Echo créé, statut", r.status);
-  // 405 = il existe déjà à cette adresse (créé lors d'un essai précédent) : on l'utilise.
-  if (!r.ok && r.status !== 405) throw new Erreur("pas_de_calendrier", 404);
-  return href;
+  console.log("icloud: création du calendrier Echo, statut", r.status);
+  // Créé à l'instant, ou par l'autre téléphone au même moment : on relit la liste et on prend l'adresse qu'iCloud donne.
+  const apres = await calendriers(auth, urlMaison);
+  if (apres[0]) return apres[0].href;
+  if (r.ok) return r.url || href;
+  throw new Erreur("pas_de_calendrier", 404);
 }
 
 type Lu = Evenement & { cal: string; href: string; etag: string };
@@ -173,8 +178,7 @@ Deno.serve(async (req) => {
         }
       }
       let cal = typeof q.cal === "string" && q.cal ? pourApple(q.cal) : "";
-      if (!cal) cal = (await calendriers(auth))[0]?.href ?? "";
-      if (!cal) cal = await creerCalendrierEcho(auth);
+      if (!cal) cal = await calendrierPourEcrire(auth);
       href = new URL(encodeURIComponent(c.uid) + ".ics", cal.endsWith("/") ? cal : cal + "/").href;
       r = await dav("PUT", href, auth, creerIcs(c), { "If-None-Match": "*" });
       if (!r.ok) { await r.body?.cancel(); throw new Erreur("apple", 502); }
