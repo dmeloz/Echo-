@@ -5,7 +5,7 @@ import type { Noms, Personne, Tache } from "../lib/types";
 import { effacerExemples, remettre, remettreExemples, toutEffacer } from "../data/actions";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../data/db";
-import { marquerGuide, poserReglage, useMaintenant, useReglage } from "../data/hooks";
+import { marquerGuide, poserReglage, useMaintenant, useNoms, useProfil, useReglage } from "../data/hooks";
 import { CodeInvitation } from "../components/Connexion";
 import { SectionIcloud } from "../components/Icloud";
 import { estConnecte, inviter, type Foyer, type Membre } from "../sync/moteur";
@@ -14,6 +14,8 @@ import { exporter, importer } from "../data/sauvegarde";
 import { RAPPELS_DEFAUT, reglerRappels, type Rappels } from "../data/rappels";
 import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
 import type { Manque } from "../lib/echo/outils";
+import { oublier, retenir } from "../lib/echo/memoire";
+import { MAX_SOUVENIR } from "../../supabase/functions/_shared/echo-outils";
 
 type Theme = "foyer" | "echo" | "notifications" | "agenda" | "modules" | "app";
 // Un module construit peut avoir sa propre sous-page : sa ligne arrive dans le sommaire, à son nom.
@@ -308,9 +310,41 @@ function SectionEcho() {
       </label>
       <p className="aide-champ">Pas besoin du code si ce téléphone est relié au foyer. Sinon, c'est le même code que pour la lecture de la fiche d'horaires. Il reste sur ce téléphone.</p>
     </section>
+    <MemoireEcho />
     <JournalEcho />
     <ManquesEcho />
   </>);
+}
+
+// La mémoire d'Echo, partagée au foyer : ce qu'il sait de vous. Chacun peut en ajouter ou en effacer.
+function MemoireEcho() {
+  const souvenirs = useLiveQuery(() => db.echo_memoire.orderBy("quand").reverse().toArray(), [], []);
+  const noms = useNoms();
+  const { proprio } = useProfil();
+  const [texte, setTexte] = useState("");
+  const ajouter = async () => {
+    const r = await retenir(texte, proprio ? noms[proprio] : "");
+    if (typeof r === "string") { toast(r); return; }
+    setTexte("");
+  };
+  return (
+    <section className="g reglages">
+      <span className="lab">Ce qu'Echo sait de vous</span>
+      {!souvenirs.length ? <p>Rien pour l'instant. Dis à Echo « retiens que… », ou il notera seul ce qui revient souvent. Vous le voyez tous les deux ici.</p> : (
+        <ul className="corbeille">
+          {souvenirs.map((m) => (
+            <li key={m.id}>
+              <span><b>{m.texte}</b><small>{m.par ? `noté par ${m.par} · ` : ""}{new Date(m.quand).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</small></span>
+              <button type="button" className="bouton-texte" onClick={() => oublier(m.id)}>Oublier</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <form className="champ" onSubmit={(e) => { e.preventDefault(); ajouter(); }}>
+        <input value={texte} maxLength={MAX_SOUVENIR} placeholder="Ajouter : Sarah n'aime pas les champignons" onChange={(e) => setTexte(e.target.value)} />
+      </form>
+    </section>
+  );
 }
 
 // Ce qu'on a demandé à Echo et qu'il ne sait pas encore faire (outil signaler_manque) : pour savoir quel outil lui ajouter.

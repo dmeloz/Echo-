@@ -1,7 +1,8 @@
 import { db } from "../../data/db";
 import { auJour, nouvelId, z } from "../dates";
-import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SOUVENIRS, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
 import { genreFinal, type Action, type ContexteEcho, type Executant } from "./outils";
+import { lireMemoire, memoirePourEcho, type Souvenir } from "./memoire";
 
 // La boucle d'Echo. La phrase part au serveur (qui garde la clé et parle à Claude). Claude répond par du texte,
 // ou demande des outils : l'app les exécute ici, sur ses données, et renvoie le résultat. Jusqu'à MAX_TOURS fois.
@@ -44,14 +45,15 @@ function reprendre(avant: Message[], phrase: string, note: string): Message[] {
   return [{ role: "user", content: avecNotes([rappel && `la discussion a été raccourcie. Ta dernière réponse : « ${rappel} »`, note], phrase) }];
 }
 
-// Ce qu'Echo sait de la situation : la date, l'heure, qui écrit. Une fois par phrase (la conversation reste en cache).
-export function situation(ctx: ContexteEcho) {
+// Ce qu'Echo sait de la situation : la date, l'heure, qui écrit, sa mémoire. Une fois par phrase (la conversation reste en cache).
+export function situation(ctx: ContexteEcho, memoire: Souvenir[] = []) {
   const today = auJour(0, ctx.now);
   const jour = ctx.now.toLocaleDateString("fr-FR", { weekday: "long" });
   const { moi, elle } = ctx.noms;
   return [
     `Aujourd'hui : ${jour} ${today}, il est ${z(ctx.now.getHours())}:${z(ctx.now.getMinutes())}.`,
     `Places du foyer : "moi" = ${moi}, "elle" = ${elle}. La personne qui écrit est ${ctx.noms[ctx.proprio]} (place "${ctx.proprio}").`,
+    memoirePourEcho(memoire),
   ].join("\n");
 }
 
@@ -72,7 +74,7 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
 }): Promise<ResultatEcho> {
   const messages: Message[] = reprendre(o.discussion ?? [], phrase, o.note ?? "");
   const outils = Object.keys(o.outils);
-  const sit = situation(ctx);
+  const sit = situation(ctx, (await lireMemoire()).slice(-MAX_SOUVENIRS)); // deux téléphones peuvent dépasser un peu le plafond
   const aConfirmer: Action[] = [];
   const faites: Faite[] = o.faites ?? [];
   let dernierTexte = "";

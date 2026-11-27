@@ -29,7 +29,7 @@ end $$;
 revoke all on function public.noter_depense_echo(text, bigint) from public, anon, authenticated;
 grant execute on function public.noter_depense_echo(text, bigint) to service_role;
 
--- 2. Le journal d'Echo part au foyer comme les autres données (table « elements », genre « journal »).
+-- 2. Le journal et la mémoire d'Echo partent au foyer comme les autres données (table « elements », genres « journal » et « memoire »).
 alter table public.elements drop constraint elements_genre_check;
 alter table public.elements add constraint elements_genre_check
-  check (genre in ('tache', 'horaire', 'course', 'habitude', 'repas', 'stock', 'gout', 'ticket', 'journal'));
+  check (genre in ('tache', 'horaire', 'course', 'habitude', 'repas', 'stock', 'gout', 'ticket', 'journal', 'memoire'));

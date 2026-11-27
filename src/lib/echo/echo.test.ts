@@ -7,7 +7,7 @@ vi.stubGlobal("navigator", {});
 import { db } from "../../data/db";
 import { plusJours } from "../dates";
 import type { Tache } from "../types";
-import { MAX_TOURS, OUTILS_ECHO, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, OUTILS_ECHO, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
 import { executer, lancerEcho, type Appeler, type Bloc, type Message, type Tour } from "./boucle";
 import { OUTILS_BASE, type ContexteEcho } from "./outils";
 import { nettoyerJournal } from "./journal";
@@ -30,7 +30,7 @@ const outil = (id: string, name: string, input: Record<string, unknown>): Bloc =
 const texte = (text: string): Tour => ({ content: [{ type: "text", text }], stop_reason: "end_turn" });
 
 beforeEach(async () => {
-  await db.taches.clear(); await db.horaires.clear(); await db.corbeille.clear(); await db.echo_journal.clear(); await db.reglages.clear();
+  await db.taches.clear(); await db.horaires.clear(); await db.corbeille.clear(); await db.echo_journal.clear(); await db.reglages.clear(); await db.echo_memoire.clear();
 });
 
 describe("la liste fermée des outils", () => {
@@ -241,6 +241,32 @@ describe("la boucle d'Echo", () => {
     const apres = await db.cuisine_courses.toArray();
     expect(apres).toHaveLength(1);
     expect(apres[0]).toMatchObject({ fait: 5, qte: "1" });
+  });
+
+  it("la mémoire : Echo retient, la retrouve à la phrase suivante, et oublie", async () => {
+    const s = scenario([
+      { content: [outil("r1", "retenir", { texte: "Dany fait les courses le samedi" })], stop_reason: "tool_use" },
+      texte("C'est retenu."),
+      texte("ok"),
+    ]);
+    const recus: string[] = [];
+    const appeler: Appeler = (c) => { recus.push(c.situation); return s.appeler(c); };
+    await lancerEcho("retiens que je fais les courses le samedi", ctx, { appeler, outils: TOUS, seul: false });
+    const [m] = await db.echo_memoire.toArray();
+    expect(m).toMatchObject({ texte: "Dany fait les courses le samedi", par: "Dany" });
+    expect(recus[0]).toMatch(/mémoire du foyer est vide/);
+    await lancerEcho("salut", ctx, { appeler, outils: TOUS, seul: false });
+    expect(recus[2]).toContain(`[${m.id}] Dany fait les courses le samedi`);
+    expect(await TOUS.retenir.lire!({ texte: "dany fait les courses le samedi" }, ctx)).toHaveProperty("erreur");
+    await TOUS.oublier.lire!({ id: m.id }, ctx);
+    expect(await db.echo_memoire.count()).toBe(0);
+  });
+
+  it("la situation reste sous la limite du serveur, même mémoire pleine", async () => {
+    for (let i = 0; i < 45; i++) await db.echo_memoire.add({ id: "m" + i, quand: i, texte: "x".repeat(MAX_SOUVENIR), par: "Dany" });
+    const recus: string[] = [];
+    await lancerEcho("salut", ctx, { appeler: async (c) => { recus.push(c.situation); return texte("ok"); }, outils: TOUS, seul: false });
+    expect(recus[0].length).toBeLessThanOrEqual(MAX_SITUATION);
   });
 
   it("ce qu'Echo ne sait pas faire est noté pour plus tard", async () => {

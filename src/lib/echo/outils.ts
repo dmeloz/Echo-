@@ -4,6 +4,7 @@ import { auJour, heureFr, libelleJour, nouvelId, plusJours, sansAccents } from "
 import { completer } from "../fixes";
 import { CODES, phraseDe } from "../horaires";
 import { autre, type Noms, type Personne, type Qui, type Repete, type Tache } from "../types";
+import { oublier, retenir } from "./memoire";
 import { genreDe, type GenreOutil } from "../../../supabase/functions/_shared/echo-outils";
 
 // Ce que fait l'app quand Echo demande un outil (la liste fermée est dans supabase/functions/_shared/echo-outils.ts).
@@ -194,6 +195,21 @@ export const OUTILS_BASE: Record<string, Executant> = {
   cocher_tache: { preparer: cocherTache },
   supprimer_tache: { preparer: supprimerTache },
   // Ce qu'Echo aimerait savoir faire : gardé sur ce téléphone, montré dans Réglages → Echo (les 30 derniers).
+  // La mémoire : sans confirmation (elle se voit et s'efface dans Réglages → Echo).
+  retenir: {
+    lire: async (e, ctx) => {
+      const s = await retenir(typeof e.texte === "string" ? e.texte : "", ctx.noms[ctx.proprio]);
+      return typeof s === "string" ? { erreur: s } : { note: "Retenu.", id: s.id };
+    },
+  },
+  oublier: {
+    lire: async (e) => {
+      const id = typeof e.id === "string" ? e.id : "";
+      if (!id || !(await db.echo_memoire.get(id))) return { erreur: "Ce souvenir n'existe pas (regarde les id de ta mémoire)." };
+      await oublier(id);
+      return { note: "Oublié." };
+    },
+  },
   signaler_manque: {
     lire: async (e) => {
       const besoin = court(e.besoin, 200);
