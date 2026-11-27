@@ -15,6 +15,9 @@ import {
   nettoyerSolde, nomMois, parMois, periode, plusMoisB, posteRempli, proposerVirements, toutesCategories, valeurDe, type Depense, type Poste,
 } from "./donnees";
 import { budget } from "./index";
+import { OUTILS_BUDGET } from "./outilsEcho";
+import { pointDuMois } from "./donnees";
+import type { Action, ContexteEcho } from "../../lib/echo/outils";
 
 // Un foyer d'essai (des chiffres ronds, pas ceux d'un vrai foyer).
 const M = "2026-12";
@@ -360,6 +363,74 @@ describe("lot 2 : les tickets de Cuisine, Entre nous, les échéances du jour", 
     expect(echeancesDu("2028-02-29", "2026-11-27", [], bissextile)).toHaveLength(1);
     // Un poste arrêté au mois de budget suivant est encore annoncé le jour où sa facture tombe.
     expect(echeancesDu("2026-11-28", "2026-11-27", [], [{ ...FOYER[9], echeance: "11-28", fin: "2026-12" }])).toHaveLength(1);
+  });
+});
+
+describe("lot 3 : le point du mois et les outils d'Echo", () => {
+  const dep = (id: string, jour: string, c: number, x: Partial<Depense> = {}): Depense => ({ id, jour, c, quoi: id, cat: "courses", qui: "commun", cree: 1, ...x });
+  const ctx: ContexteEcho = { noms: { moi: "Dany", elle: "Sarah" }, proprio: "moi", now: new Date(2026, 11, 10, 10, 0) };
+  const TODAY = "2026-12-10";
+
+  it("le point : dépensé en tout et par catégorie, comparé au mois d'avant", () => {
+    // Le budget d'essai commence en novembre (25 oct.) : décembre a donc un mois d'avant.
+    const ds = [dep("a", "2026-11-26", 20_000), dep("b", "2026-12-02", 5_000, { cat: "plaisir" }), dep("c", "2026-11-10", 30_000), dep("d", "2026-11-12", 1_000, { cat: "divers" })];
+    const p = pointDuMois(FOYER, ds, [], M, TODAY);
+    expect(p).toMatchObject({ fini: false, depense: 25_000, avant: 31_000, restants: 15 });
+    expect(p.cats).toEqual([{ cat: "courses", c: 20_000, avant: 30_000 }, { cat: "plaisir", c: 5_000, avant: 0 }]);
+    expect(p.enveloppes.find((e) => e.cat === "courses")).toMatchObject({ budget: 50_000, depense: 20_000, reste: 30_000 });
+    expect(pointDuMois(FOYER, ds, [], M, "2026-12-25").fini).toBe(true);
+  });
+  it("le point : le premier mois du budget n'a pas de mois d'avant, et rien n'a « changé »", () => {
+    const p = pointDuMois(FOYER, [dep("x", "2026-10-20", 9_000)], [], "2026-11", "2026-11-10");
+    expect(p.avant).toBeNull();
+    expect(p.changements).toEqual([]);
+  });
+  it("le point : les montants qui ne sont plus ceux du mois d'avant, les factures à payer et payées", () => {
+    const postes = FOYER.map((x) => (x.id === "loyer" ? changer(x, { c: 210_000, des: M, par: "moi" }) : x));
+    const facture = (id: string, echeance: string, paye: false | string = false) => nettoyerAPayer({ id, titre: id, emetteur: "", c: 8_000, echeance, repete: "", dossier: "autre", paye, cree: 1 })!;
+    const p = pointDuMois(postes, [], [facture("retard", "2026-12-01"), facture("bientot", "2026-12-20"), facture("apres", "2027-01-05"), facture("ok", "2026-12-03", "2026-12-04")], M, TODAY);
+    expect(p.changements).toEqual([{ nom: "loyer", sorte: "foyer", avant: 200_000, apres: 210_000 }]);
+    expect(p.aPayer).toEqual({ nombre: 2, c: 16_000, retard: 1 });
+    expect(p.payees).toBe(1);
+  });
+
+  it("Echo lit le budget avec les prénoms, jamais les places", async () => {
+    await db.budget_postes.bulkAdd(FOYER);
+    await db.budget_depenses.add(dep("m", "2026-12-02", 12_000, { quoi: "Migros" }));
+    const r = await OUTILS_BUDGET.voir_budget.lire!({}, ctx) as Record<string, unknown>;
+    expect(r.resteAChacun).toEqual({ Dany: "1 200 CHF", Sarah: "1 800 CHF" });
+    expect(r.categories).toEqual(["Courses", "Plaisir", "Frais divers"]);
+    expect((r.enveloppes as Array<Record<string, string>>)[0]).toMatchObject({ nom: "courses", depense: "120 CHF", reste: "380 CHF" });
+    expect(JSON.stringify(r)).not.toMatch(/"(moi|elle)"/);
+    const p = await OUTILS_BUDGET.point_du_mois.lire!({ mois: "ce_mois" }, ctx) as Record<string, unknown>;
+    expect(p).toMatchObject({ depenseEnTout: "120 CHF", joursQuiRestent: 15, facturesEncoreAPayer: "aucune" });
+    expect(await OUTILS_BUDGET.point_du_mois.lire!({ mois: "mois_precedent" }, { ...ctx, now: new Date(2026, 10, 10) })).toHaveProperty("erreur");
+  });
+  it("Echo ne lit rien tant que le budget n'est pas rempli", async () => {
+    expect(await OUTILS_BUDGET.voir_budget.lire!({}, ctx)).toHaveProperty("erreur");
+    expect(typeof await OUTILS_BUDGET.ajouter_depense.preparer!({ montantFrancs: 10, quoi: "x", categorie: "Courses", payePar: "commun", jour: "" }, ctx)).toBe("string");
+  });
+  it("Echo note une dépense : une petite chose, rien n'est écrit avant le oui, et on peut l'annuler", async () => {
+    await db.budget_postes.bulkAdd(FOYER);
+    const a = await OUTILS_BUDGET.ajouter_depense.preparer!({ montantFrancs: 45.5, quoi: "Migros", categorie: "courses", payePar: "commun", jour: "" }, ctx) as Action;
+    expect(a).toMatchObject({ outil: "ajouter_depense", genre: "petit", details: ["Courses", "compte commun"] });
+    expect(await db.budget_depenses.count()).toBe(0);
+    const defaire = await a.faire();
+    expect(await db.budget_depenses.toArray()).toMatchObject([{ c: 4_550, quoi: "Migros", cat: "courses", qui: "commun", jour: TODAY }]);
+    expect(toast).not.toHaveBeenCalled(); // Echo montre lui-même ce qu'il a fait
+    await defaire();
+    expect(await db.budget_depenses.count()).toBe(0);
+  });
+  it("Echo note une dépense : ce qui ne tient pas debout est refusé avec une phrase", async () => {
+    await db.budget_postes.bulkAdd(FOYER);
+    const e = { montantFrancs: 30, quoi: "Resto", categorie: "Plaisir", payePar: "elle", jour: "2026-12-09" };
+    const prep = (x: Record<string, unknown>) => OUTILS_BUDGET.ajouter_depense.preparer!({ ...e, ...x }, ctx);
+    expect(await prep({})).toMatchObject({ details: ["Plaisir", "payé par Sarah", "9 décembre"] });
+    for (const faux of [{ montantFrancs: 0 }, { montantFrancs: -5 }, { montantFrancs: 200_000 }, { categorie: "Vacances" }, { jour: "2026-12-11" }, { jour: "2026-09-01" }, { jour: "demain" }])
+      expect(typeof await prep(faux)).toBe("string");
+    // La même dépense déjà là (à la main ou par un ticket) : Echo demande avant de la doubler.
+    await db.budget_depenses.add(dep("deja", "2026-12-09", 3_000, { cat: "plaisir" }));
+    expect(await prep({})).toMatch(/déjà notée/);
   });
 });
 

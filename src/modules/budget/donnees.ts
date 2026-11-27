@@ -257,6 +257,44 @@ export interface APayer {
 }
 export const resteAPayer = (lignes: APayer[]) => lignes.filter((l) => !l.paye).sort((a, b) => a.echeance.localeCompare(b.echeance));
 
+/* ---------- Le point du mois : ce qui a été dépensé, ce qui reste, ce qui a changé ---------- */
+
+// Tout est recalculé à chaque fois, comme le reste : rien n'est gardé. avant : la même chose le mois d'avant (null : le budget n'existait pas encore).
+export interface Point {
+  mois: string; fini: boolean; restants: number;
+  depense: number; avant: number | null;
+  cats: Array<{ cat: string; c: number; avant: number }>; // la plus grosse en tête
+  enveloppes: Enveloppe[];
+  reste: Deux; resteCommun: number; epargne: number; plaisir: number;
+  aPayer: { nombre: number; c: number; retard: number }; // ce qui reste à payer jusqu'à la fin de ce mois (les retards compris)
+  payees: number; // les factures payées pendant ce mois
+  changements: Array<{ nom: string; sorte: Sorte; avant: number; apres: number }>; // les montants qui ne sont plus ceux du mois d'avant
+  aRendre: Deux;
+}
+export function pointDuMois(postes: Poste[], depenses: Depense[], apayer: APayer[], mois: string, today: string): Point {
+  const { du, au } = bornes(mois), b = bilan(postes, mois), precedent = plusMoisB(mois, -1);
+  const debut = debutBudget(postes), existait = !!debut && debut <= bornes(precedent).du;
+  const ds = duMois(depenses, mois), dsAvant = existait ? duMois(depenses, precedent) : [];
+  const parCat = (liste: Depense[]) => { const m = new Map<string, number>(); for (const d of liste) m.set(d.cat, (m.get(d.cat) ?? 0) + d.c); return m; };
+  const ici = parCat(ds), la = parCat(dsAvant);
+  const dus = resteAPayer(apayer).filter((l) => l.echeance <= au);
+  const changements: Point["changements"] = [];
+  for (const p of postes) {
+    const avant = existait ? valeurDe(p, precedent) : null, apres = valeurDe(p, mois);
+    if (avant !== null && apres !== null && avant !== apres) changements.push({ nom: p.nom, sorte: p.sorte, avant, apres });
+  }
+  return {
+    mois, fini: today > au, restants: avancee(mois, today).restants,
+    depense: somme(ds), avant: existait ? somme(dsAvant) : null,
+    cats: [...ici].map(([cat, c]) => ({ cat, c, avant: la.get(cat) ?? 0 })).sort((x, y) => y.c - x.c),
+    enveloppes: enveloppes(postes, depenses, mois).filter((e) => e.budget > 0 || e.depense > 0),
+    reste: b.reste, resteCommun: b.resteCommun, epargne: b.epargne, plaisir: b.plaisir,
+    aPayer: { nombre: dus.length, c: dus.reduce((s, l) => s + l.c, 0), retard: dus.filter((l) => l.echeance < today).length },
+    payees: apayer.filter((l) => l.paye && l.paye >= du && l.paye <= au).length,
+    changements, aRendre: duA(depenses),
+  };
+}
+
 /* ---------- Écrire et lire un montant ---------- */
 
 const MAX = 100_000_000; // un million de francs : au-delà, ce n'est pas un montant de foyer
