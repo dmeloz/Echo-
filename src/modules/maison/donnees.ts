@@ -186,6 +186,99 @@ export function lireContact(texte: string): { nom: string; role: string; tel: st
   return { nom: t[0].toUpperCase() + t.slice(1), role: role ? role[0].toUpperCase() + role.slice(1) : "", tel };
 }
 
+/* ---------- Papiers : l'administration du foyer ---------- */
+
+// Les dossiers. Aucune hypothèse locataire ou propriétaire : « Logement » couvre le bail, la régie, l'hypothèque.
+export type Dossier = "impots" | "logement" | "assurances" | "sante" | "vehicule" | "abonnements" | "identite" | "garanties" | "autre";
+export const DOSSIERS: Array<{ id: Dossier; nom: string; mots: RegExp }> = [
+  { id: "impots", nom: "Impôts", mots: /impot|fisc|acompte|declaration|taxation/ },
+  { id: "logement", nom: "Logement", mots: /loyer|bail|regie|gerance|hypothe|charges|proprietaire|serafe|electricite|romande energie|\bsig\b/ },
+  { id: "assurances", nom: "Assurances", mots: /assurance|menage|\brc\b|responsabilite civile|mobiliere|axa|zurich|allianz|helvetia|baloise|generali/ },
+  { id: "sante", nom: "Santé", mots: /caisse maladie|lamal|maladie|medecin|dentiste|hopital|pharmacie|css|helsana|swica|assura|groupe mutuel|visana|sanitas|concordia/ },
+  { id: "vehicule", nom: "Véhicule", mots: /voiture|plaque|permis de conduire|vignette|garage|leasing|expertise|\bsan\b|vehicule|moto/ },
+  { id: "abonnements", nom: "Abonnements", mots: /abonnement|swisscom|salt|sunrise|netflix|spotify|disney|internet|mobile|\bcff\b|demi-tarif|\bga\b|salle de sport|fitness/ },
+  { id: "identite", nom: "Identité", mots: /passeport|carte d.identite|permis de sejour|permis [bcl]\b|\bavs\b|acte de|livret de famille|etat civil/ },
+  { id: "garanties", nom: "Garanties", mots: /garantie|ticket d.achat|bon de garantie|mode d.emploi/ },
+  { id: "autre", nom: "Autre", mots: /$^/ },
+];
+export const nomDossier = (d: Dossier) => DOSSIERS.find((x) => x.id === d)!.nom;
+export const devinerDossier = (texte: string): Dossier => DOSSIERS.find((d) => d.mots.test(sansAccents(texte)))?.id ?? "autre";
+
+// Ce qu'il y a à faire d'un papier, et quand. fait : le jour où c'est fait (payé, renvoyé…).
+export type QuoiPapier = "" | "payer" | "renouveler" | "resilier" | "repondre";
+export const QUOIS: Array<{ id: QuoiPapier; nom: string; fait: string }> = [
+  { id: "", nom: "Rien à faire", fait: "" }, { id: "payer", nom: "À payer", fait: "Payé" }, { id: "renouveler", nom: "À renouveler", fait: "Renouvelé" },
+  { id: "resilier", nom: "À résilier", fait: "Résilié" }, { id: "repondre", nom: "À répondre", fait: "Répondu" },
+];
+export type RepetePapier = "" | "mois" | "trimestre" | "an";
+export const REPETES: Array<{ id: RepetePapier; nom: string; mois: number }> = [
+  { id: "", nom: "Une fois", mois: 0 }, { id: "mois", nom: "Chaque mois", mois: 1 }, { id: "trimestre", nom: "Chaque trimestre", mois: 3 }, { id: "an", nom: "Chaque année", mois: 12 },
+];
+// montant : en centimes de franc (entier). Sur le téléphone, les photos sont dans la table photos (clé « papier:<id> »).
+// photos : les noms des photos (« <id>.jpg »), gardées sur le serveur du foyer et sur chaque téléphone qui les a vues.
+export interface Papier { id: string; titre: string; dossier: Dossier; emetteur: string; note: string; quoi: QuoiPapier; echeance?: string; montant?: number; repete: RepetePapier; fait?: string; photos: string[]; cree: number }
+export const clePhotos = (p: Pick<Papier, "id">) => `papier:${p.id}`;
+
+// « 89.90 », « 89,90 CHF », « 1'250.- » → centimes. Rien de lisible : undefined.
+export function lireMontant(texte: string): number | undefined {
+  const m = /(\d{1,3}(?:['’ ]\d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(?:\.-|chf|fr\.?|francs?)?/i.exec(texte.replace(/chf\s*/i, ""));
+  if (!m) return undefined;
+  const francs = Number(m[1].replace(/['’ ]/g, "")), cts = m[2] ? Number(m[2].padEnd(2, "0")) : 0;
+  const v = francs * 100 + cts;
+  return v > 0 && v < 100_000_000 ? v : undefined;
+}
+export const texteMontant = (c: number) => `${Math.floor(c / 100).toLocaleString("fr-CH")}.${String(c % 100).padStart(2, "0")} CHF`;
+
+// Une ligne écrite : « Facture Swisscom 89.90 le 15.12 » → titre, dossier deviné, montant, échéance.
+const MOIS_FR = ["janvier", "fevrier", "mars", "avril", "mai", "juin", "juillet", "aout", "septembre", "octobre", "novembre", "decembre"];
+export function lirePapier(texte: string, now = new Date()): Pick<Papier, "titre" | "dossier" | "quoi"> & { echeance?: string; montant?: number } | null {
+  let t = texte.replace(/\s+/g, " ").trim().slice(0, 100);
+  if (!t) return null;
+  let echeance: string | undefined;
+  const annee = (j: number, m: number, a?: string) => {
+    let y = a ? Number(a.length === 2 ? "20" + a : a) : now.getFullYear();
+    if (!a && iso(new Date(y, m - 1, j)) < auJour(0, now)) y++;
+    if (m < 1 || m > 12 || j < 1 || j > 31) return undefined;
+    const d = new Date(y, m - 1, j, 12);
+    return d.getMonth() === m - 1 ? iso(d) : undefined;
+  };
+  // « 89.90 le 15.12 » : 89.90 n'est pas un jour, on prend la première vraie date.
+  const num = [...t.matchAll(/\s*(?:le|au|avant le|pour le|d'ici le)?\s*(?<![\d.,'’])\b(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?\b(?![.,]?\d|\s*(?:chf|fr\b|francs?|\.-))/gi)].find((m) => annee(Number(m[1]), Number(m[2]), m[3]));
+  const mot = /\s*(?:le|au|avant le|pour le|d'ici le)?\s*\b(\d{1,2})(?:er)?\s+([a-zéèû]+)(?:\s+(\d{4}))?\b/i.exec(t);
+  const moisMot = mot ? MOIS_FR.indexOf(sansAccents(mot[2])) : -1;
+  if (num) { echeance = annee(Number(num[1]), Number(num[2]), num[3]); if (echeance) t = (t.slice(0, num.index) + t.slice(num.index + num[0].length)).trim(); }
+  else if (mot && moisMot >= 0) { echeance = annee(Number(mot[1]), moisMot + 1, mot[3]); if (echeance) t = (t.slice(0, mot.index) + t.slice(mot.index + mot[0].length)).trim(); }
+  const somme = /\s*(?:chf\s*)?(\d{1,3}(?:['’]\d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(?:\.-|chf|fr\.?|francs?)?(?=\s|$)/i.exec(t);
+  const montant = somme ? lireMontant(somme[0]) : undefined;
+  if (montant !== undefined && somme) t = (t.slice(0, somme.index) + t.slice(somme.index + somme[0].length)).trim();
+  t = t.replace(/\s+(?:expire|[àa] payer|[àa] renouveler)$/i, "").replace(/[.,;:–-]+$/, "").trim();
+  if (!t) return null;
+  const s = sansAccents(texte);
+  const quoi: QuoiPapier = montant !== undefined || /factur|payer|acompte|prime|rappel/.test(s) ? "payer" : /resili/.test(s) ? "resilier" : /renouvel|expire|echeance/.test(s) ? "renouveler" : /repondre|courrier|lettre/.test(s) && echeance ? "repondre" : "";
+  return { titre: t[0].toUpperCase() + t.slice(1), dossier: devinerDossier(t), quoi, ...(echeance ? { echeance } : {}), ...(montant !== undefined ? { montant } : {}) };
+}
+
+// Ce qui reste à faire, et pour quand : en haut de Papiers ce qui arrive dans les 30 jours (ou est passé).
+export const aFairePapier = (p: Papier) => !!p.quoi && !!p.echeance && !p.fait;
+export const joursAvant = (p: Papier, now = new Date()) => (p.echeance ? ecart(auJour(0, now), p.echeance) : Infinity);
+export const bientot = (p: Papier, now = new Date(), jours = 30) => aFairePapier(p) && joursAvant(p, now) <= jours;
+export function quandPapier(p: Papier, now = new Date()): string {
+  const n = joursAvant(p, now);
+  if (!Number.isFinite(n)) return "";
+  return n < 0 ? (n === -1 ? "c'était hier" : `c'était il y a ${-n} jours`) : n === 0 ? "aujourd'hui" : n === 1 ? "demain" : n <= 30 ? `dans ${n} jours` : `le ${new Date(p.echeance + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`;
+}
+// C'est fait : une chose qui revient repart à la prochaine échéance ; sinon, elle garde le jour où c'est fait.
+export function apresFait(p: Papier, now = new Date()): Papier {
+  const mois = REPETES.find((r) => r.id === p.repete)?.mois ?? 0;
+  if (mois && p.echeance) { let e = plusMois(p.echeance, mois); while (e < auJour(0, now)) e = plusMois(e, mois); return { ...p, echeance: e, fait: undefined }; }
+  return { ...p, fait: auJour(0, now) };
+}
+
+// La ligne « à payer » que le module Budget reprendra (forme convenue avec le fil Budget, 2026-11-27).
+export interface APayer { id: string; titre: string; emetteur: string; montant: number; echeance: string; repete: RepetePapier; dossier: Dossier; papier: string; paye: false | string }
+export const aPayer = (p: Papier): APayer | null =>
+  p.quoi === "payer" && p.montant && p.echeance ? { id: `papier:${p.id}`, titre: p.titre, emetteur: p.emetteur, montant: p.montant, echeance: p.echeance, repete: p.repete, dossier: p.dossier, papier: p.id, paye: p.fait ?? false } : null;
+
 /* ---------- Ce qui arrive du foyer : on ne garde que les formes attendues ---------- */
 
 const obj = (x: unknown) => (x && typeof x === "object" ? x : {}) as Record<string, unknown>;
@@ -224,4 +317,14 @@ export function nettoyerContact(x: unknown): Contact | null {
   const o = obj(x), id = txt(o.id, 80), nom = txt(o.nom, 80).trim();
   if (!id || !nom) return null;
   return { id, nom, role: txt(o.role, 30).trim(), tel: txt(o.tel, 20).replace(/[^\d+ ]/g, ""), cree: nb(o.cree) ?? Date.now() };
+}
+export function nettoyerPapier(x: unknown): Papier | null {
+  const o = obj(x), id = txt(o.id, 80), titre = txt(o.titre, 100).trim(), echeance = txt(o.echeance, 10), fait = txt(o.fait, 10), montant = nb(o.montant);
+  if (!id || !titre) return null;
+  const dossier = DOSSIERS.find((d) => d.id === o.dossier)?.id ?? "autre";
+  const quoi = QUOIS.find((q) => q.id === o.quoi)?.id ?? "";
+  const repete = REPETES.find((r) => r.id === o.repete)?.id ?? "";
+  return { id, titre, dossier, emetteur: txt(o.emetteur, 60).trim(), note: txt(o.note, 300), quoi, ...(JOUR_ISO.test(echeance) ? { echeance } : {}),
+    ...(montant !== null && Number.isInteger(montant) && montant > 0 && montant < 100_000_000 ? { montant } : {}), repete, ...(JOUR_ISO.test(fait) ? { fait } : {}),
+    photos: (Array.isArray(o.photos) ? o.photos : []).filter((n): n is string => typeof n === "string" && /^[a-z0-9]{4,40}\.jpg$/.test(n)).slice(0, 12), cree: nb(o.cree) ?? Date.now() };
 }

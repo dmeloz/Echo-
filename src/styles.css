@@ -1121,3 +1121,16 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .lt-ajout { display: flex; align-items: center; justify-content: center; gap: var(--e3); min-height: 48px; border-radius: 16px; border: 1.5px dashed rgb(18 40 58 / .16); background: none; color: var(--bleu); font-weight: 700; font-size: 15px; }
 .lt-ajout:active { background: rgb(255 255 255 / .6); }
 .aide-champ.danger { color: var(--urgent); }
+
+/* Maison · Papiers : les dossiers en tuiles, la photo dans la barre d'ajout */
+.dossiers { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--e3); }
+.dossier { display: flex; align-items: center; gap: 10px; min-height: 64px; padding: 10px 12px; border: 0; text-align: left; font: inherit; color: var(--encre); cursor: pointer; }
+.dossier b { display: flex; flex-direction: column; min-width: 0; font-size: 15px; }
+.dossier small { font-size: var(--t-petit); font-weight: 500; color: var(--discret); }
+.dossier:active { scale: .97; }
+.corvees .stock-ligne { min-width: 0; }
+.corvees .stock-ligne > b { min-width: 0; }
+.corvees .stock-ligne .compte { flex: none; }
+label.rond-champ { cursor: pointer; color: var(--bleu); }
+label.rond-champ:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.corvees .stock-plus label.puce { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; }
