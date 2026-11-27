@@ -17,7 +17,7 @@ export type Bloc =
 export interface ResultatOutil { type: "tool_result"; tool_use_id: string; content: string; is_error?: boolean }
 export type Message = { role: "user"; content: string | ResultatOutil[] } | { role: "assistant"; content: Bloc[] };
 export interface Tour { content: Bloc[]; stop_reason: string }
-export type Appeler = (corps: { mode: "agent"; situation: string; messages: Message[]; outils: string[] }) => Promise<Tour>;
+export type Appeler = (corps: { mode: "agent"; situation: string; messages: Message[]; outils: string[] }, enDirect?: (texte: string) => void) => Promise<Tour>;
 
 export interface Faite { action: Action; annuler: () => Promise<unknown>; ligne: string }
 export interface ResultatEcho {
@@ -84,6 +84,8 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
   // La discussion jusque-là (Echo se souvient de ce qui a été dit), et la note de l'app sur la proposition précédente.
   discussion?: Message[];
   note?: string;
+  // La réponse d'Echo pendant qu'il l'écrit (le texte du tour en cours ; "" quand un nouveau tour commence).
+  enDirect?: (texte: string) => void;
 }): Promise<ResultatEcho> {
   const messages: Message[] = reprendre(o.discussion ?? [], phrase, [maintenant(ctx), o.note ?? ""]);
   const outils = Object.keys(o.outils);
@@ -95,7 +97,8 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
   for (let tour = 0; tour < MAX_TOURS; tour++) {
     // Les résultats d'outils ont trop rempli la conversation : on s'arrête avec ce qu'on a (le serveur la refuserait).
     if (JSON.stringify(messages).length > MAX_CONVERSATION - 10_000) break;
-    const r = await o.appeler({ mode: "agent", situation: sit, messages, outils });
+    o.enDirect?.("");
+    const r = await o.appeler({ mode: "agent", situation: sit, messages, outils }, o.enDirect);
     const blocs = Array.isArray(r.content) ? r.content : [];
     messages.push({ role: "assistant", content: blocs });
     // La réponse est le texte du dernier tour seulement (« Je regarde. » d'un tour précédent n'est pas une réponse).

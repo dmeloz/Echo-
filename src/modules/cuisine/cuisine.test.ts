@@ -252,3 +252,16 @@ describe("changer un repas validé", () => {
     expect((await db.cuisine_repas.get("2026-12-02"))?.plat).toBe("Raclette");
   });
 });
+
+describe("lien de recette", () => {
+  it("garde une page web, refuse le reste", async () => {
+    const { lienRecette, nettoyerRecette, cleDe } = await import("./donnees");
+    expect(lienRecette("marmiton.org/recettes/lasagnes")).toBe("https://marmiton.org/recettes/lasagnes");
+    expect(lienRecette("javascript:alert(1)")).toBe("");
+    expect(lienRecette("bonjour")).toBe("");
+    expect(lienRecette("")).toBe("");
+    const r = nettoyerRecette({ cle: cleDe("Lasagnes"), plat: "Lasagnes", avis: 1, fois: 1, dernier: "", lien: "https://exemple.fr/l", maj: 1 });
+    expect(r?.lien).toBe("https://exemple.fr/l");
+    expect(nettoyerRecette({ cle: cleDe("Lasagnes"), plat: "Lasagnes", avis: 1, fois: 1, dernier: "", lien: "data:text/html,x", maj: 1 })?.lien).toBeUndefined();
+  });
+});

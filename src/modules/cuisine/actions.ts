@@ -273,3 +273,15 @@ export async function oublierRecette(cle: string) {
   await db.cuisine_recettes.delete(cle);
   toast(r.avis === 1 ? `${r.plat} retiré du livre` : `Echo pourra reproposer ${r.plat}`, { action: { label: "Annuler", onClick: () => db.cuisine_recettes.put(r) } });
 }
+
+// Une recette ajoutée à la main dans le livre (sans passer par la semaine ni par Echo).
+export async function ajouterRecette(plat: string, ingredients: Lu[], lien: string) {
+  const nom = plat.trim().slice(0, 80), cle = cleDe(nom);
+  if (!cle) return false;
+  const avant = await db.cuisine_recettes.get(cle);
+  const recette: Recette = { ...(avant ?? { fois: 1, dernier: "" }), cle, plat: avant?.plat ?? nom, avis: 1, maj: Date.now(),
+    ...(ingredients.length ? { ingredients: ingredients.slice(0, 20) } : {}), ...(lien ? { lien } : {}) } as Recette;
+  await db.cuisine_recettes.put(recette);
+  toast(`${recette.plat} : dans le livre de recettes`, { action: { label: "Annuler", onClick: () => (avant ? db.cuisine_recettes.put(avant) : db.cuisine_recettes.delete(cle)) } });
+  return true;
+}

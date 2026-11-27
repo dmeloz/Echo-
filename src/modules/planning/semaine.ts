@@ -61,3 +61,19 @@ export function proposerRepos(taches: Tache[], travail: Map<string, Code>, p: Pe
   }
   return null;
 }
+
+// Les trous de la journée (2 h ou plus, entre 8 h et 21 h, après maintenant pour aujourd'hui) : on peut y poser quelque chose d'un toucher.
+const DEBUT_JOUR = 8 * 60, FIN_JOUR = 21 * 60, TROU = 120;
+export const hm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+export function trous(avecHeure: Tache[], depuis: number): Array<{ de: number; a: number }> {
+  const occupe = avecHeure.map((t) => [minutes(t.heure), t.fin ? Math.max(minutes(t.fin), minutes(t.heure) + 15) : minutes(t.heure) + 60]).sort((a, b) => a[0] - b[0]);
+  const res: Array<{ de: number; a: number }> = [];
+  let curseur = Math.max(DEBUT_JOUR, Math.ceil(depuis / 30) * 30);
+  for (const [d, f] of [...occupe, [FIN_JOUR, FIN_JOUR]]) {
+    const fin = Math.min(d, FIN_JOUR);
+    if (fin - curseur >= TROU) res.push({ de: curseur, a: fin });
+    curseur = Math.max(curseur, Math.ceil(f / 30) * 30);
+  }
+  return res;
+}
+

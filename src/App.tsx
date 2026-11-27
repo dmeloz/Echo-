@@ -163,7 +163,7 @@ export default function App() {
           ) : <Secours key={vue.id}>
           <div className="cadre arrivee">
             {!baseOk ? <BaseFermee /> : taches === undefined ? <Squelette />
-              : module ? (module.Page && module.etat === "construit" ? <Suspense fallback={<Squelette />}><module.Page noms={noms} proprio={proprio} now={now} aller={aller} ouvrir={(t) => ouvrir(t)} /></Suspense> : <Bientot module={module} onAller={aller} />)
+              : module ? (module.Page && module.etat === "construit" ? <Suspense fallback={<Squelette />}><module.Page noms={noms} proprio={proprio} now={now} aller={aller} ouvrir={(t) => ouvrir(t)} creer={(p) => ouvrir(null, { titre: "", jour: p.jour, heure: p.heure ?? "", qui: proprio, repete: "", niveau: null })} /></Suspense> : <Bientot module={module} onAller={aller} />)
               : vue.id === "reglages" ? <Reglages taches={liste} noms={noms} masques={masques} proprio={proprio} onGuide={() => setGuideFerme(false)} onRelier={() => setRelier(true)} />
               : <Aujourdhui taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} />}
           </div>

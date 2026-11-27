@@ -1,16 +1,17 @@
 import { Sparkles } from "pulsoicon-react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { auJour, heureFr, libelleJour, minutes } from "../../lib/dates";
 import { autre, type Personne, type Tache } from "../../lib/types";
 import { changerHeure, deplacer } from "../../data/actions";
 import { initialeDe, nomDe, poserReglage, useHoraires, useReglage, useTaches } from "../../data/hooks";
 import { useModulesActifs } from "../registre";
 import type { ContexteModule } from "../contrat";
-import { charge, duJour, faitesDuJour, joursAVenir, proposerDeplacement, proposerRepos } from "./semaine";
+import { charge, duJour, faitesDuJour, joursAVenir, proposerDeplacement, proposerRepos, trous, hm } from "./semaine";
 import { CODES, heuresDe, phraseDe, type Code } from "../../lib/horaires";
 import { VueMois } from "./Mois";
 import { PageHoraires } from "../horaires/PageHoraires";
-import { CalendarClock, ChevronLeft } from "pulsoicon-react";
+import { CalendarClock, ChevronLeft, Plus } from "pulsoicon-react";
 import { vibrer } from "../../lib/gestes";
 
 type Vue = "jour" | "semaine" | "mois";
@@ -22,7 +23,7 @@ const classeQui = (t: Tache) => (t.qui === "nous" ? "nous" : t.qui);
 
 // Le planning : aujourd'hui et les six jours suivants, jour par jour ou toute la semaine d'un coup.
 // Il lit les mêmes tâches que l'accueil (celles qui ont un jour, et une heure si on veut).
-export function PagePlanning({ noms, proprio, now, ouvrir, aller }: ContexteModule) {
+export function PagePlanning({ noms, proprio, now, ouvrir, aller, creer }: ContexteModule) {
   const taches = useTaches() ?? [];
   const choix = useReglage<string>("planningVue", "jour");
   const vue: Vue = choix === "semaine" || choix === "mois" ? choix : "jour";
@@ -47,8 +48,13 @@ export function PagePlanning({ noms, proprio, now, ouvrir, aller }: ContexteModu
     </>
   );
 
+  const entete = typeof document === "undefined" ? null : document.getElementById("entete-module");
+
   return (
     <>
+      {/* Ajouter : un bouton bien visible en haut, pour le jour regardé (aujourd'hui en vue Mois). */}
+      {entete && creer && createPortal(
+        <button type="button" className="pilule-entete" onClick={() => creer({ jour: vue === "mois" ? today : jourVu })}><Plus size={17} strokeWidth={2.4} />Ajouter</button>, entete)}
       {/* Les vues : trois mots posés sur la page, une goutte de verre glisse sous le mot choisi. Mes horaires : un rond à droite. */}
       <div className="agenda-barre">
         <div className="vues" role="tablist" aria-label="Vue" style={{ "--i": VUES.indexOf(vue) } as React.CSSProperties}>
@@ -80,7 +86,7 @@ export function PagePlanning({ noms, proprio, now, ouvrir, aller }: ContexteModu
       <IdeeEcho taches={taches} travail={travail} proprio={proprio} lautre={lautre} noms={noms} now={now} refusees={refusees} onRefuser={(id) => setRefusees((r) => [...r, id])} />
 
       {vue === "jour"
-        ? <VueJour taches={taches} jour={jourVu} today={today} now={now} noms={noms} ouvrir={ouvrir} travail={travail.get(jourVu)} proprio={proprio} aller={aller} />
+        ? <VueJour taches={taches} jour={jourVu} today={today} now={now} noms={noms} ouvrir={ouvrir} travail={travail.get(jourVu)} proprio={proprio} aller={aller} creer={creer} />
         : <VueSemaine taches={taches} jours={jours} today={today} now={now} noms={noms} proprio={proprio} lautre={lautre} travail={travail} onJour={choisirJour} />}
       </>}
     </>
@@ -169,13 +175,19 @@ function BandeauTravail({ code }: { code: Code }) {
   );
 }
 
-function VueJour({ taches, jour, today, now, noms, ouvrir, travail, proprio, aller }: { taches: Tache[]; jour: string; today: string; now: Date; noms: ContexteModule["noms"]; ouvrir: (t: Tache) => void; travail?: Code; proprio: Personne; aller: (id: string) => void }) {
+function VueJour({ taches, jour, today, now, noms, ouvrir, travail, proprio, aller, creer }: { taches: Tache[]; jour: string; today: string; now: Date; noms: ContexteModule["noms"]; ouvrir: (t: Tache) => void; travail?: Code; proprio: Personne; aller: (id: string) => void; creer?: ContexteModule["creer"] }) {
+  const aideVue = useReglage("agendaAideVue", false);
   const liste = duJour(taches, jour, today);
   const avecHeure = liste.filter((t) => t.heure && t.jour === jour);
   const sansHeure = liste.filter((t) => !t.heure || t.jour !== jour);
   const faites = faitesDuJour(taches, jour);
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const iMaintenant = jour === today ? avecHeure.findIndex((t) => minutes(t.heure) > nowMin) : -1;
+  // Les trous de la journée, rangés entre les choses à heure. Pas pour un jour passé, ni sans moyen de créer.
+  const libres = creer && jour >= today && liste.length > 0 ? trous(avecHeure, jour === today ? nowMin : 0) : [];
+  const rangs = [...avecHeure.map((t) => ({ m: minutes(t.heure), t, libre: null as null | { de: number; a: number } })), ...libres.map((l) => ({ m: l.de, t: null as Tache | null, libre: l }))].sort((a, b) => a.m - b.m);
+  // Le trait « maintenant » se pose avant la première chose à venir (un trou commence toujours à maintenant ou après).
+  const iMaintenant = jour === today ? rangs.findIndex((r) => (r.libre ? r.m >= nowMin : r.m > nowMin)) : -1;
+  const trait = <span className="maintenant-p" aria-label={`Il est ${heureFr(hm(nowMin))}`} />;
   const ligne = (t: Tache) => (
     <li key={t.id}>
       <button className={`bloc-p ${classeQui(t)}${t.fait ? " fait" : ""}${t.evt ? " evt" : ""}`} onClick={() => ouvrir(t)}>
@@ -190,15 +202,21 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail, proprio, all
       <h2 className="jour-titre" id="lab-jour">{libelleJour(jour, now)}</h2>
       {travail && <BandeauTravail code={travail} />}
       {!liste.length && !faites.length && (
-        <div className="vide-jour"><b>Rien de prévu ce jour-là</b><span>Écris une chose en bas, par exemple « dentiste {jour === today ? "à 15 h" : court(jour) + " 9 h"} ».</span></div>
+        <div className="vide-jour"><b>Rien de prévu ce jour-là</b><span>Écris une chose en bas, par exemple « dentiste {jour === today ? "à 15 h" : court(jour) + " 9 h"} ».</span>{creer && jour >= today && <button type="button" className="bouton-texte" onClick={() => creer({ jour })}>Ajouter ce jour-là</button>}</div>
       )}
-      {avecHeure.length > 0 && (
+      {(avecHeure.length > 0 || libres.length > 0) && (
         <ol className="ligne-temps">
-          {avecHeure.map((t, i) => (
-            <li key={t.id} className="lt-rang">
-              {i === iMaintenant && <span className="maintenant-p" aria-label={`Il est ${heureFr(`${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`)}`} />}
-              <span className="lt-heure">{heureFr(t.heure)}</span>
-              <BlocGlissable t={t}>{ligne(t)}</BlocGlissable>
+          {rangs.map((r, i) => r.libre ? (
+            <li key={"libre-" + r.libre.de} className="lt-rang lt-libre">
+              {i === iMaintenant && trait}
+              <span className="lt-heure">{heureFr(hm(r.libre.de))}</span>
+              <button type="button" onClick={() => creer!({ jour, heure: hm(r.libre!.de) })}>Libre jusqu'à {heureFr(hm(r.libre.a))} <b>Ajouter</b></button>
+            </li>
+          ) : (
+            <li key={r.t!.id} className="lt-rang">
+              {i === iMaintenant && trait}
+              <span className="lt-heure">{heureFr(r.t!.heure)}</span>
+              <BlocGlissable t={r.t!}>{ligne(r.t!)}</BlocGlissable>
             </li>
           ))}
           {jour === today && iMaintenant === -1 && <li className="lt-rang fin"><span className="maintenant-p" aria-hidden="true" /></li>}
@@ -212,7 +230,10 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail, proprio, all
         </>
       )}
       {faites.length > 0 && <details className="faites"><summary>{faites.length} fait{faites.length > 1 ? "s" : ""}</summary><ul className="sans-heure">{faites.map(ligne)}</ul></details>}
-      <p className="aide-champ">Touche une chose pour la changer. Garde le doigt dessus puis glisse vers le haut ou le bas pour changer son heure.</p>
+      {/* L'astuce du geste : montrée tant qu'on ne l'a pas fermée, puis plus jamais. */}
+      {!aideVue && avecHeure.length > 0 && (
+        <p className="aide-champ aide-fermable">Garde le doigt sur une chose à heure puis glisse vers le haut ou le bas pour changer son heure. <button type="button" className="bouton-texte" onClick={() => poserReglage("agendaAideVue", true)}>Compris</button></p>
+      )}
     </section>
   );
 }
