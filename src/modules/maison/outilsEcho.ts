@@ -1,7 +1,7 @@
 import { db } from "../../data/db";
 import type { Action, Executant } from "../../lib/echo/outils";
 import { autre, type Personne } from "../../lib/types";
-import { ajouterCorvees, ajouterPapier, ajouterReparation, faireCorvee, memeNom } from "./actions";
+import { ajouterCorvees, ajouterPapier, ajouterReparation, faireCorvee, memeNom, retirerPapierSansBruit } from "./actions";
 import { DOSSIERS, ETATS_REPARATION, QUOIS, REPETES, aFairePapier, besoin, depuis, devinerDossier, equilibre, joursAvant, nomDossier, nomRythme, parts, pour, quandPapier, texteMontant, trouverCorvees, vraiJour, type Corvee, type QuiCorvee, type Taille } from "./donnees";
 
 // Ce que l'assistant Echo peut faire dans la Maison (décrit dans supabase/functions/_shared/echo-outils.ts).
@@ -114,7 +114,7 @@ export const OUTILS_MAISON: Record<string, Executant> = {
         faire: async () => {
           const p = await ajouterPapier({ titre, dossier, quoi, echeance: quoi ? echeance : undefined, montant: quoi === "payer" ? montant : undefined, repete: quoi ? repete : "", emetteur: court(e.deQui, 60), note: court(e.note, 300) }, true);
           if (!p) throw new Error("Papier déjà rangé");
-          return () => db.maison_papiers.delete(p.id);
+          return () => retirerPapierSansBruit(p);
         },
       };
     },

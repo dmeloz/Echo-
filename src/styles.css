@@ -98,7 +98,7 @@ button { cursor: pointer; }
   transition: opacity .3s, color .3s, scale .35s var(--ressort, ease), translate .35s var(--ressort, ease); }
 .ligne[aria-current="page"] { opacity: 1; color: var(--bleu); }
 .ligne:active { opacity: 1; }
-.ligne .pastille { font: 700 11px/1 var(--police); letter-spacing: .02em; color: #fff; background: var(--bleu); border-radius: 999px; padding: 4px 7px; transform: translateY(-14px); }
+.ligne .pastille { font: 700 13px/1 var(--police); letter-spacing: .02em; color: #fff; background: var(--bleu); border-radius: 999px; padding: 3px 7px; transform: translateY(-14px); }
 .ligne .pastille.bientot { background: rgb(18 40 58 / .1); color: var(--discret); letter-spacing: .01em; font-size: 13px; }
 .liste.parcours .ligne { opacity: .22; }
 .liste.parcours .ligne.vise { opacity: 1; color: var(--bleu); scale: 1.1; translate: -8px 0; }
@@ -1238,3 +1238,9 @@ button.budget-reste:active { scale: .97; }
 label.rond-champ { cursor: pointer; color: var(--bleu); }
 label.rond-champ:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .corvees .stock-plus label.puce { display: inline-flex; align-items: center; gap: 8px; min-height: 40px; }
+/* Entre nous : le rond à droite des onglets, avec un point quand quelque chose est à rendre. */
+.budget-nous { position: relative; }
+.budget-nous i { position: absolute; top: 1px; right: 1px; width: 10px; height: 10px; border-radius: 50%; background: var(--bleu); border: 2px solid #fff; animation: budget-pouls 2.4s ease-in-out infinite; }
+@keyframes budget-pouls { 0%, 100% { box-shadow: 0 0 0 0 rgb(47 107 255 / .35); } 50% { box-shadow: 0 0 0 5px rgb(47 107 255 / 0); } }
+.budget-rendu { align-self: flex-start; margin: var(--e4) 0 var(--e2); }
+@media (prefers-reduced-motion: reduce) { .budget-nous i { animation: none; } }
