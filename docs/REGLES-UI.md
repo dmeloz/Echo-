@@ -119,3 +119,13 @@ Aussi : rien sous 13 px (sauf une initiale dans une pastille, marquée « except
 ## L'atelier de design
 
 Outil de travail de Melo, **hors de l'app** : une page du projet Claude qui montre la vraie app dans un cadre et permet de régler couleurs, tailles et espaces sans code. `npm run atelier` construit `dist-atelier/` (l'app en `app.html`, la page en `page.html`) ; Claude publie ce dossier. « Envoyer à Claude » range le design dans la base de la page (`atelier/design`) ; Claude le relit et l'écrit dans `src/styles.css`. À republier quand l'app change.
+
+## 8. Finitions 2027 (les détails, tenus dans `src/finitions.css`)
+
+- **44 px sous le doigt.** Tout ce qui se touche a une zone d'au moins 44 px. La forme visible peut rester plus petite : la zone déborde (`::after`).
+- **Un seul bouton retour.** Une pastille de verre en haut à gauche de la sous-page, avec le nom de l'endroit où l'on revient (`.retour`). Glisser vers la droite fait la même chose.
+- **Rien ne passe sous la capsule.** Un givre (`.halo-capsule`) efface ce qui défile près d'elle, comme l'effet de bord d'iOS 26.
+- **Le bouton qui enregistre reste sous le pouce** : collé en bas de la feuille, jamais au bout d'un long défilement.
+- **Pas de bande grise** pour choisir entre deux ou trois vues : les mots sont posés sur la page, une goutte de verre glisse dessous.
+- **Rien sous 13 px**, y compris dans le raccourci `font:` (vérifié par `npm run verifier`).
+- **Vibration** : `vibrer()` vibre sur Android ; sur iPhone elle fait le « tic » d'iOS quand le système le permet (17.4 à 26.4), sinon rien. Ne jamais compter dessus pour dire quelque chose.

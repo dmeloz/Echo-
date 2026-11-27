@@ -1,3 +1,4 @@
+import { vibrer as vibrerPartout } from "../lib/gestes";
 import { useEffect, useRef, type ReactNode } from "react";
 import { Settings } from "pulsoicon-react";
 
@@ -61,7 +62,7 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
     const scene = r.scene.current!, coulisses = r.coulisses.current!, menu = r.menu.current!, liste = r.liste.current!;
     const point = r.point.current!, bascule = r.bascule.current!, defile = r.defile.current!, lumiere = r.lumiere.current!;
     const reduit = matchMedia("(prefers-reduced-motion: reduce)");
-    const vibrer = (ms = 8) => { if (!reduit.matches) try { navigator.vibrate?.(ms); } catch { /* rien */ } };
+    const vibrer = (ms = 8) => { try { vibrerPartout(ms); } catch { /* rien */ } };
     const estOuvert = () => racine.classList.contains("menu-ouvert");
     const lignes = () => [...liste.querySelectorAll<HTMLAnchorElement>(".ligne")];
     const morceaux = () => [menu.querySelector<HTMLElement>(".qui")!, ...[...liste.children].filter((e) => e !== point) as HTMLElement[], menu.querySelector<HTMLElement>(".pied")!];
@@ -215,9 +216,9 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
         g.axe = Math.abs(dx) > Math.abs(dy) * 1.3 ? "x" : "y";
         if (g.axe === "y") { g = null; return; }
         if (!estOuvert() && p < 0.01 && dx * S < 0) {
-          // Vers la droite, menu fermé : sur une sous-page (Réglages), c'est le retour ; ailleurs, rien.
+          // Vers la droite, menu fermé : sur une sous-page (elle montre le bouton retour), c'est le retour ; ailleurs, rien.
           // On attend la fin du geste : seul un vrai glisser (assez long, bien horizontal) compte comme retour.
-          if (document.querySelector(".reglage-page")) g.retour = [dx, dy]; else g = null;
+          if (scene.querySelector(".retour, .retour-agenda, .reglage-page")) g.retour = [dx, dy]; else g = null;
           return;
         }
         cancelAnimationFrame(rafId); rafId = 0;
@@ -290,6 +291,8 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
         <button className="ombrage" aria-hidden="true" tabIndex={-1} />
       </div>
 
+      {/* Le givre autour de la capsule : ce qui défile dessous s'efface au lieu de passer sous les boutons. */}
+      <div className="halo-capsule" aria-hidden="true" />
       {/* La capsule du pouce : le menu en haut, Echo en bas, un seul objet en verre. */}
       <div className="capsule">
         <button className="bascule" ref={r.bascule} aria-label="Ouvrir le menu" aria-expanded="false">
