@@ -54,7 +54,7 @@ export function aEnvoyer(a: Abonne, taches: TacheLue[], now: Date, papiers: Papi
   }
   if (a.matin && due(a.matin, ici.minutes)) {
     for (const p of papiers) {
-      if (!p || typeof p.titre !== "string" || !QUOI_PAPIER[p.quoi] || p.fait || typeof p.echeance !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(p.echeance)) continue;
+      if (!p || typeof p.titre !== "string" || typeof p.quoi !== "string" || !Object.hasOwn(QUOI_PAPIER, p.quoi) || p.fait || typeof p.echeance !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(p.echeance)) continue;
       const n = ecartJours(ici.jour, p.echeance);
       if (!AVANT_PAPIER.includes(n)) continue;
       const quand = n === 0 ? "aujourd'hui" : n === 1 ? "demain" : `dans ${n} jours`;
@@ -62,7 +62,7 @@ export function aEnvoyer(a: Abonne, taches: TacheLue[], now: Date, papiers: Papi
         cle: `p|${a.id}|${p.id}|${p.echeance}|${n}`,
         titre: `${p.titre} : ${QUOI_PAPIER[p.quoi]} ${quand}`,
         texte: p.quoi === "payer" && typeof p.montant === "number" && Number.isInteger(p.montant) && p.montant > 0 ? francs(p.montant) : "Dans Maison, Papiers",
-        tag: `papier-${p.id}`,
+        tag: `papier-${p.id}-${n}`, // un tag par rappel : celui du jour même sonne, même si celui de la veille est encore affiché
       });
     }
   }

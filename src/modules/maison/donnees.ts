@@ -279,9 +279,9 @@ export function quandPapier(p: Papier, now = new Date()): string {
   return n < 0 ? (n === -1 ? "c'était hier" : `c'était il y a ${-n} jours`) : n === 0 ? "aujourd'hui" : n === 1 ? "demain" : n <= 30 ? `dans ${n} jours` : `le ${new Date(p.echeance + "T12:00:00").toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`;
 }
 // Les papiers à régler un jour donné, pour la ligne de la journée : ceux qui tombent ce jour-là, et aujourd'hui aussi ceux en retard.
-// Une facture avec son montant est annoncée par le Budget (« à payer ») : on ne la redit pas ici.
-export const papiersDu = (papiers: Papier[], jour: string, aujourdhui: string) =>
-  papiers.filter((p) => aFairePapier(p) && !aPayer(p) && (p.echeance === jour || (jour === aujourdhui && p.echeance! < aujourdhui)))
+// auBudget : les lignes « à payer » que le Budget annonce déjà lui-même (module allumé, ligne présente) : on ne les redit pas.
+export const papiersDu = (papiers: Papier[], jour: string, aujourdhui: string, auBudget: ReadonlySet<string> = new Set()) =>
+  papiers.filter((p) => aFairePapier(p) && !auBudget.has(idAPayer(p)) && (p.echeance === jour || (jour === aujourdhui && p.echeance! < aujourdhui)))
     .sort((a, b) => a.echeance!.localeCompare(b.echeance!));
 // C'est fait : une chose qui revient repart à la prochaine échéance ; sinon, elle garde le jour où c'est fait.
 export function apresFait(p: Papier, now = new Date()): Papier {

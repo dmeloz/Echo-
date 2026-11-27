@@ -456,7 +456,9 @@ describe("les papiers", () => {
   it("la ligne de la journée : ce qui tombe ce jour-là, les retards aujourd'hui, pas les factures chiffrées", () => {
     const l = [papier({ id: "a", quoi: "renouveler", montant: undefined, echeance: "2026-11-27" }), papier({ id: "b", quoi: "repondre", montant: undefined, echeance: "2026-11-20" }),
       papier({ id: "c" , echeance: "2026-11-27" }), papier({ id: "d", quoi: "resilier", montant: undefined, echeance: "2026-11-30" }), papier({ id: "e", quoi: "renouveler", montant: undefined, echeance: "2026-11-27", fait: "2026-11-26" })];
-    expect(papiersDu(l, "2026-11-27", "2026-11-27").map((p) => p.id)).toEqual(["b", "a"]);
+    expect(papiersDu(l, "2026-11-27", "2026-11-27", new Set(["papier:c"])).map((p) => p.id)).toEqual(["b", "a"]);
+    // Budget éteint ou ligne absente : la facture est dite ici, elle ne disparaît pas.
+    expect(papiersDu(l, "2026-11-27", "2026-11-27").map((p) => p.id)).toEqual(["b", "a", "c"]);
     expect(papiersDu(l, "2026-11-30", "2026-11-27").map((p) => p.id)).toEqual(["d"]);
   });
   it("donne au Budget la ligne à payer convenue", () => {

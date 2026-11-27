@@ -51,12 +51,19 @@ Deno.serve(async (req) => {
 
   // Les papiers du foyer encore à régler, dont l'échéance tombe dans les 8 jours (rappel 7 jours avant, la veille, le jour même).
   const limite = new Date(now.getTime() + 9 * 86400_000).toISOString().slice(0, 10), depuis = new Date(now.getTime() - 2 * 86400_000).toISOString().slice(0, 10);
-  const { data: lusPapiers, error: errPapiers } = await base.from("elements").select("foyer_id, data")
-    .eq("genre", "papier").eq("supprime", false).in("foyer_id", foyers)
-    .is("data->>fait", null).gte("data->>echeance", depuis).lte("data->>echeance", limite).limit(1000);
-  if (errPapiers) console.warn("[rappels] papiers", errPapiers.message); // les rappels des tâches partent quand même
+  // Lus par pages, comme les tâches. Une erreur ici n'empêche pas les rappels des tâches.
+  const lusPapiers: Array<{ foyer_id: string; data: unknown }> = [];
+  for (let de = 0; ; de += 1000) {
+    const { data: page, error: e } = await base.from("elements").select("foyer_id, data")
+      .eq("genre", "papier").eq("supprime", false).in("foyer_id", foyers)
+      .is("data->>fait", null).gte("data->>echeance", depuis).lte("data->>echeance", limite)
+      .order("foyer_id").order("cle").range(de, de + 999);
+    if (e) { console.warn("[rappels] papiers", e.message); break; }
+    lusPapiers.push(...(page ?? []));
+    if (!page || page.length < 1000) break;
+  }
   const papiers = new Map<string, PapierLu[]>();
-  for (const e of lusPapiers ?? []) {
+  for (const e of lusPapiers) {
     const d = e.data as PapierLu | null;
     if (d && typeof d.id === "string") papiers.set(e.foyer_id, [...(papiers.get(e.foyer_id) ?? []), d]);
   }
