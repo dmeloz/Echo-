@@ -9,7 +9,8 @@ export type EtatAction = "fait" | "propose" | "oui" | "non" | "annule";
 export interface LigneEchange { texte: string; etat: EtatAction }
 export interface Echange { moi: string; echo: string; actions?: LigneEchange[] }
 // suite : la conversation à renvoyer au serveur ; note : ce que l'app dira à Echo avant la phrase suivante.
-export interface Fil { id: string; debut: number; quand: number; suite: Message[]; echanges: Echange[]; note?: string }
+// nouveau : Echo a écrit de lui-même (un mot le matin, ce que l'autre a fait) et ce n'est pas encore lu.
+export interface Fil { id: string; debut: number; quand: number; suite: Message[]; echanges: Echange[]; note?: string; nouveau?: boolean }
 export interface Ancienne { id: string; debut: number; quand: number; echanges: Echange[] }
 
 // Une discussion reste « en cours » 15 minutes après le dernier message : pendant ce temps, tout ce qu'on écrit va à Echo.
@@ -20,6 +21,9 @@ export const MAX_ECHANGES = 40;
 export const MAX_ANCIENNES = 20;
 const CLE = "echo-discussion";
 const CLE_ANCIENNES = "echo-discussions";
+
+// Une discussion non lue ne part pas chez les anciennes : elle attend qu'on l'ouvre.
+export const expire = (f: Pick<Fil, "quand" | "nouveau">, now = Date.now()) => !f.nouveau && now - f.quand >= REPRISE;
 
 const lire = <T>(cle: string, defaut: T): T => {
   try { const v = localStorage.getItem(cle); return v ? (JSON.parse(v) as T) : defaut; } catch { return defaut; }
@@ -63,7 +67,7 @@ export function oublierAncienne(id: string) { ecrire(CLE_ANCIENNES, anciennes().
 export function chargerFil(now = Date.now(), qui = "La personne"): Fil | null {
   const f = lire<Fil | null>(CLE, null);
   if (!propre(f) || !Array.isArray(f.suite)) { ecrire(CLE, null); return null; }
-  if (now - f.quand >= REPRISE) { archiver(f); ecrire(CLE, null); return null; }
+  if (expire(f, now)) { archiver(f); ecrire(CLE, null); return null; }
   const { fil, laissee } = clore(f);
   if (!laissee) return f;
   const note = `${qui} n'a pas répondu à ta proposition : rien n'en a été fait.`;
@@ -92,8 +96,30 @@ export function rappelDe(a: Ancienne | undefined, now = Date.now(), place = 700,
   return `discussion précédente (${quand}), pour le contexte seulement : ${lignes.join(" | ")}`;
 }
 
-// Le titre d'une ancienne discussion : sa première phrase.
+// Le titre d'une ancienne discussion : sa première phrase (celle d'Echo, s'il a commencé).
 export const titreDe = (a: { echanges: Echange[] }) => {
-  const p = a.echanges[0]?.moi.replace(/\s+/g, " ").trim() ?? "";
+  const p = (a.echanges[0]?.moi || a.echanges[0]?.echo || "").replace(/\s+/g, " ").trim();
   return p.length > 60 ? `${p.slice(0, 57)}…` : p || "Discussion";
 };
+
+// Echo prend l'initiative : un message de lui, sans phrase de la personne (un mot le matin, ce que l'autre vient de faire).
+// note : ce qu'Echo en saura avec la phrase suivante. L'écran de discussion (BarreAjout) le range dans la discussion en cours.
+export interface Mot { texte: string; note: string }
+export const EVT_MOT = "echo-mot";
+export const EVT_NON_LU = "echo-non-lu";
+export function annoncer(mot: Mot) { if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent<Mot>(EVT_MOT, { detail: mot })); }
+// Le mot rangé dans la discussion : il s'y ajoute, et la discussion est marquée non lue.
+export function avecMot(f: Fil | null, mot: Mot, now = Date.now()): Fil {
+  const g = f ?? nouveauFil(now);
+  return { ...g, echanges: [...g.echanges, { moi: "", echo: mot.texte }].slice(-MAX_ECHANGES), quand: now, nouveau: true, note: [g.note, mot.note].filter(Boolean).join(" ") };
+}
+export const nonLu = () => lire<Fil | null>(CLE, null)?.nouveau === true;
+
+// Ce que l'autre vient de faire, dit par Echo. nouvelles : « a ajouté « Dentiste » », « a terminé « Poubelles » ».
+export function motDeLAutre(prenom: string, nouvelles: string[]): Mot | null {
+  if (!nouvelles.length) return null;
+  const liste = nouvelles.slice(0, 5).join(", ");
+  const plus = nouvelles.length > 5 ? ` et ${nouvelles.length - 5} autre${nouvelles.length > 6 ? "s" : ""} chose${nouvelles.length > 6 ? "s" : ""}` : "";
+  const texte = `${prenom} ${liste}${plus}.`;
+  return { texte, note: `pendant ce temps, ${texte}` };
+}

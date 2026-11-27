@@ -3,7 +3,7 @@
 //    par du texte ou par des demandes d'outils (liste fermée : ../_shared/echo-outils.ts). C'est l'app qui exécute les outils
 //    sur ses données et qui demande l'accord de la personne : ici on ne touche à aucune donnée du foyer.
 // 2. L'ancienne façon (une phrase → des tâches proposées), gardée pour les téléphones qui n'ont pas encore la mise à jour.
-// Modèle : Claude Sonnet 5.5 pour toute la discussion (mode agent), Haiku 5.5 quand le budget du jour est presque fini et pour l'ancienne façon. La clé reste ici (secret ANTHROPIC_API_KEY), jamais dans l'app.
+// Modèle (mode agent) : Haiku 5.5 pour les phrases simples, Sonnet 5.5 pour organiser une journée ou une semaine (voir demandeTour). Haiku pour l'ancienne façon. La clé reste ici (secret ANTHROPIC_API_KEY), jamais dans l'app.
 // Qui peut l'appeler : un membre connecté d'un foyer, ou le code secret du foyer (voir ../_shared/garde.ts). Appels comptés.
 import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
@@ -161,7 +161,7 @@ Deno.serve(async (req) => {
 
 // ---------- Le mode agent : un tour de la boucle ----------
 
-interface DemandeAgent { mode?: unknown; situation?: unknown; messages?: unknown; outils?: unknown }
+interface DemandeAgent { mode?: unknown; situation?: unknown; messages?: unknown; outils?: unknown; direct?: unknown }
 
 // Le budget du jour, en dollars (secret ECHO_BUDGET_JOUR, 1 $ sinon). Au-delà, Echo s'arrête jusqu'à minuit (heure de Zurich).
 // Deux budgets séparés : les membres du foyer ont le budget entier ; le code partagé, un cinquième à part.
@@ -213,19 +213,51 @@ async function tourAgent(d: DemandeAgent, source: "membre" | "code", origine: st
   if (reste <= 0) return repondre({ erreur: "budget" }, 429, origine);
 
   const client = new Anthropic();
-  try {
-    const demande = demandeTour(situation, messages, outils, { sansPlan: reste < RESERVE_PLAN });
-    const r = await client.beta.messages.create({ ...demande, messages: messages as Anthropic.Beta.BetaMessageParam[] });
+  const demande = demandeTour(situation, messages, outils, { sansPlan: reste < RESERVE_PLAN });
+  const noterCout = async (r: Anthropic.Beta.BetaMessage) => {
     const { error: errNote } = await db.rpc("noter_depense_echo", { p_source: source, p_micro: coutMicro(r.model ?? demande.model, r.usage) });
     if (errNote) console.error("[echo] noter_depense", errNote.message);
+  };
+  // En direct : la réponse arrive mot à mot, une ligne JSON par morceau ({ t }), puis le tour entier ({ fin }) ou { erreur }.
+  // Le texte en direct n'est qu'un aperçu : c'est le tour entier, à la fin, qui compte (outils, réflexion, repli).
+  if (d.direct === true) {
+    const enc = new TextEncoder();
+    const corps = new ReadableStream({
+      async start(c) {
+        const ligne = (o: unknown) => c.enqueue(enc.encode(`${JSON.stringify(o)}\n`));
+        try {
+          const flux = client.beta.messages.stream({ ...demande, messages: messages as Anthropic.Beta.BetaMessageParam[] });
+          for await (const ev of flux) {
+            if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") ligne({ t: ev.delta.text });
+          }
+          const r = await flux.finalMessage();
+          await noterCout(r);
+          if (r.stop_reason === "refusal") ligne({ erreur: "refus" });
+          else if (r.stop_reason === "max_tokens") ligne({ erreur: "lecture" });
+          else ligne({ fin: { content: r.content, stop_reason: r.stop_reason } });
+        } catch (e) {
+          ligne({ erreur: erreurDe(e) });
+        }
+        c.close();
+      },
+    });
+    return new Response(corps, { status: 200, headers: { ...cors(origine), "Content-Type": "application/x-ndjson", "Cache-Control": "no-cache" } });
+  }
+  try {
+    const r = await client.beta.messages.create({ ...demande, messages: messages as Anthropic.Beta.BetaMessageParam[] });
+    await noterCout(r);
     if (r.stop_reason === "refusal") return repondre({ erreur: "refus" }, 422, origine);
     if (r.stop_reason === "max_tokens") return repondre({ erreur: "lecture" }, 502, origine);
     return repondre({ content: r.content, stop_reason: r.stop_reason }, 200, origine);
   } catch (e) {
-    if (e instanceof Anthropic.AuthenticationError) return repondre({ erreur: "cle" }, 503, origine);
-    if (e instanceof Anthropic.RateLimitError) return repondre({ erreur: "occupe" }, 429, origine);
-    if (e instanceof Anthropic.BadRequestError) { console.error("[echo] requete", e.message); return repondre({ erreur: "requete" }, 400, origine); }
-    if (e instanceof Anthropic.APIError) return repondre({ erreur: "service" }, 502, origine);
-    return repondre({ erreur: "service" }, 502, origine);
+    const erreur = erreurDe(e);
+    return repondre({ erreur }, erreur === "cle" ? 503 : erreur === "occupe" ? 429 : erreur === "requete" ? 400 : 502, origine);
   }
+}
+
+function erreurDe(e: unknown) {
+  if (e instanceof Anthropic.AuthenticationError) return "cle";
+  if (e instanceof Anthropic.RateLimitError) return "occupe";
+  if (e instanceof Anthropic.BadRequestError) { console.error("[echo] requete", e.message); return "requete"; }
+  return "service";
 }

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 const stock = new Map<string, string>();
 vi.stubGlobal("localStorage", { getItem: (k: string) => stock.get(k) ?? null, setItem: (k: string, v: string) => stock.set(k, v), removeItem: (k: string) => stock.delete(k) });
-import { anciennes, archiver, chargerFil, clore, garderFil, nouveauFil, oublierAncienne, rappelDe, REPRISE, RAPPEL, titreDe, MAX_ANCIENNES } from "./discussions";
+import { anciennes, archiver, avecMot, chargerFil, clore, garderFil, motDeLAutre, nonLu, nouveauFil, oublierAncienne, rappelDe, REPRISE, RAPPEL, titreDe, MAX_ANCIENNES } from "./discussions";
 
 const echange = (moi: string, echo = "ok") => ({ moi, echo });
 beforeEach(() => stock.clear());
@@ -71,5 +71,27 @@ describe("les discussions avec Echo", () => {
     expect(chargerFil(2)).toBeNull();
     stock.set("echo-discussions", JSON.stringify([{ id: "b", debut: 1, quand: "hier", echanges: [] }, { id: "c", debut: 1, quand: 1, echanges: [{ moi: "a", echo: "b" }] }]));
     expect(anciennes().map((a) => a.id)).toEqual(["c"]);
+  });
+});
+
+describe("Echo prend l'initiative", () => {
+  it("son mot entre dans la discussion, sans phrase de la personne, et Echo le saura", () => {
+    const f = avecMot(null, { texte: "Bonjour Dany !", note: "ce matin, tu as écrit…" }, 1000);
+    expect(f.echanges).toEqual([{ moi: "", echo: "Bonjour Dany !" }]);
+    expect(f).toMatchObject({ nouveau: true, note: "ce matin, tu as écrit…", quand: 1000 });
+    expect(titreDe(f)).toBe("Bonjour Dany !");
+  });
+  it("un mot pas encore lu ne part pas chez les anciennes ; une fois lu, si", () => {
+    garderFil(avecMot(null, { texte: "Bonjour", note: "" }, 1000));
+    expect(nonLu()).toBe(true);
+    expect(chargerFil(1000 + 3 * REPRISE)?.echanges).toHaveLength(1);
+    garderFil({ ...avecMot(null, { texte: "Bonjour", note: "" }, 1000), nouveau: false });
+    expect(chargerFil(1000 + REPRISE)).toBeNull();
+    expect(nonLu()).toBe(false);
+  });
+  it("ce que l'autre a fait, en une phrase", () => {
+    expect(motDeLAutre("Sarah", ["a ajouté « Dentiste »", "a terminé « Poubelles »"])?.texte).toBe("Sarah a ajouté « Dentiste », a terminé « Poubelles ».");
+    expect(motDeLAutre("Sarah", Array.from({ length: 7 }, (_, i) => `a ajouté « ${i} »`))?.texte).toMatch(/et 2 autres choses\.$/);
+    expect(motDeLAutre("Sarah", [])).toBeNull();
   });
 });

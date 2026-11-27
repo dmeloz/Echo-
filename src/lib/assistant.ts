@@ -71,16 +71,53 @@ export function versBrouillon(t: TacheEcho): Brouillon {
 }
 
 // Un tour de la boucle d'Echo (src/lib/echo/boucle.ts) : la conversation part au serveur, la réponse de Claude revient.
+// enDirect : la réponse arrive mot à mot (le texte du tour jusque-là), puis le tour entier à la fin.
 export function appelerServeur(code: string): Appeler {
-  return async (corps) => {
+  return async (corps, enDirect) => {
     let r: Response;
+    // En direct, la réponse peut prendre plus longtemps (elle s'écrit pendant ce temps) : le délai couvre tout le tour.
+    const signal = AbortSignal.timeout(enDirect ? 90_000 : 30_000);
     try {
-      r = await fetch(ADRESSE_ECHO, { method: "POST", headers: await entetesIA(code), body: JSON.stringify(corps), signal: AbortSignal.timeout(30000) });
+      r = await fetch(ADRESSE_ECHO, { method: "POST", headers: await entetesIA(code), body: JSON.stringify(enDirect ? { ...corps, direct: true } : corps), signal });
     } catch {
       throw new ErreurEcho("Pas de connexion avec Echo.");
     }
+    if (enDirect && r.ok && r.body && (r.headers.get("content-type") ?? "").includes("ndjson")) return lireEnDirect(r.body, enDirect);
     const c = await r.json().catch(() => null);
     if (!r.ok || !c || !Array.isArray(c.content)) throw new ErreurEcho(MESSAGES[c?.erreur] ?? MESSAGES.service);
     return c as Tour;
   };
+}
+
+// Les lignes JSON du serveur : { t } un morceau de texte, { fin } le tour entier, { erreur } un arrêt.
+export async function lireEnDirect(corps: ReadableStream<Uint8Array>, enDirect: (texte: string) => void): Promise<Tour> {
+  const lecteur = corps.getReader();
+  const decodeur = new TextDecoder();
+  let reste = "", texte = "";
+  const lire = (l: string): Tour | null => {
+    if (!l.trim()) return null;
+    let o: { t?: unknown; fin?: { content?: unknown; stop_reason?: unknown }; erreur?: unknown };
+    try { o = JSON.parse(l); } catch { return null; }
+    if (typeof o.t === "string") { texte += o.t; enDirect(texte); return null; }
+    if (o.fin && Array.isArray(o.fin.content)) return o.fin as Tour;
+    throw new ErreurEcho(MESSAGES[String(o.erreur)] ?? MESSAGES.service);
+  };
+  try {
+    for (;;) {
+      const { value, done } = await lecteur.read();
+      if (done) break;
+      reste += decodeur.decode(value, { stream: true });
+      const lignes = reste.split("\n");
+      reste = lignes.pop() ?? "";
+      for (const l of lignes) { const t = lire(l); if (t) return t; }
+    }
+    const t = lire(reste);
+    if (t) return t;
+  } catch (e) {
+    if (e instanceof ErreurEcho) throw e;
+    throw new ErreurEcho("Pas de connexion avec Echo.");
+  } finally {
+    lecteur.cancel().catch(() => {});
+  }
+  throw new ErreurEcho(MESSAGES.service);
 }

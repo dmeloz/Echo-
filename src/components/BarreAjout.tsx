@@ -7,8 +7,9 @@ import { heureFr, libelleJour } from "../lib/dates";
 import { NIVEAUX, niveauPropose } from "../lib/importance";
 import { appelerServeur, ErreurEcho } from "../lib/assistant";
 import { executer, lancerEcho, type Faite, type ResultatEcho } from "../lib/echo/boucle";
+import { aDireBonjour, motDuMatin, noterBonjour } from "../lib/echo/initiative";
 import type { Action } from "../lib/echo/outils";
-import { anciennes, archiver, chargerFil, garderFil, MAX_ECHANGES, nouveauFil, oublierAncienne, rappelDe, REPRISE, titreDe, type Ancienne, type Echange, type EtatAction, type Fil } from "../lib/echo/discussions";
+import { anciennes, annoncer, archiver, avecMot, chargerFil, EVT_MOT, EVT_NON_LU, expire, garderFil, MAX_ECHANGES, nouveauFil, oublierAncienne, rappelDe, titreDe, type Ancienne, type Echange, type EtatAction, type Fil, type Mot } from "../lib/echo/discussions";
 import { REPETES, type Noms, type Personne } from "../lib/types";
 import { ajouter } from "../data/actions";
 import { nomDe, useReglage } from "../data/hooks";
@@ -20,7 +21,7 @@ interface Props {
   onTexte: (t: string) => void; onRanger: () => void; onFinEcoute: () => void; onPlusOptions: (pre: Compris | null) => void;
 }
 
-type EtatEcho = null | { etat: "pense"; phrase: string } | { etat: "propose"; r: ResultatEcho; phrase: string };
+type EtatEcho = null | { etat: "pense"; phrase: string; direct?: string } | { etat: "propose"; r: ResultatEcho; phrase: string };
 
 // La discussion avec Echo (src/lib/echo/discussions.ts) : gardée sur le téléphone, même si l'app se ferme.
 // Elle reste « en cours » 15 minutes après le dernier message ; ensuite elle part chez les anciennes, qu'on peut relire et reprendre.
@@ -30,7 +31,7 @@ let filGarde: Fil | null | undefined;
 let sansRappel = false;
 const filActuel = (qui?: string) => {
   if (filGarde === undefined) filGarde = chargerFil(Date.now(), qui);
-  if (filGarde && Date.now() - filGarde.quand >= REPRISE) { archiver(filGarde); garderFil(null); filGarde = null; }
+  if (filGarde && expire(filGarde)) { archiver(filGarde); garderFil(null); filGarde = null; }
   return filGarde;
 };
 const ligneDe = (a: Action) => [a.libelle, ...a.details].join(" · ");
@@ -51,8 +52,11 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const [tache, setTache] = useState(false); // « Plutôt une tâche » : la phrase n'est pas pour un module
   const [simple, setSimple] = useState(false); // Echo n'a pas répondu : on reste en mode simple pour cette phrase
   const [filEtat, setFilEtat] = useState<Fil | null>(() => filActuel(noms[proprio]));
-  const fil = filEtat && Date.now() - filEtat.quand < REPRISE ? filEtat : null; // passé 15 minutes, la discussion repart à neuf
-  const setFil = (f: Fil | null) => { filGarde = f; garderFil(f); setFilEtat(f); };
+  const fil = filEtat && !expire(filEtat) ? filEtat : null; // passé 15 minutes, la discussion repart à neuf (sauf un mot d'Echo pas encore lu)
+  const setFil = (f: Fil | null) => {
+    filGarde = f; garderFil(f); setFilEtat(f);
+    window.dispatchEvent(new CustomEvent(EVT_NON_LU, { detail: !!f?.nouveau })); // le point sur l'étoile Echo
+  };
   // Les anciennes discussions : la liste, ou l'une d'elles ouverte pour la relire.
   const [vueAnciennes, setVueAnciennes] = useState<null | "liste" | Ancienne>(null);
   // Relue seulement quand la discussion change ou qu'on ouvre la liste (pas à chaque lettre tapée).
@@ -104,10 +108,44 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const ecran = ouverte && versEcho && !tache && (!!echo || !!fil?.echanges.length || !!vueAnciennes || (!v && !!fil));
   const defile = useRef<HTMLDivElement>(null);
   const nbEchanges = fil?.echanges.length ?? 0;
+  const ecrit = echo?.etat === "pense" ? echo.direct : undefined; // la réponse qui s'écrit
   useEffect(() => {
     const d = defile.current;
     if (d && !vueAnciennes) d.scrollTop = d.scrollHeight;
-  }, [nbEchanges, echo?.etat, vueAnciennes, ecran]);
+  }, [nbEchanges, echo?.etat, vueAnciennes, ecran, ecrit]);
+
+  // Echo prend l'initiative (src/lib/echo/initiative.ts) : son mot entre dans la discussion, quand il ne coupe rien
+  // (pas pendant qu'il réfléchit ou attend un oui : le mot attend son tour).
+  const mots = useRef<Mot[]>([]);
+  const [motsEnAttente, setMotsEnAttente] = useState(0);
+  useEffect(() => {
+    const recevoir = (e: Event) => { mots.current.push((e as CustomEvent<Mot>).detail); setMotsEnAttente((n) => n + 1); };
+    window.addEventListener(EVT_MOT, recevoir);
+    return () => window.removeEventListener(EVT_MOT, recevoir);
+  }, []);
+  useEffect(() => {
+    if (echo || !mots.current.length) return;
+    let f = filActuel();
+    for (const m of mots.current.splice(0)) f = avecMot(f, m);
+    setFil(f);
+  }, [echo, motsEnAttente]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Le petit mot du matin : la première fois qu'on ouvre l'app entre 5 h et midi.
+  const initiative = useReglage("echoInitiative", true);
+  useEffect(() => {
+    if (!actif || !initiative || !(code || relie)) return;
+    const essayer = () => {
+      if (document.visibilityState !== "visible" || !navigator.onLine || !aDireBonjour()) return;
+      noterBonjour();
+      motDuMatin(ctx(), appelerServeur(code), outilsEcho(actifs)).then((m) => { if (m) annoncer(m); }).catch(() => { /* pas de mot ce matin */ });
+    };
+    essayer();
+    document.addEventListener("visibilitychange", essayer);
+    return () => document.removeEventListener("visibilitychange", essayer);
+  }, [actif, initiative, code, relie, actifs]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Ouvert sous les yeux : c'est lu (la discussion reprend ses 15 minutes à partir de maintenant).
+  useEffect(() => {
+    if (ecran && !vueAnciennes && fil?.nouveau) setFil({ ...fil, nouveau: false, quand: Date.now() });
+  }, [ecran, vueAnciennes, fil?.nouveau]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On peut préparer la phrase suivante pendant qu'Echo réfléchit ; on l'envoie quand il a répondu.
   const setTexte = (t: string) => { onTexte(t); setSimple(false); setTache(false); };
@@ -192,6 +230,8 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
       const r = await lancerEcho(phrase, ctx(), {
         appeler: appelerServeur(code), outils: outilsEcho(actifs), seul, noter: executer, faites: dejaFaites,
         discussion: avant?.suite, note: [rappel, avant?.note].filter(Boolean).join(" "),
+        // La réponse s'écrit sous les yeux, comme dans l'app Claude.
+        enDirect: (t) => { if (num === demande.current) setEcho({ etat: "pense", phrase, direct: t }); },
       });
       if (num !== demande.current) {
         if (r.faites.length) { proposerAnnuler(r.faites, "Echo a fait des choses pendant ce temps"); noterFaites(r.faites); }
@@ -277,10 +317,12 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
               {fil?.echanges.map((x, i) => <Bulles key={i} x={x} />)}
               {echo?.etat === "pense" && <>
                 <p className="bulle-moi">{echo.phrase}</p>
-                <div className="echo-pense" role="status">
-                  <span className="echo-points" aria-hidden="true"><i /><i /><i /></span>
-                  <span>Echo réfléchit…</span>
-                </div>
+                {echo.direct ? <p className="echo-dit" aria-live="polite">{echo.direct}</p> : (
+                  <div className="echo-pense" role="status">
+                    <span className="echo-points" aria-hidden="true"><i /><i /><i /></span>
+                    <span>Echo réfléchit…</span>
+                  </div>
+                )}
               </>}
             </>}
           </div>
@@ -360,7 +402,7 @@ const quandDe = (ms: number) => {
 function Bulles({ x }: { x: Echange }) {
   return (
     <>
-      <p className="bulle-moi">{x.moi}</p>
+      {x.moi && <p className="bulle-moi">{x.moi}</p>}
       {x.echo && <p className="echo-dit">{x.echo}</p>}
       {x.actions?.map((a, i) => (
         <div key={i} className={`echo-action ${a.etat}`}>

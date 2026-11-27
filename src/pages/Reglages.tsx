@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bell, Calendar, CalendarDays, ChevronLeft, ChevronRight, HardDrive, House, LayoutGrid, ShoppingBasket, SlidersHorizontal, Sparkles, Users, Wallet } from "pulsoicon-react";
 import { toast } from "sonner";
-import type { Noms, Personne, Tache } from "../lib/types";
+import { autre, type Noms, type Personne, type Tache } from "../lib/types";
 import { effacerExemples, remettre, remettreExemples, toutEffacer } from "../data/actions";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "../data/db";
@@ -47,7 +47,7 @@ export function Reglages(props: { taches: Tache[]; noms: Noms; masques: string[]
       <h2 className="reglage-titre">{module?.libelle ?? TITRES[theme as Theme]}</h2>
       {module?.Reglages && <module.Reglages noms={noms} proprio={proprio} now={now} aller={() => {}} ouvrir={() => {}} />}
       {theme === "foyer" && <SectionFoyer noms={noms} proprio={proprio} onRelier={onRelier} />}
-      {theme === "echo" && <SectionEcho />}
+      {theme === "echo" && <SectionEcho autre={noms[autre(proprio)]} />}
       {theme === "notifications" && <SectionNotifications noms={noms} proprio={proprio} />}
       {theme === "agenda" && <SectionIcloud relie={relie} />}
       {theme === "modules" && <SectionModules masques={masques} />}
@@ -300,10 +300,11 @@ function SectionRappels({ relie }: { relie: boolean }) {
   );
 }
 
-// L'assistant Echo (Claude Haiku 5.5, sur le serveur du foyer) : il regarde, prépare, et demande avant de changer quoi que ce soit.
-function SectionEcho() {
+// L'assistant Echo (Claude, sur le serveur du foyer) : il regarde, prépare, et demande avant de changer quoi que ce soit.
+function SectionEcho({ autre: nomAutre }: { autre: string }) {
   const actif = useReglage("assistantEcho", true);
   const seul = useReglage("echoSeul", false);
+  const initiative = useReglage("echoInitiative", true);
   const code = useReglage<string>("codeEcho", "");
   return (<>
     <section className="g reglages">
@@ -315,6 +316,10 @@ function SectionEcho() {
       <label className="module-ligne">
         <span><b>Petites choses sans demander</b><small>Echo ajoute, déplace et coche tes choses tout seul, et tu as 10 secondes pour annuler. Effacer, et toucher aux choses de l'autre, restent toujours demandés.</small></span>
         <input type="checkbox" role="switch" className="interrupteur" checked={seul} disabled={!actif} onChange={() => poserReglage("echoSeul", !seul)} />
+      </label>
+      <label className="module-ligne">
+        <span><b>Echo prend l'initiative</b><small>Un petit mot le matin quand tu ouvres l'app, et un message quand {nomAutre} ajoute ou termine quelque chose. Tu le retrouves en touchant l'étoile Echo.</small></span>
+        <input type="checkbox" role="switch" className="interrupteur" checked={initiative} disabled={!actif} onChange={() => poserReglage("echoInitiative", !initiative)} />
       </label>
       <label className="champ">Code Echo
         <input key={code} defaultValue={code} type="password" placeholder="Le code secret du foyer" autoComplete="off" onBlur={(e) => poserReglage("codeEcho", e.target.value.trim())} />

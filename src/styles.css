@@ -291,6 +291,10 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .echo-btn.appui::before { opacity: 1; animation: appui .45s linear forwards; }
 .echo-btn.ecoute::after { content: ""; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 0 rgb(47 107 255 / .45); animation: halo 1.3s ease-out infinite; pointer-events: none; }
 @keyframes halo { to { box-shadow: 0 0 0 14px rgb(47 107 255 / 0); } }
+/* Echo a écrit de lui-même (mot du matin, ce que l'autre a fait) : un point turquoise, comme un message non lu. */
+.echo-point { position: absolute; top: 4px; right: 4px; width: 11px; height: 11px; border-radius: 50%; background: var(--turquoise, #12a594); box-shadow: 0 0 0 2px #fff; pointer-events: none; animation: point-echo .5s cubic-bezier(.3, 1.6, .5, 1) both; }
+@keyframes point-echo { from { scale: 0; } }
+@media (prefers-reduced-motion: reduce) { .echo-point { animation: none; } }
 /* L'astuce : apparaît un instant aux premiers lancements, disparaît dès que l'étoile a servi. */
 .astuce { position: fixed; z-index: 5; right: calc(env(safe-area-inset-right, 0px) + 82px); bottom: calc(env(safe-area-inset-bottom, 0px) + 26px); padding: 7px 12px; border-radius: 12px;
   background: var(--encre); color: #fff; font-size: 13px; font-weight: 600; white-space: nowrap; box-shadow: 0 8px 20px rgb(18 40 58 / .2); pointer-events: none;
