@@ -7,6 +7,7 @@ import { ajouterCorvees, ajouterReparation, cocherCorvees } from "./actions";
 import { ditFait, lireCorvee, trouverCorvees, type Corvee } from "./donnees";
 import { ReglagesMaison } from "./ReglagesMaison";
 import { TuileMaison } from "./Tuile";
+import { JourneeMaison } from "./Journee";
 import { OUTILS_MAISON } from "./outilsEcho";
 
 // La barre d'Echo lit une phrase sans attendre : on garde sous la main les corvées connues (tenues à jour par la base).
@@ -21,6 +22,7 @@ export const maison: Module = {
   prevu: [],
   Page: lazy(() => import("./Page").then((m) => ({ default: m.PageMaison }))), // chargée à la première ouverture
   Tuile: TuileMaison,
+  Journee: JourneeMaison,
   Reglages: ReglagesMaison,
   outils: OUTILS_MAISON,
   // « j'ai passé l'aspirateur » coche la corvée ; « corvée : litière tous les 2 jours » en ajoute une ; « à réparer : le robinet » note une réparation.
