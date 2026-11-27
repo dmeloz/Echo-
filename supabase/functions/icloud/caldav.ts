@@ -48,7 +48,7 @@ export const estCalendrierEvenements = (corps: string) => {
   const type = corps.match(balise("resourcetype"))?.[1] ?? "";
   if (!/<(?:[\w-]+:)?calendar\b/i.test(type)) return false;
   const comps = corps.match(balise("supported-calendar-component-set"))?.[1];
-  return !comps || /name="VEVENT"/i.test(comps);
+  return !comps || /name=["']VEVENT["']/i.test(comps);
 };
 
 /* ---------- Heures ---------- */
