@@ -1,5 +1,6 @@
 import { Sparkles } from "pulsoicon-react";
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { auJour, heureFr, libelleJour, minutes } from "../../lib/dates";
 import { autre, type Personne, type Tache } from "../../lib/types";
 import { changerHeure, deplacer } from "../../data/actions";
@@ -10,7 +11,7 @@ import { charge, duJour, faitesDuJour, joursAVenir, proposerDeplacement, propose
 import { CODES, heuresDe, phraseDe, type Code } from "../../lib/horaires";
 import { VueMois } from "./Mois";
 import { PageHoraires } from "../horaires/PageHoraires";
-import { CalendarClock, ChevronLeft } from "pulsoicon-react";
+import { CalendarClock, ChevronLeft, Plus } from "pulsoicon-react";
 import { vibrer } from "../../lib/gestes";
 
 type Vue = "jour" | "semaine" | "mois";
@@ -47,8 +48,13 @@ export function PagePlanning({ noms, proprio, now, ouvrir, aller, creer }: Conte
     </>
   );
 
+  const entete = typeof document === "undefined" ? null : document.getElementById("entete-module");
+
   return (
     <>
+      {/* Ajouter : un bouton bien visible en haut, pour le jour regardé (aujourd'hui en vue Mois). */}
+      {entete && creer && createPortal(
+        <button type="button" className="pilule-entete" onClick={() => creer({ jour: vue === "mois" ? today : jourVu })}><Plus size={17} strokeWidth={2.4} />Ajouter</button>, entete)}
       {/* Les vues : trois mots posés sur la page, une goutte de verre glisse sous le mot choisi. Mes horaires : un rond à droite. */}
       <div className="agenda-barre">
         <div className="vues" role="tablist" aria-label="Vue" style={{ "--i": VUES.indexOf(vue) } as React.CSSProperties}>

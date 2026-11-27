@@ -23,16 +23,14 @@ export function Auteur({ a, noms }: { a: Article; noms: Noms }) {
 
 interface Props extends ContexteModule { courses: Article[] | undefined; onMagasin: () => void; onTicket: (lu: LectureTicket) => void }
 
-// Les courses : un champ pour écrire, puis un carrousel, une carte par rayon. Un rayon terminé sort du carrousel.
+// Les courses : un champ pour écrire, puis une seule liste qui défile, rangée par rayon. Un rayon terminé sort de la liste.
+// Les pastilles en haut sautent au rayon (pratique au magasin, sans faire glisser des cartes).
 export function Courses({ noms, courses, onMagasin, onTicket }: Props) {
   const [texte, setTexte] = useState("");
   const [ecoute, setEcoute] = useState(false);
   const [ouvert, setOuvert] = useState<string | null>(null);
-  const [actif, setActif] = useState(0);
   const [voirPris, setVoirPris] = useState(false);
   const arret = useRef<(() => void) | null>(null);
-  const piste = useRef<HTMLDivElement>(null);
-  const pilules = useRef<HTMLDivElement>(null);
   const boite = useRef<HTMLFormElement>(null);
   const entete = typeof document === "undefined" ? null : document.getElementById("entete-module");
   useEffect(() => () => arret.current?.(), []);
@@ -41,13 +39,6 @@ export function Courses({ noms, courses, onMagasin, onTicket }: Props) {
   const ouverts = groupes.filter((g) => g.reste > 0);
   const pris = groupes.filter((g) => g.reste === 0).flatMap((g) => g.articles);
   const reste = ouverts.reduce((n, g) => n + g.reste, 0);
-  const ici = Math.min(actif, Math.max(0, ouverts.length - 1));
-
-  // La pilule du rayon affiché reste visible quand on fait défiler les cartes.
-  useEffect(() => {
-    const p = pilules.current, el = p?.children[ici] as HTMLElement | undefined;
-    if (p && el) p.scrollTo({ left: el.offsetLeft - p.offsetLeft - 16, behavior: "smooth" });
-  }, [ici]);
 
   const envoyer = () => {
     const lus = lireArticles(texte);
@@ -61,17 +52,9 @@ export function Courses({ noms, courses, onMagasin, onTicket }: Props) {
     vibrer(12); setEcoute(true);
     arret.current = ecouterVoix({ onTexte: setTexte, onErreur: (m) => toast(m, { duration: 6000 }), onFin: () => { arret.current = null; setEcoute(false); } });
   };
-  const allerA = (i: number) => {
-    const carte = piste.current?.children[i] as HTMLElement | undefined;
-    if (carte && piste.current) piste.current.scrollTo({ left: carte.offsetLeft - piste.current.offsetLeft, behavior: "smooth" });
-  };
-  const suivre = () => {
-    const p = piste.current;
-    if (!p) return;
-    const cartes = Array.from(p.children) as HTMLElement[];
-    let mieux = 0;
-    cartes.forEach((c, i) => { if (Math.abs(c.offsetLeft - p.offsetLeft - p.scrollLeft) < Math.abs(cartes[mieux].offsetLeft - p.offsetLeft - p.scrollLeft)) mieux = i; });
-    setActif(mieux);
+  const allerA = (rayon: string) => {
+    const reduit = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById("rayon-" + rayon)?.scrollIntoView({ behavior: reduit ? "auto" : "smooth", block: "start" });
   };
 
   return (
@@ -96,14 +79,14 @@ export function Courses({ noms, courses, onMagasin, onTicket }: Props) {
         <>
           {ouverts.length > 0 ? (
             <>
-              <div className="rayons" role="tablist" aria-label="Rayons" ref={pilules}>
-                {ouverts.map((g, i) => (
-                  <button key={g.rayon} type="button" role="tab" aria-selected={i === ici} className="ray" onClick={() => allerA(i)}>{g.nom} <b>{g.reste}</b></button>
-                ))}
-              </div>
-              <div className="carrousel" ref={piste} onScroll={suivre}>
-                {ouverts.map((g, i) => (
-                  <section key={g.rayon} className="g carte-rayon" aria-label={`${g.nom}, reste ${g.reste}`} aria-current={i === ici}>
+              {ouverts.length > 1 && (
+                <nav className="rayons" aria-label="Aller au rayon">
+                  {ouverts.map((g) => <button key={g.rayon} type="button" className="ray" onClick={() => allerA(g.rayon)}>{g.nom} <b>{g.reste}</b></button>)}
+                </nav>
+              )}
+              <div className="liste-rayons">
+                {ouverts.map((g) => (
+                  <section key={g.rayon} id={"rayon-" + g.rayon} className="g carte-rayon" aria-label={`${g.nom}, reste ${g.reste}`}>
                     <header><h2>{g.nom}</h2><span>reste {g.reste}</span></header>
                     <ul>
                       {g.articles.map((a) => <LigneArticle key={a.id} a={a} noms={noms} ouvert={ouvert === a.id} onOuvrir={() => setOuvert(ouvert === a.id ? null : a.id)} />)}
@@ -111,7 +94,6 @@ export function Courses({ noms, courses, onMagasin, onTicket }: Props) {
                   </section>
                 ))}
               </div>
-              {ouverts.length > 1 && <div className="points-rayons" role="img" aria-label={`Rayon ${ici + 1} sur ${ouverts.length}`}>{ouverts.map((g, i) => <i key={g.rayon} className={i === ici ? "la" : ""} />)}</div>}
               <div className="rangee centre"><PhotoTicket onLu={onTicket} discret /></div>
             </>
           ) : (
