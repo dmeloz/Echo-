@@ -23,13 +23,13 @@ import { coutMicro, demandeTour } from "../supabase/functions/_shared/echo-outil
 const cle = process.env.ANTHROPIC_API_KEY;
 const jeton = process.env.ECHO_JETON;
 const adresse = process.env.ECHO_URL || ADRESSE_ECHO;
-const client = cle ? new Anthropic() : null;
+const client = cle && !jeton ? new Anthropic() : null;
 const OUTILS = outilsEcho(MODULES);
 let micro = 0;
 
 // Avec un jeton : la fonction en ligne, comme le fait l'app (sans le direct). Sinon : le modèle, avec la clé.
 const appeler: Appeler = jeton ? async (corps) => {
-  const r = await fetch(adresse, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${jeton}` }, body: JSON.stringify(corps), signal: AbortSignal.timeout(60_000) });
+  const r = await fetch(adresse, { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${jeton}` }, body: JSON.stringify(corps), signal: AbortSignal.timeout(110_000) });
   const c = await r.json().catch(() => null);
   if (!r.ok || !c || !Array.isArray(c.content)) throw new Error(`La fonction echo a répondu ${r.status} : ${c?.erreur ?? "illisible"}`);
   return c as Tour;
@@ -158,7 +158,7 @@ const CAS: Record<string, Cas> = {
 beforeEach(async () => {
   await db.taches.clear(); await db.horaires.clear(); await db.echo_journal.clear(); await db.maison_corvees.clear(); await db.maison_faits.clear();
 });
-afterAll(() => { if (cle) console.log(`Coût des essais : environ ${(micro / 1e6).toFixed(3)} $`); });
+afterAll(() => { if (jeton) console.log("Essais faits contre la fonction en ligne : le coût est compté dans le budget du jour du foyer."); else if (cle) console.log(`Coût des essais : environ ${(micro / 1e6).toFixed(3)} $`); });
 
 describe.skipIf(!cle && !jeton)("phrases d'essai d'Echo (vrai modèle)", () => {
   for (const [nom, c] of Object.entries(CAS)) {

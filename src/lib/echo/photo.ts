@@ -15,7 +15,8 @@ async function enBase64(b: Blob) {
 export async function preparerPhoto(fichier: File, reduire = reduirePhoto): Promise<string | null> {
   for (const max of [1400, 1000, 700]) {
     const b = await reduire(fichier, max);
-    if (b.type !== "image/jpeg") return null; // la réduction a échoué (format que le téléphone ne sait pas ouvrir)
+    // La réduction a échoué (elle rend alors le fichier tel quel) : on n'envoie jamais la photo d'origine.
+    if (b === fichier || b.type !== "image/jpeg") return null;
     const d = await enBase64(b).catch(() => "");
     if (d && d.length <= MAX_PHOTO) return d;
   }

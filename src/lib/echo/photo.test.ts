@@ -80,6 +80,7 @@ describe("préparer la photo", () => {
   });
   it("refuse une photo que le téléphone n'a pas su ouvrir, ou toujours trop lourde", async () => {
     expect(await preparerPhoto(fichier, async (f) => f.slice(0, 1, "image/heic"))).toBeNull();
+    expect(await preparerPhoto(fichier, async (f) => f)).toBeNull(); // rendue telle quelle : jamais envoyée
     expect(await preparerPhoto(fichier, async () => new Blob([new Uint8Array(MAX_PHOTO)], { type: "image/jpeg" }))).toBeNull();
   });
 });

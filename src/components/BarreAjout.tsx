@@ -55,15 +55,18 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const [tache, setTache] = useState(false); // « Plutôt une tâche » : la phrase n'est pas pour un module
   const [simple, setSimple] = useState(false); // Echo n'a pas répondu : on reste en mode simple pour cette phrase
   // Une photo à montrer à Echo (un courrier, le frigo, un mot écrit à la main) : elle part avec la phrase, et n'est gardée nulle part.
-  const [photo, setPhoto] = useState<{ donnee: string; url: string } | null>(null);
+  // (la photo réduite, en JPEG base64 : la vignette se dessine à partir d'elle, rien d'autre à garder ni à libérer.)
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoArrive, setPhotoArrive] = useState(false); // le téléphone la réduit : on attend avant d'envoyer
   const choixPhoto = useRef<HTMLInputElement>(null);
-  const poserPhoto = (p: { donnee: string; url: string } | null) => setPhoto((avant) => { if (avant && avant.url !== p?.url) URL.revokeObjectURL(avant.url); return p; });
   const choisirPhoto = async (f: File | undefined) => {
-    if (!f) return;
-    const donnee = await preparerPhoto(f);
+    if (!f || photoArrive) return;
+    setPhotoArrive(true);
+    const donnee = await preparerPhoto(f).catch(() => null);
+    setPhotoArrive(false);
     if (!donnee) { trembler(boite.current); toast("Je n'ai pas pu ouvrir cette photo. Essaie d'en prendre une autre.", { duration: 5000 }); return; }
     setSimple(false); setTache(false);
-    poserPhoto({ donnee, url: URL.createObjectURL(f) });
+    setPhoto(donnee);
     saisie.current?.focus({ preventScroll: true });
   };
   const [filEtat, setFilEtat] = useState<Fil | null>(() => filActuel(noms[proprio]));
@@ -120,6 +123,8 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const parEcho = actif && (!!code || relie) && !simple && !pour;
   // Le bouton photo : seulement quand Echo peut répondre (lui seul sait regarder une photo).
   const peutPhoto = actif && (!!code || relie);
+  // Echo éteint ou plus relié entre-temps : la photo n'a plus personne pour la regarder.
+  useEffect(() => { if (!peutPhoto) setPhoto(null); }, [peutPhoto]);
   const tropLong = parEcho && v.length > MAX_PHRASE;
   // L'écran de discussion, comme dans l'app Claude : dès qu'Echo travaille, ou qu'une discussion est en cours.
   const ecran = ouverte && versEcho && !tache && (!!echo || !!fil?.echanges.length || !!vueAnciennes || (!v && !!fil));
@@ -250,11 +255,13 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
     const phrase = v || PHRASE_PHOTO;
     const jointe = photo;
     setPhoto(null); // elle part avec la phrase (elle revient si Echo ne répond pas)
+    // Elle revient dans la barre, sauf si une autre a été choisie depuis.
+    const rendrePhoto = () => { if (jointe) setPhoto((p) => p ?? jointe); };
     setVueAnciennes(null);
     setEcho({ etat: "pense", phrase, photo: !!jointe });
     onTexte(""); // la phrase part tout de suite dans la discussion (elle revient si Echo ne répond pas)
     await confirmation;
-    if (num !== demande.current) return;
+    if (num !== demande.current) { rendrePhoto(); return; }
     const avant = filActuel();
     // Une nouvelle discussion peu après la précédente : Echo en reçoit un court rappel (« et pour demain soir ? »),
     // sauf si on vient de toucher « Nouvelle » pour changer de sujet.
@@ -268,11 +275,10 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
     try {
       const r = await lancerEcho(phrase, ctx(), {
         appeler: appelerServeur(code), outils: outilsEcho(actifs), seul, noter: executer, faites: dejaFaites,
-        discussion: vivante ? avant?.suite : undefined, note: [rappel, avant?.note].filter(Boolean).join(" "), photo: jointe?.donnee,
+        discussion: vivante ? avant?.suite : undefined, note: [rappel, avant?.note].filter(Boolean).join(" "), photo: jointe ?? undefined,
         // La réponse s'écrit sous les yeux, comme dans l'app Claude.
         enDirect: (t) => { if (num === demande.current) setEcho({ etat: "pense", phrase, direct: t, photo: !!jointe }); },
       });
-      if (jointe) URL.revokeObjectURL(jointe.url);
       if (num !== demande.current) {
         if (r.faites.length) { proposerAnnuler(r.faites, "Echo a fait des choses pendant ce temps"); noterFaites(r.faites); }
         return;
@@ -294,14 +300,15 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
         if (num === demande.current) annulerEcho();
         return;
       }
-      if (num !== demande.current) { if (jointe) URL.revokeObjectURL(jointe.url); return; }
+      if (num !== demande.current) return;
       if (jointe) {
-        // Sans Echo, personne ne peut regarder la photo : elle revient avec la phrase, pour réessayer.
+        // Sans Echo, personne ne peut regarder la photo : elle revient avec la phrase.
         setEcho(null);
-        setPhoto((p) => { if (p) { URL.revokeObjectURL(jointe.url); return p; } return jointe; });
+        rendrePhoto();
         if (!texteRef.current.trim() && phrase !== PHRASE_PHOTO) onTexte(phrase);
         trembler(boite.current);
-        toast(`${e instanceof ErreurEcho ? e.message : "Echo ne répond pas."} Ta photo est gardée : réessaie dans un instant.`, { duration: 6000 });
+        const passager = !(e instanceof ErreurEcho) || e.passager;
+        toast(`${e instanceof ErreurEcho ? e.message : "Echo ne répond pas."}${passager ? " Ta photo est gardée : réessaie dans un instant." : " Ta photo est restée dans la barre : touche-la pour la retirer."}`, { duration: 7000 });
         return;
       }
       setEcho(null); setSimple(true);
@@ -313,6 +320,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   return (
     <form id="barre-ecriture" className={`barre-bas${ouverte ? "" : " ferme"}`} inert={!ouverte} autoComplete="off" onSubmit={(e) => {
       e.preventDefault();
+      if (photoArrive) { trembler(boite.current); toast("La photo arrive : envoie dans une seconde.", { duration: 2500 }); return; }
       if (!r && !photo) return;
       if (echo?.etat === "pense") { trembler(boite.current); toast("Echo réfléchit encore : envoie ta phrase quand il a répondu.", { duration: 3000 }); return; }
       if (photo) {
@@ -439,16 +447,18 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
           onChange={(e) => setTexte(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") onRanger(); }} />
         {ecoute && <button type="button" className="bouton-texte arret" onClick={onFinEcoute}>Fini</button>}
         {photo ? (
-          <button type="button" className="photo-jointe" aria-label="Retirer la photo" onPointerDown={(e) => e.preventDefault()} onClick={() => poserPhoto(null)}>
-            <img src={photo.url} alt="" /><X size={12} strokeWidth={3} autoAnimated={false} />
+          <button type="button" className="photo-jointe" aria-label="Retirer la photo" onPointerDown={(e) => e.preventDefault()} onClick={() => setPhoto(null)}>
+            <img src={`data:image/jpeg;base64,${photo}`} alt="" /><X size={12} strokeWidth={3} autoAnimated={false} />
           </button>
+        ) : photoArrive ? (
+          <span className="photo-echo" role="status" aria-label="La photo arrive"><span className="echo-points" aria-hidden="true"><i /><i /><i /></span></span>
         ) : peutPhoto && !ecoute && (
           <button type="button" className="photo-echo" aria-label="Montrer une photo à Echo" onPointerDown={(e) => e.preventDefault()} onClick={() => choixPhoto.current?.click()}>
             <Camera size={20} strokeWidth={2.1} autoAnimated={false} />
           </button>
         )}
         <input ref={choixPhoto} type="file" accept="image/*" hidden tabIndex={-1} onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; choisirPhoto(f); }} />
-        <button className="envoyer" type="submit" aria-label={parEcho || photo ? "Envoyer à Echo" : "Ajouter"} disabled={(!v && !photo) || echo?.etat === "pense"}>
+        <button className="envoyer" type="submit" aria-label={parEcho || photo ? "Envoyer à Echo" : "Ajouter"} disabled={(!v && !photo) || photoArrive || echo?.etat === "pense"}>
           <Check size={20} strokeWidth={2.4} autoAnimated={false} play={!!v || !!photo} />
         </button>
       </div>

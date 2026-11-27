@@ -110,6 +110,8 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors(origine) });
   if (req.method !== "POST") return repondre({ erreur: "methode" }, 405, origine);
 
+  // Rien de plus gros qu'une discussion entière avec sa photo n'est lu.
+  if (Number(req.headers.get("content-length") ?? 0) > MAX_CONVERSATION * 2 + MAX_PHOTO) return repondre({ erreur: "requete" }, 413, origine);
   let d: Demande & DemandeAgent;
   try { d = await req.json(); } catch { return repondre({ erreur: "requete" }, 400, origine); }
   // Un tour de boucle compte comme un appel : jusqu'à 6 par phrase, d'où une limite plus large en mode agent.

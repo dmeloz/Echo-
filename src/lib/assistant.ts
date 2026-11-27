@@ -27,7 +27,13 @@ const MESSAGES: Record<string, string> = {
   budget: "Echo a assez travaillé aujourd'hui (budget du jour atteint). Il revient demain.",
   requete: "Echo n'a pas pu lire ta demande. Reformule-la plus simplement.",
 };
-export class ErreurEcho extends Error {}
+// passager : réessayer peut marcher (pas de connexion, serveur occupé). Sinon, réessayer ne sert à rien pour l'instant.
+const PASSAGERES = new Set(["occupe", "service", "limite"]);
+export class ErreurEcho extends Error {
+  passager: boolean;
+  constructor(message: string, passager = true) { super(message); this.passager = passager; }
+}
+const erreurServeur = (code: unknown) => new ErreurEcho(MESSAGES[String(code)] ?? MESSAGES.service, !(String(code) in MESSAGES) || PASSAGERES.has(String(code)));
 
 // Les tâches à venir (14 jours) donnent du contexte à Echo, sans les photos ni les notes.
 export function contexte(taches: Tache[], now = new Date()) {
@@ -84,7 +90,7 @@ export function appelerServeur(code: string): Appeler {
     }
     if (enDirect && r.ok && r.body && (r.headers.get("content-type") ?? "").includes("ndjson")) return lireEnDirect(r.body, enDirect);
     const c = await r.json().catch(() => null);
-    if (!r.ok || !c || !Array.isArray(c.content)) throw new ErreurEcho(MESSAGES[c?.erreur] ?? MESSAGES.service);
+    if (!r.ok || !c || !Array.isArray(c.content)) throw erreurServeur(c?.erreur);
     return c as Tour;
   };
 }
@@ -100,7 +106,7 @@ export async function lireEnDirect(corps: ReadableStream<Uint8Array>, enDirect: 
     try { o = JSON.parse(l); } catch { return null; }
     if (typeof o.t === "string") { texte += o.t; enDirect(texte); return null; }
     if (o.fin && Array.isArray(o.fin.content)) return o.fin as Tour;
-    throw new ErreurEcho(MESSAGES[String(o.erreur)] ?? MESSAGES.service);
+    throw erreurServeur(o.erreur);
   };
   try {
     for (;;) {
