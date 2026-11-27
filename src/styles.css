@@ -1179,6 +1179,8 @@ button.budget-reste:active { scale: .97; }
 .budget-enveloppe .barre i.depasse { background: var(--urgent); }
 .budget-a-remplir { display: flex; flex-direction: column; gap: 2px; text-align: left; border: 0; border-radius: var(--r3); padding: 12px 16px; background: var(--bleu-pale); color: var(--encre); font: inherit; }
 .budget-a-remplir span { font-size: 14px; color: var(--discret); }
+/* L'entrée vers le point du mois : la même ligne, en verre, au bas de Mois. */
+.budget-vers-point { background: var(--verre); border: 1px solid var(--bord); width: 100%; }
 /* Les listes du Budget : un nom, une petite ligne dessous, le montant à droite. */
 .budget-liste { display: flex; flex-direction: column; }
 .budget-liste > .lab, .budget-liste > .budget-tete { padding: 10px 0 4px; }
