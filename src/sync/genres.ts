@@ -1,7 +1,7 @@
 import type { Table } from "dexie";
 import { db } from "../data/db";
 import { nettoyerJournal } from "../lib/echo/journal";
-import { nettoyerCorvee, nettoyerFait } from "../modules/maison/donnees";
+import { nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation } from "../modules/maison/donnees";
 import { nettoyerSouvenir } from "../lib/echo/memoire";
 import { nettoyerArticle, nettoyerGouts, nettoyerHabitude, nettoyerBatch, nettoyerProduit, nettoyerRecette, nettoyerRepas, nettoyerTicket } from "../modules/cuisine/donnees";
 
@@ -20,6 +20,9 @@ export const GENRES: Record<string, Genre> = {
   gout: { table: db.cuisine_gouts, cle: "qui", nettoyer: nettoyerGouts, naturelle: true },
   corvee: { table: db.maison_corvees, cle: "id", nettoyer: nettoyerCorvee },
   corvee_faite: { table: db.maison_faits, cle: "id", nettoyer: nettoyerFait },
+  reparation: { table: db.maison_reparations, cle: "id", nettoyer: nettoyerReparation },
+  appareil: { table: db.maison_appareils, cle: "id", nettoyer: nettoyerAppareil },
+  contact: { table: db.maison_contacts, cle: "id", nettoyer: nettoyerContact },
   journal: { table: db.echo_journal, cle: "id", nettoyer: nettoyerJournal },
   memoire: { table: db.echo_memoire, cle: "id", nettoyer: nettoyerSouvenir },
 };

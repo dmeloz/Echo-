@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { BookOpen, ChevronRight, CookingPot, Snowflake, Sparkles, ThumbsDown, ThumbsUp, X } from "pulsoicon-react";
+import { ChevronRight, CookingPot, Snowflake, Sparkles, ThumbsDown, ThumbsUp, X } from "pulsoicon-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { db } from "../../data/db";
@@ -15,7 +15,7 @@ const court = (j: string, o: Intl.DateTimeFormatOptions) => new Date(j + "T12:00
 
 // La semaine du lundi au dimanche, un jour = une ligne. « Prévoir ma semaine » : Echo propose les repas du soir
 // selon les horaires, les goûts et le stock ; on change un plat ou on valide, et ce qu'il manque part aux courses.
-export function Semaine({ now, noms, proprio, prochaine, setProchaine, onBatch, onLivre }: ContexteModule & { prochaine: boolean; setProchaine: (p: boolean) => void; onBatch: (semaine: string) => void; onLivre: () => void }) {
+export function Semaine({ now, noms, proprio, prochaine, setProchaine, onBatch }: ContexteModule & { prochaine: boolean; setProchaine: (p: boolean) => void; onBatch: (semaine: string) => void }) {
   const today = auJour(0, now);
   const lundi = plusJours(today, -((now.getDay() + 6) % 7));
   const debut = plusJours(lundi, prochaine ? 7 : 0);
@@ -44,7 +44,6 @@ export function Semaine({ now, noms, proprio, prochaine, setProchaine, onBatch, 
   const aCuisiner = repasDuBatch(repas, today).length;
   const etapes = batch?.etapes.length ?? 0, faites = batch?.etapes.filter((e) => e.fait).length ?? 0;
   const etatBatch = batch?.fini ? "Fait, les boîtes sont au stock" : etapes ? `${faites} étape${faites > 1 ? "s" : ""} sur ${etapes}${batch?.duree ? `, environ ${duree(batch.duree)}` : ""}` : `${aCuisiner} plats à cuisiner d'un coup`;
-  const aimes = livre.filter((x) => x.avis === 1).length;
 
   const avecEcho = async (quoi: "semaine" | string, faire: () => Promise<unknown>) => {
     if (pense) return;
@@ -161,11 +160,6 @@ export function Semaine({ now, noms, proprio, prochaine, setProchaine, onBatch, 
           <ChevronRight size={18} strokeWidth={2.2} className="signe" animated={false} />
         </button>
       )}
-      <button type="button" className="g ligne-lien" onClick={onLivre}>
-        <span className="tuile-icone" aria-hidden="true"><BookOpen size={18} strokeWidth={1.8} animated={false} /></span>
-        <span><b>Livre de recettes</b><span>{aimes ? `${aimes} plat${aimes > 1 ? "s" : ""} que vous aimez` : "Les plats que vous aimez se rangent ici"}</span></span>
-        <ChevronRight size={18} strokeWidth={2.2} className="signe" animated={false} />
-      </button>
     </>
   );
 }
