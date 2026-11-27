@@ -12,13 +12,16 @@ import { lireFile } from "../../sync/file";
 import { appliquer } from "../../sync/moteur";
 import { ajouterArticles, cocherArticle, rangerArticle, rangerFaits, remettreHabituels, retirerArticle } from "./actions";
 import { cuisine } from "./index";
+import { preparerDemande, refuserProposition, validerSemaine, versTravail } from "./semaineEcho";
+import { additionner, besoins, manquants, nettoyerRepas } from "./donnees";
+import { poserRepas } from "./actions";
 import { cleDe, devinerRayon, habituelsDus, lireArticles, lireDemande, parRayon, rythme, type Article, type Habitude } from "./donnees";
 
 const J = 86_400_000;
 const ligne = (genre: string, cle: string, data: unknown, supprime = false) => ({ genre, cle, data, supprime, par: "autre", maj: new Date().toISOString() });
 
 beforeEach(async () => {
-  await Promise.all([db.cuisine_courses.clear(), db.cuisine_habitudes.clear(), db.cuisine_gouts.clear(), db.cuisine_repas.clear(), db.reglages.clear(), db.taches.clear()]);
+  await Promise.all([db.cuisine_stock.clear(), db.cuisine_courses.clear(), db.cuisine_habitudes.clear(), db.cuisine_gouts.clear(), db.cuisine_repas.clear(), db.reglages.clear(), db.taches.clear()]);
   stock.clear(); toast.mockClear();
 });
 
@@ -149,5 +152,94 @@ describe("les achats habituels", () => {
     await db.cuisine_habitudes.put(hab());
     await db.reglages.put({ cle: "cuisineHabituels", valeur: false });
     expect(await remettreHabituels(now)).toBe(0);
+  });
+});
+
+describe("la semaine proposée par Echo", () => {
+  const semaine = ["2026-11-30", "2026-12-01", "2026-12-02", "2026-12-03", "2026-12-04", "2026-12-05", "2026-12-06"];
+  const noms = { moi: "Dany", elle: "Sarah" };
+  const travail = versTravail([
+    { qui: "moi", jour: "2026-11-30", code: "C5" }, { qui: "moi", jour: "2026-12-02", code: "C6" }, { qui: "moi", jour: "2026-12-03", code: "C1" }, { qui: "moi", jour: "2026-12-04", code: "R" },
+    ...semaine.slice(0, 5).map((jour) => ({ qui: "elle" as const, jour, code: "FIX" as const })),
+  ]);
+
+  it("compte les portions du soir selon les horaires, et la gamelle des jours de travail fixes", () => {
+    const b = besoins(semaine, travail);
+    expect(b.map((x) => x.soir)).toEqual([2, 2, 1, 1, 2, 2, 2]); // mercredi (jusqu'à 21 h) et jeudi (coupé jusqu'à 22 h 30) : une seule portion
+    expect(b[2].absents).toEqual(["moi"]);
+    expect(b.map((x) => x.gamelle)).toEqual(["elle", "elle", "elle", "elle", "elle", null, null]);
+  });
+  it("garde les champs d'un repas proposé et écarte un repas abîmé", () => {
+    expect(nettoyerRepas({ jour: "2026-12-03", plat: "Bœuf carottes", congele: true, propose: true, gamelle: " Chili de mardi ", ingredients: [{ nom: "carottes", qte: "1 kg" }, { nom: "" }, 3] }))
+      .toEqual({ jour: "2026-12-03", plat: "Bœuf carottes", congele: true, propose: true, gamelle: "Chili de mardi", ingredients: [{ nom: "carottes", qte: "1 kg" }] });
+    expect(nettoyerRepas({ jour: "2026-12-03", plat: "Riz" })).toEqual({ jour: "2026-12-03", plat: "Riz" });
+    expect(nettoyerRepas({ jour: "jeudi", plat: "Riz" })).toBeNull();
+  });
+  it("ne met aux courses que ce qui manque, chaque produit une fois", () => {
+    const repas = [
+      { jour: "2026-11-30", plat: "Chili", ingredients: [{ nom: "haricots rouges", qte: "1 boîte" }, { nom: "riz", qte: "300 g" }, { nom: "oignons", qte: "2" }] },
+      { jour: "2026-12-01", plat: "Curry", ingredients: [{ nom: "Riz", qte: "200 g" }, { nom: "pois chiches", qte: "1 boîte" }] },
+    ];
+    expect(manquants(repas, [{ id: "s", nom: "Oignon", lieu: "placard", cree: 1 }])).toEqual([
+      { nom: "Haricots rouges", qte: "1 boîte", jours: ["2026-11-30"] }, { nom: "Riz", qte: "500 g", jours: ["2026-11-30", "2026-12-01"] }, { nom: "Pois chiches", qte: "1 boîte", jours: ["2026-12-01"] },
+    ]);
+    expect([additionner("1,5 kg", "500 g"), additionner("2", "3"), additionner("", "1 botte")]).toEqual(["1,5 kg + 500 g", "5", "1 botte"]);
+  });
+  it("prépare la demande : jours, goûts par prénom, stock, plats gardés et récents", async () => {
+    await db.cuisine_gouts.put({ qui: "elle", aime: ["Riz"], evite: "champignons", rechauffe: "oui", maj: 1 });
+    await db.cuisine_stock.put({ id: "s", nom: "Courgettes", lieu: "frigo", avant: "2026-12-01", cree: 1 });
+    await db.cuisine_repas.bulkPut([{ jour: "2026-11-25", plat: "Lasagnes" }, { jour: "2026-11-30", plat: "Poulet rôti" }, { jour: "2026-12-01", plat: "Vieux plat", propose: true }]);
+    const b = besoins(semaine, travail).slice(1, 3);
+    const d = await preparerDemande(b, noms, semaine, ["Chili"]);
+    expect(d.jours).toEqual([{ jour: "2026-12-01", soir: 2, gamelle: true }, { jour: "2026-12-02", soir: 1, gamelle: true }]);
+    expect(d.gamellePour).toBe("Sarah");
+    expect(d.gouts).toEqual([{ prenom: "Sarah", aime: ["Riz"], evite: "champignons", rechauffe: "oui" }]);
+    expect(d.stock).toEqual([{ nom: "Courgettes", avant: "2026-12-01" }]);
+    expect(d.gardes).toEqual([{ jour: "2026-11-30", plat: "Poulet rôti" }]);
+    expect(d.recents).toEqual(["Lasagnes"]);
+    expect(d.eviter).toEqual(["Chili"]);
+  });
+  it("valide la proposition : les repas restent, ce qui manque part aux courses, et Annuler remet tout", async () => {
+    await db.cuisine_stock.put({ id: "s", nom: "Riz", lieu: "placard", cree: 1 });
+    await db.cuisine_courses.bulkPut([
+      { id: "deja", nom: "Pain", qte: "", rayon: "boulangerie", par: "moi", fait: null, cree: 1 },
+      { id: "pris", nom: "Haricots rouges", qte: "3 boîtes", rayon: "epicerie", par: "moi", fait: 5, cree: 1 },
+    ]);
+    await db.cuisine_repas.bulkPut([
+      { jour: "2026-11-30", plat: "Chili", propose: true, ingredients: [{ nom: "haricots rouges", qte: "1 boîte" }, { nom: "riz", qte: "300 g" }] },
+      { jour: "2026-12-01", plat: "Curry", propose: true, ingredients: [{ nom: "pois chiches", qte: "1 boîte" }] },
+    ]);
+    await validerSemaine(semaine);
+    expect((await db.cuisine_repas.toArray()).every((r) => !r.propose)).toBe(true);
+    // Un article déjà dans la liste (même coché) n'est pas touché ; le nouveau sait pour quel repas il est là.
+    expect(await db.cuisine_courses.get("pris")).toMatchObject({ qte: "3 boîtes", fait: 5 });
+    const pois = (await db.cuisine_courses.toArray()).find((a) => a.nom === "Pois chiches")!;
+    expect(pois).toMatchObject({ rayon: "epicerie", pour: ["2026-12-01"] });
+    expect(await db.cuisine_courses.count()).toBe(3);
+    // Ajouté par quelqu'un d'autre entre-temps : Annuler ne l'emporte pas.
+    await db.cuisine_courses.put({ id: "lait", nom: "Lait", qte: "", rayon: "frais", par: "elle", fait: null, cree: 2 });
+    await toast.mock.calls.at(-1)![1].action.onClick();
+    expect((await db.cuisine_courses.toArray()).map((a) => a.id).sort()).toEqual(["deja", "lait", "pris"]);
+    expect((await db.cuisine_repas.toArray()).every((r) => r.propose)).toBe(true);
+    await refuserProposition(semaine);
+    expect(await db.cuisine_repas.count()).toBe(0);
+  });
+});
+
+describe("changer un repas validé", () => {
+  it("écrire ou retirer un plat fait repartir ses courses, et un plat écrit sur une proposition n'est plus une proposition", async () => {
+    await db.cuisine_repas.bulkPut([{ jour: "2026-12-01", plat: "Curry", ingredients: [{ nom: "pois chiches", qte: "1 boîte" }] }, { jour: "2026-12-02", plat: "Dahl", propose: true }]);
+    await db.cuisine_courses.bulkPut([
+      { id: "a", nom: "Pois chiches", qte: "1 boîte", rayon: "epicerie", par: "moi", fait: null, cree: 1, pour: ["2026-12-01"] },
+      { id: "b", nom: "Riz", qte: "500 g", rayon: "epicerie", par: "moi", fait: null, cree: 1, pour: ["2026-12-01", "2026-12-03"] },
+    ]);
+    await poserRepas("2026-12-01", "Restes");
+    expect((await db.cuisine_courses.toArray()).map((a) => [a.id, a.pour])).toEqual([["b", ["2026-12-03"]]]);
+    expect(await db.cuisine_repas.get("2026-12-01")).toEqual({ jour: "2026-12-01", plat: "Restes" });
+    await toast.mock.calls.at(-1)![1].action.onClick();
+    expect(await db.cuisine_courses.count()).toBe(2);
+    await poserRepas("2026-12-02", "Raclette");
+    await refuserProposition(["2026-12-01", "2026-12-02"]);
+    expect((await db.cuisine_repas.get("2026-12-02"))?.plat).toBe("Raclette");
   });
 });

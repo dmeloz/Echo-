@@ -842,7 +842,27 @@ button.case::after { content: ""; position: absolute; inset: -9px; } /* zone de 
 .deja-magasin b { flex: 1; font-weight: 600; }
 
 /* Semaine : un jour = une ligne. */
-.semaine-dates { font-size: 14px; color: var(--discret); padding: 0 var(--e2); }
+.semaine-tete { display: flex; align-items: center; justify-content: space-between; gap: var(--e5); }
+.semaine-tete > span { font-size: 14px; color: var(--discret); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.vue-choix.petit { flex: none; grid-template-columns: auto auto; border-radius: 999px; }
+.vue-choix.petit button { min-height: 36px; padding: 0 14px; border-radius: 999px; font-size: 14px; }
+/* La barre fine d'Echo : sa proposition (Valider), ou ce qu'il peut compléter. */
+.barre-echo { display: flex; align-items: center; gap: var(--e4); min-height: 56px; padding: 6px 6px 6px 14px; border-radius: 999px; text-align: left; color: var(--encre); }
+.barre-echo b { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; }
+.barre-echo .etoile { flex: none; color: var(--accent); }
+.barre-echo > span:not(.echo-points) { font-size: var(--t-petit); color: var(--discret); padding-right: var(--e5); white-space: nowrap; }
+.barre-echo.lien:active { scale: .98; }
+.vide-icone.bleu { border-radius: 50%; background: var(--bleu-pale); color: var(--accent); box-shadow: none; }
+.semaine-repas.attend { opacity: .5; pointer-events: none; }
+.jour-bloc { border-top: 1px solid var(--trait); }
+.jour-bloc:first-child { border-top: 0; }
+.jour-bloc > .jour-repas { border-top: 0; }
+.jour-bloc.ouvert { background: rgb(255 255 255 / .6); }
+.jour-repas .signe { flex: none; color: var(--discret); }
+.jour-detail { display: flex; flex-direction: column; gap: var(--e2); padding: 0 16px 14px 64px; font-size: 15px; color: color-mix(in oklab, var(--encre) 82%, transparent); animation: reglage-entre var(--m-apparition) var(--douce); }
+.jour-detail .ingredients { font-size: var(--t-petit); color: var(--discret); }
+.jour-detail .rangee { margin-top: var(--e4); }
+.jour-detail .puce:disabled { opacity: .5; }
 .semaine-repas { padding: 0; overflow: hidden; }
 .jour-repas { display: flex; align-items: center; gap: var(--e5); width: 100%; min-height: 54px; padding: 8px 16px; border: 0; border-top: 1px solid var(--trait); background: transparent; text-align: left; color: var(--encre); }
 .jour-repas:first-child { border-top: 0; }
@@ -867,6 +887,25 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .ajout-stock .saisie { flex: 1 1 100%; }
 .ajout-stock .puce { flex: 1; display: flex; align-items: center; gap: var(--e4); }
 .liste-stock { padding: 4px 16px; }
+/* Le ticket de caisse : ce qu'Echo a lu, à vérifier avant de ranger. */
+.lien-ticket { display: inline-flex; align-items: center; gap: 6px; }
+.lien-ticket:disabled { color: var(--discret); }
+.ticket-tete { margin: -6px 4px 0; font-size: 15px; color: var(--discret); font-variant-numeric: tabular-nums; }
+.ticket-note { margin: 0; padding: 10px 14px; border-radius: 14px; background: var(--bleu-pale); font-size: 14.5px; line-height: 1.4; }
+.ticket-note.alerte { color: var(--urgent); font-weight: 600; }
+.liste-ticket { padding: 4px 14px; }
+.liste-ticket li { display: flex; align-items: center; gap: var(--e5); min-height: 58px; padding: 8px 0; }
+.liste-ticket li + li { border-top: 1px solid var(--trait); }
+.ticket-nom { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ticket-nom b { font-size: 16px; font-weight: 600; line-height: 1.25; }
+.ticket-nom b i { font-style: normal; font-weight: 500; color: var(--discret); }
+.ticket-nom span { font-size: 13px; color: var(--discret); font-variant-numeric: tabular-nums; }
+.liste-ticket .non .ticket-nom b { color: var(--discret); text-decoration: line-through; }
+.lieu-ticket { flex: none; min-height: 36px; white-space: nowrap; }
+.lieu-ticket.aucun { background: transparent; color: var(--discret); border-style: dashed; }
+.lieu-ticket:disabled { opacity: .4; }
+.ticket-pied { position: sticky; bottom: calc(env(safe-area-inset-bottom) + 12px); display: flex; padding-right: 76px; }
+.ticket-pied .bouton { flex: 1; box-shadow: 0 12px 28px -12px rgb(47 107 255 / .7); }
 .liste-stock .retirer { position: relative; width: 28px; height: 28px; border-radius: 50%; border: 0; background: rgb(18 40 58 / .07); color: var(--discret); display: grid; place-items: center; }
 
 /* Le questionnaire des goûts (popup au premier passage, et dans les Réglages). */

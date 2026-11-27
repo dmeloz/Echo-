@@ -8,7 +8,8 @@ import type { Noms } from "../../lib/types";
 import { ecouterVoix, voixPossible } from "../../lib/voix";
 import type { ContexteModule } from "../contrat";
 import { ajouterArticles, changerArticle, cocherArticle, rangerArticle, rangerFaits, retirerArticle } from "./actions";
-import { RAYONS, lireArticles, parRayon, type Article, type Rayon } from "./donnees";
+import { RAYONS, lireArticles, parRayon, type Article, type LectureTicket, type Rayon } from "./donnees";
+import { PhotoTicket } from "./Ticket";
 
 // La coche qui se dessine (gardée à la main, comme dans le reste de l'app).
 export const Coche = () => <svg className="coche-trait" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12l5 5L20 7" /></svg>;
@@ -20,10 +21,10 @@ export function Auteur({ a, noms }: { a: Article; noms: Noms }) {
   return <i className={`av ${qui}`} role="img" aria-label={`${a.fait && a.faitPar ? "Coché" : "Ajouté"} par ${nom}`}>{qui === "echo" ? "E" : initialeDe(noms, qui)}</i>;
 }
 
-interface Props extends ContexteModule { courses: Article[] | undefined; onMagasin: () => void }
+interface Props extends ContexteModule { courses: Article[] | undefined; onMagasin: () => void; onTicket: (lu: LectureTicket) => void }
 
 // Les courses : un champ pour écrire, puis un carrousel, une carte par rayon. Un rayon terminé sort du carrousel.
-export function Courses({ noms, courses, onMagasin }: Props) {
+export function Courses({ noms, courses, onMagasin, onTicket }: Props) {
   const [texte, setTexte] = useState("");
   const [ecoute, setEcoute] = useState(false);
   const [ouvert, setOuvert] = useState<string | null>(null);
@@ -111,6 +112,7 @@ export function Courses({ noms, courses, onMagasin }: Props) {
                 ))}
               </div>
               {ouverts.length > 1 && <div className="points-rayons" role="img" aria-label={`Rayon ${ici + 1} sur ${ouverts.length}`}>{ouverts.map((g, i) => <i key={g.rayon} className={i === ici ? "la" : ""} />)}</div>}
+              <div className="rangee centre"><PhotoTicket onLu={onTicket} discret /></div>
             </>
           ) : (
             <section className="g vide">

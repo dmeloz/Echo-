@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { db } from "../../data/db";
 import { poserReglage } from "../../data/hooks";
 import type { ContexteModule } from "../contrat";
@@ -9,6 +9,8 @@ import { PopupGouts } from "./Gouts";
 import { Magasin } from "./Magasin";
 import { Semaine } from "./Semaine";
 import { Stock } from "./Stock";
+import { ApercuTicket } from "./Ticket";
+import type { LectureTicket } from "./donnees";
 
 type Partie = "semaine" | "courses" | "stock";
 const NOMS: Record<Partie, string> = { semaine: "Semaine", courses: "Courses", stock: "Stock" };
@@ -18,6 +20,8 @@ export function PageCuisine(ctx: ContexteModule) {
   const { proprio, now } = ctx;
   const [partie, setPartie] = useState<Partie>(() => ([5, 6].includes(now.getDay()) ? "courses" : "semaine"));
   const [magasin, setMagasin] = useState(false);
+  const [ticket, setTicket] = useState<LectureTicket | null>(null);
+  const fermerTicket = useCallback(() => setTicket(null), []);
   const courses = useLiveQuery(() => db.cuisine_courses.toArray(), [], undefined);
   // Le questionnaire des goûts : une fois par personne, tant qu'il n'a été ni rempli ni remis à plus tard.
   const aDemander = useLiveQuery(async () => !(await db.reglages.get("cuisineGoutsVu"))?.valeur && !(await db.cuisine_gouts.get(proprio)), [proprio], false);
@@ -25,6 +29,7 @@ export function PageCuisine(ctx: ContexteModule) {
   // À l'ouverture : ce qui a été acheté quitte la liste, puis Echo remet les achats habituels dont c'est le moment.
   useEffect(() => { rangerFaits().then(() => remettreHabituels()).catch(() => {}); }, []);
 
+  if (ticket) return <ApercuTicket lu={ticket} now={now} onFini={fermerTicket} />;
   if (magasin && courses) return <Magasin courses={courses} onQuitter={() => setMagasin(false)} />;
   return (
     <>
@@ -33,9 +38,9 @@ export function PageCuisine(ctx: ContexteModule) {
           <button key={p} type="button" aria-pressed={partie === p} onClick={() => setPartie(p)}>{NOMS[p]}</button>
         ))}
       </div>
-      {partie === "courses" && <Courses {...ctx} courses={courses} onMagasin={() => setMagasin(true)} />}
+      {partie === "courses" && <Courses {...ctx} courses={courses} onMagasin={() => setMagasin(true)} onTicket={setTicket} />}
       {partie === "semaine" && <Semaine {...ctx} />}
-      {partie === "stock" && <Stock {...ctx} />}
+      {partie === "stock" && <Stock {...ctx} onTicket={setTicket} />}
       {aDemander && <PopupGouts {...ctx} onFini={() => poserReglage("cuisineGoutsVu", true)} />}
     </>
   );

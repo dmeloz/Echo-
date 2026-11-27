@@ -22,10 +22,13 @@ export const nomRayon = (r: Rayon) => RAYONS.find((x) => x.id === r)?.nom ?? "Au
 const estRayon = (x: unknown): x is Rayon => RAYONS.some((r) => r.id === x);
 
 export type Auteur = Personne | "echo"; // « echo » = un achat habituel remis tout seul
-export interface Article { id: string; nom: string; qte: string; rayon: Rayon; par: Auteur; fait: number | null; faitPar?: Personne; cree: number }
+// pour = les jours des repas pour lesquels Echo a mis cet article (il repart avec eux si le repas change).
+export interface Article { id: string; nom: string; qte: string; rayon: Rayon; par: Auteur; fait: number | null; faitPar?: Personne; cree: number; pour?: string[] }
 // Ce qu'Echo retient d'un produit : son rayon, et quand on l'a acheté (pour le remettre tout seul).
 export interface Habitude { cle: string; nom: string; qte: string; rayon: Rayon; achats: number[]; refus: number; pause?: number }
-export interface Repas { jour: string; plat: string }
+// Le repas du soir d'un jour. Quand Echo le propose : ses ingrédients, s'il vient du congélateur, la gamelle du midi.
+// propose = pas encore validé (la barre « Proposition d'Echo »).
+export interface Repas { jour: string; plat: string; ingredients?: Lu[]; congele?: boolean; gamelle?: string; propose?: boolean }
 export type Lieu = "frigo" | "congelateur" | "placard" | "maison";
 export const LIEUX: Array<{ id: Lieu; nom: string }> = [
   { id: "frigo", nom: "Frigo" }, { id: "congelateur", nom: "Congélateur" }, { id: "placard", nom: "Placard" }, { id: "maison", nom: "Maison" },
@@ -157,6 +160,48 @@ export function apresRefus(h: Habitude, now: number): Habitude {
   return { ...h, refus, pause: now + (rythme(h.achats) ?? 7 * JOUR) * refus };
 }
 
+/* ---------- La semaine de repas ---------- */
+
+// Ce dont le foyer a besoin un jour donné : combien de portions le soir (une de moins par personne qui travaille le soir),
+// et si quelqu'un emporte une gamelle le midi (la personne aux horaires fixes, les jours où elle travaille).
+export interface Besoin { jour: string; soir: number; absents: Personne[]; gamelle: Personne | null }
+export interface Travail { qui: Personne; jour: string; plages: Array<[string, string]>; fixe: boolean }
+export function besoins(jours: string[], travail: Travail[]): Besoin[] {
+  return jours.map((jour) => {
+    const duJour = travail.filter((t) => t.jour === jour);
+    const absents = duJour.filter((t) => t.plages.some(([, fin]) => fin >= "20:00")).map((t) => t.qui);
+    const gamelle = duJour.find((t) => t.fixe && t.plages.some(([debut, fin]) => debut <= "12:00" && fin >= "13:00"))?.qui ?? null;
+    return { jour, soir: Math.max(0, 2 - new Set(absents).size), absents: [...new Set(absents)], gamelle };
+  });
+}
+
+// Deux quantités du même produit : on additionne quand l'unité est la même (« 300 g » + « 200 g »), sinon on les écrit côte à côte.
+export function additionner(a: string, b: string): string {
+  if (!a || !b) return a || b;
+  const lire = (q: string) => q.match(/^(\d+(?:,\d+)?)\s*(.*)$/);
+  const x = lire(a), y = lire(b);
+  if (x && y && x[2].toLowerCase() === y[2].toLowerCase()) {
+    const somme = Math.round((Number(x[1].replace(",", ".")) + Number(y[1].replace(",", "."))) * 100) / 100;
+    return `${String(somme).replace(".", ",")}${x[2] ? ` ${x[2]}` : ""}`;
+  }
+  return `${a} + ${b}`.slice(0, 20);
+}
+
+// Ce qu'il faut acheter pour des repas : leurs ingrédients, sans ce qui est déjà au stock. Un produit commun à plusieurs
+// repas n'apparaît qu'une fois, avec les quantités ajoutées et les jours concernés.
+export interface Achat extends Lu { jours: string[] }
+export function manquants(repas: Repas[], stock: Produit[]): Achat[] {
+  const auStock = new Set(stock.map((p) => cleDe(p.nom)));
+  const vus = new Map<string, Achat>();
+  for (const r of repas) for (const i of r.ingredients ?? []) {
+    const cle = cleDe(i.nom), deja = vus.get(cle);
+    if (!cle || auStock.has(cle)) continue;
+    if (deja) { deja.qte = additionner(deja.qte, i.qte); if (!deja.jours.includes(r.jour)) deja.jours.push(r.jour); }
+    else vus.set(cle, { nom: i.nom.charAt(0).toUpperCase() + i.nom.slice(1), qte: i.qte, jours: [r.jour] });
+  }
+  return [...vus.values()];
+}
+
 /* ---------- Regrouper pour l'écran ---------- */
 
 export interface Groupe { rayon: Rayon; nom: string; articles: Article[]; reste: number }
@@ -182,7 +227,8 @@ export function nettoyerArticle(x: unknown): Article | null {
   const o = obj(x), id = txt(o.id, 80), nom = txt(o.nom, 60).trim();
   if (!id || !nom) return null;
   return { id, nom, qte: txt(o.qte, 20), rayon: estRayon(o.rayon) ? o.rayon : "autre", par: personne(o.par) ? o.par : o.par === "echo" ? "echo" : "moi",
-    fait: nb(o.fait), ...(personne(o.faitPar) ? { faitPar: o.faitPar } : {}), cree: nb(o.cree) ?? Date.now() };
+    fait: nb(o.fait), ...(personne(o.faitPar) ? { faitPar: o.faitPar } : {}), cree: nb(o.cree) ?? Date.now(),
+    ...(Array.isArray(o.pour) && o.pour.length ? { pour: o.pour.filter((j): j is string => typeof j === "string" && JOUR_ISO.test(j)).slice(0, 7) } : {}) };
 }
 export function nettoyerHabitude(x: unknown): Habitude | null {
   const o = obj(x), cle = txt(o.cle, 80), nom = txt(o.nom, 60).trim();
@@ -192,8 +238,11 @@ export function nettoyerHabitude(x: unknown): Habitude | null {
   return { cle, nom, qte: txt(o.qte, 20), rayon: estRayon(o.rayon) ? o.rayon : "autre", achats, refus: Math.max(0, Math.min(9, nb(o.refus) ?? 0)), ...(pause ? { pause } : {}) };
 }
 export function nettoyerRepas(x: unknown): Repas | null {
-  const o = obj(x), jour = txt(o.jour, 10), plat = txt(o.plat, 80).trim();
-  return JOUR_ISO.test(jour) && plat ? { jour, plat } : null;
+  const o = obj(x), jour = txt(o.jour, 10), plat = txt(o.plat, 80).trim(), gamelle = txt(o.gamelle, 80).trim();
+  if (!JOUR_ISO.test(jour) || !plat) return null;
+  const ingredients = (Array.isArray(o.ingredients) ? o.ingredients : []).slice(0, 20)
+    .map((i) => ({ nom: txt(obj(i).nom, 60).trim(), qte: txt(obj(i).qte, 20).trim() })).filter((i) => i.nom);
+  return { jour, plat, ...(ingredients.length ? { ingredients } : {}), ...(o.congele === true ? { congele: true } : {}), ...(gamelle ? { gamelle } : {}), ...(o.propose === true ? { propose: true } : {}) };
 }
 export function nettoyerProduit(x: unknown): Produit | null {
   const o = obj(x), id = txt(o.id, 80), nom = txt(o.nom, 60).trim(), avant = txt(o.avant, 10);
@@ -207,3 +256,45 @@ export function nettoyerGouts(x: unknown): Gouts | null {
   const rechauffe = (["oui", "non", "pas"] as const).find((r) => r === o.rechauffe) ?? "";
   return { qui: o.qui, aime, evite: txt(o.evite, 200), rechauffe, maj: nb(o.maj) ?? 0 };
 }
+
+/* ---------- Le ticket de caisse (lu par photo) ---------- */
+
+export type Rangement = Lieu | "aucun"; // « aucun » = ne va pas au stock (sac, consigne…)
+export interface LigneTicket { nom: string; qte: string; prix: number; lieu: Rangement; jours: number; course: string; sur: boolean }
+export interface LectureTicket { lisible: boolean; magasin: string; date: string; total: number; monnaie: "CHF" | "EUR"; lignes: LigneTicket[]; remarque: string }
+// Le ticket gardé : le magasin, le jour, le total et les prix (pour le budget, plus tard).
+export interface Ticket { id: string; magasin: string; date: string; total: number; monnaie: "CHF" | "EUR"; lignes: Array<{ nom: string; qte: string; prix: number }>; par: Personne; cree: number }
+
+// Une vraie date du calendrier (« 2026-11-31 » n'en est pas une).
+export function vraiJour(j: string) {
+  const d = JOUR_ISO.test(j) ? new Date(j + "T12:00:00Z") : null;
+  return !!d && !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === j;
+}
+const prix = (x: unknown) => { const n = nb(x); return n !== null && n > 0 && n < 100_000 ? Math.round(n * 100) / 100 : 0; };
+const monnaie = (x: unknown) => (x === "EUR" ? "EUR" : "CHF");
+
+// La réponse du serveur n'est pas crue sur parole : tailles bornées, lieux connus, un article de la liste coché une seule fois.
+export function nettoyerLecture(x: unknown, courses: string[]): LectureTicket {
+  const o = obj(x), libres = new Set(courses), date = txt(o.date, 10);
+  const brutes = Array.isArray(o.lignes) ? o.lignes : [];
+  const lignes = brutes.slice(0, 80).flatMap((l): LigneTicket[] => {
+    const i = obj(l), nom = txt(i.nom, 40).trim();
+    if (!nom) return [];
+    const lieu: Rangement = LIEUX.find((k) => k.id === i.lieu)?.id ?? "aucun";
+    const j = nb(i.jours);
+    const course = typeof i.course === "string" && libres.delete(i.course) ? i.course : "";
+    return [{ nom, qte: txt(i.qte, 20).trim(), prix: prix(i.prix), lieu, jours: lieu === "frigo" && j !== null && Number.isInteger(j) && j > 0 && j <= 60 ? j : 0, course, sur: i.sur !== false }];
+  });
+  return { lisible: o.lisible === true && lignes.length > 0, magasin: txt(o.magasin, 40).trim(), date: vraiJour(date) ? date : "", total: prix(o.total), monnaie: monnaie(o.monnaie), lignes,
+    remarque: brutes.length > 80 ? "Ticket très long : seules les 80 premières lignes sont lues." : txt(o.remarque, 200).trim() };
+}
+
+export function nettoyerTicket(x: unknown): Ticket | null {
+  const o = obj(x), id = txt(o.id, 80), date = txt(o.date, 10);
+  if (!id || !vraiJour(date) || !personne(o.par)) return null;
+  const lignes = (Array.isArray(o.lignes) ? o.lignes : []).slice(0, 80)
+    .map((l) => ({ nom: txt(obj(l).nom, 40).trim(), qte: txt(obj(l).qte, 20).trim(), prix: prix(obj(l).prix) })).filter((l) => l.nom);
+  return { id, magasin: txt(o.magasin, 40).trim(), date, total: prix(o.total), monnaie: monnaie(o.monnaie), lignes, par: o.par, cree: nb(o.cree) ?? Date.now() };
+}
+
+export const montant = (n: number, m: "CHF" | "EUR") => (m === "EUR" ? `${n.toFixed(2).replace(".", ",")} €` : `${n.toFixed(2)} CHF`);
