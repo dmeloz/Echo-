@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aEnvoyer, chezLui, type Abonne, type TacheLue } from "./quoi";
+import { aEnvoyer, chezLui, type Abonne, type PapierLu, type TacheLue } from "./quoi";
 
 const a: Abonne = { id: "tel1", place: "moi", fuseau: "Europe/Zurich", aLHeure: true, matin: "07:30" };
 const t = (x: Partial<TacheLue>): TacheLue => ({ id: "a", titre: "Vétérinaire", jour: "2026-11-27", heure: "", qui: "moi", fait: null, ...x });
@@ -53,4 +53,21 @@ describe("rappels : le résumé du matin", () => {
     expect(aEnvoyer(a, [t({})], a18h00)).toHaveLength(0);
   });
   it("un fuseau inconnu ne fait pas planter (retour à Zurich)", () => expect(aEnvoyer({ ...a, fuseau: "Nimporte/Quoi" }, [t({})], a7h30)).toHaveLength(1));
+});
+
+describe("rappels : les papiers à régler", () => {
+  const p = (x: Partial<PapierLu>): PapierLu => ({ id: "p1", titre: "Loyer", quoi: "payer", echeance: "2026-11-28", montant: 185000, ...x });
+  it("le matin : 7 jours avant, la veille et le jour même, avec le montant", () => {
+    expect(aEnvoyer(a, [], a7h30, [p({})])).toEqual([{ cle: "p|tel1|p1|2026-11-28|1", titre: "Loyer : à payer demain", texte: "1850.00 CHF", tag: "papier-p1-1" }]);
+    expect(aEnvoyer(a, [], a7h30, [p({ echeance: "2026-11-27" })])[0].titre).toBe("Loyer : à payer aujourd'hui");
+    expect(aEnvoyer(a, [], a7h30, [p({ echeance: "2026-12-04", quoi: "renouveler", titre: "Passeport", montant: undefined })])[0]).toMatchObject({ titre: "Passeport : à renouveler dans 7 jours", texte: "Dans Maison, Papiers" });
+  });
+  it("rien les autres jours, ni pour un papier fait, à garder ou sans date, ni hors de l'heure du matin", () => {
+    expect(aEnvoyer(a, [], a7h30, [p({ echeance: "2026-11-30" }), p({ echeance: "2026-11-26" }), p({ fait: "2026-11-20" }), p({ quoi: "" }), p({ quoi: "constructor" }), p({ echeance: undefined }), p({ echeance: "bientôt" })])).toEqual([]);
+    expect(aEnvoyer(a, [], a18h00, [p({})])).toEqual([]);
+    expect(aEnvoyer({ ...a, matin: null }, [], a7h30, [p({})])).toEqual([]);
+  });
+  it("s'ajoute au résumé du matin sans le remplacer", () => {
+    expect(aEnvoyer(a, [t({})], a7h30, [p({})]).map((e) => e.tag)).toEqual(["matin", "papier-p1-1"]);
+  });
 });
