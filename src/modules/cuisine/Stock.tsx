@@ -1,14 +1,21 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { ChevronLeft, House, Package, Plus, Refrigerator, Snowflake, X } from "pulsoicon-react";
+import { ChevronLeft, House, Package, Plus, Refrigerator, Snowflake } from "pulsoicon-react";
 import { useEffect, useState } from "react";
 import { db } from "../../data/db";
 import { auJour, libelleJour } from "../../lib/dates";
 import type { ContexteModule } from "../contrat";
-import { ajouterProduit, retirerProduit } from "./actions";
-import { LIEUX, montant, type LectureTicket, type Lieu, type Produit } from "./donnees";
+import { vibrer } from "../../lib/gestes";
+import { ajouterProduit, noterReste, retirerProduit } from "./actions";
+import { LIEUX, RESTES, montant, type LectureTicket, type Lieu, type Produit, type Reste } from "./donnees";
 import { PhotoTicket } from "./Ticket";
 
 const ICONES: Record<Lieu, typeof House> = { frigo: Refrigerator, congelateur: Snowflake, placard: Package, maison: House };
+
+// La petite jauge d'un produit : trois traits, pleins selon ce qu'il reste.
+function Jauge({ reste }: { reste?: Reste }) {
+  const n = reste === "peu" ? 1 : reste === "moitie" ? 2 : 3;
+  return <i className={`jauge n${n}`} role="img" aria-label={reste === "peu" ? "Presque fini" : reste === "moitie" ? "À moitié" : "Plein"}><i /><i /><i /></i>;
+}
 
 // Le stock : ce qu'il faut manger vite, puis quatre endroits. On le remplit avec la photo du ticket de caisse, ou à la main.
 // (Le code-barres arrive plus tard.)
@@ -16,6 +23,7 @@ export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: Lectu
   const produits = useLiveQuery(() => db.cuisine_stock.toArray(), [], [] as Produit[]);
   const dernier = useLiveQuery(async () => (await db.cuisine_tickets.toArray()).sort((a, b) => b.cree - a.cree)[0], [], undefined);
   const [lieu, setLieu] = useState<Lieu | null>(null);
+  const [ouvert, setOuvert] = useState<string | null>(null);
   const today = auJour(0, now), limite = auJour(3, now);
   const vite = produits.filter((p) => p.avant && p.avant <= limite).sort((a, b) => a.avant!.localeCompare(b.avant!));
   const quand = (p: Produit) => (p.avant! < today ? "dépassé" : libelleJour(p.avant!, now).toLowerCase());
@@ -46,10 +54,23 @@ export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: Lectu
         {ici.length > 0 ? (
           <ul className="g liste-stock">
             {ici.map((p) => (
-              <li key={p.id}>
-                <b>{p.nom}</b>
-                {p.avant && <span className={p.avant <= limite ? "vite" : ""}>{quand(p)}</span>}
-                <button type="button" className="retirer" aria-label={`Retirer ${p.nom}`} onClick={() => retirerProduit(p.id)}><X size={16} strokeWidth={2.2} /></button>
+              <li key={p.id} className={ouvert === p.id ? "ouvert" : ""}>
+                <button type="button" className="stock-ligne" aria-expanded={ouvert === p.id} onClick={() => setOuvert(ouvert === p.id ? null : p.id)}>
+                  <b>{p.nom}</b>
+                  {p.avant && <span className={p.avant <= limite ? "vite" : ""}>{quand(p)}</span>}
+                  <Jauge reste={p.reste} />
+                </button>
+                {ouvert === p.id && (
+                  <div className="stock-plus">
+                    <span className="lab">Il en reste</span>
+                    <div className="stock-restes" role="group" aria-label={`Ce qu'il reste de ${p.nom}`}>
+                      {RESTES.map((r) => <button key={r.id} type="button" className="puce" aria-pressed={(p.reste ?? "plein") === r.id} onClick={() => { vibrer(); noterReste(p.id, r.id); }}>{r.nom}</button>)}
+                      <button type="button" className="puce" onClick={() => { vibrer(12); setOuvert(null); noterReste(p.id, "fini"); }}>Fini</button>
+                    </div>
+                    <p className="aide-champ">Presque fini ou fini : Echo le remet dans les courses.</p>
+                    <button type="button" className="bouton-texte danger" onClick={() => { setOuvert(null); retirerProduit(p.id); }}>Retirer sans racheter</button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

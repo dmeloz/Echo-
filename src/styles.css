@@ -861,6 +861,7 @@ button.case::after { content: ""; position: absolute; inset: -9px; } /* zone de 
 .jour-repas .signe { flex: none; color: var(--discret); }
 .jour-detail { display: flex; flex-direction: column; gap: var(--e2); padding: 0 16px 14px 64px; font-size: 15px; color: color-mix(in oklab, var(--encre) 82%, transparent); animation: reglage-entre var(--m-apparition) var(--douce); }
 .jour-detail .ingredients { font-size: var(--t-petit); color: var(--discret); }
+.jour-detail .du-stock { font-size: var(--t-petit); font-weight: 600; color: var(--turquoise-texte); }
 .jour-detail .rangee { margin-top: var(--e4); }
 .jour-detail .puce:disabled { opacity: .5; }
 .semaine-repas { padding: 0; overflow: hidden; }
@@ -887,6 +888,16 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .ajout-stock .saisie { flex: 1 1 100%; }
 .ajout-stock .puce { flex: 1; display: flex; align-items: center; gap: var(--e4); }
 .liste-stock { padding: 4px 16px; }
+.liste-stock li { flex-direction: column; align-items: stretch; gap: 0; }
+.stock-ligne { display: flex; align-items: center; gap: var(--e5); width: 100%; min-height: 48px; padding: 0; border: 0; background: none; font: inherit; color: var(--encre); text-align: left; }
+.jauge { display: inline-flex; gap: 3px; flex: none; }
+.jauge i { width: 6px; height: 16px; border-radius: 3px; background: rgb(18 40 58 / .12); }
+.jauge.n3 i, .jauge.n2 i:nth-child(-n+2) { background: var(--turquoise); }
+.jauge.n1 i:first-child { background: var(--urgent); }
+.stock-plus { display: flex; flex-direction: column; align-items: flex-start; gap: var(--e3); padding: 2px 0 12px; }
+.stock-restes { display: flex; flex-wrap: wrap; gap: var(--e3); }
+.stock-restes .puce { min-height: 40px; }
+.stock-plus .aide-champ { margin: 0; }
 /* Le ticket de caisse : ce qu'Echo a lu, à vérifier avant de ranger. */
 .lien-ticket { display: inline-flex; align-items: center; gap: 6px; }
 .lien-ticket:disabled { color: var(--discret); }

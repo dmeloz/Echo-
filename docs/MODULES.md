@@ -88,3 +88,10 @@ Page à trois parties : Semaine, Courses, Stock (elle s'ouvre sur Courses le ven
 - « Ranger » (`ticket.ts`) : ajoute au stock (un produit déjà au même endroit n'est pas doublé, sa date est rafraîchie), coche les articles de la liste, garde le ticket dans `cuisine_tickets` (genre `ticket`, synchronisé : magasin, jour, total, prix par ligne, pour le budget plus tard). Le message propose « Annuler », qui remet tout.
 - La réponse du serveur est nettoyée deux fois (fonction, puis `nettoyerLecture`) : tailles bornées, lieux connus, un article de la liste coché une seule fois et seulement s'il a été envoyé.
 - Mise en service : migration `20261127150000_cuisine_ticket.sql` (genre `ticket`), fonction `lire-ticket` à déployer, secret `ANTHROPIC_API_KEY` posé.
+
+## Cuisine · ce qu'il reste d'un produit, et Echo qui part du stock (2026-11-27)
+
+- Dans un endroit du Stock, toucher un produit ouvre « Il en reste » : Plein, À moitié, Presque fini, Fini. Une petite jauge à trois traits le montre sur la ligne.
+- « Presque fini » remet le produit aux courses ; « Fini » le sort du stock et le remet aux courses (`noterReste` dans `actions.ts`, avec « Annuler »). « Retirer sans racheter » l'enlève seulement.
+- Un produit presque fini ne compte plus comme « au stock » pour la semaine d'Echo. Racheté par un ticket, il redevient plein.
+- La semaine d'Echo part du stock : l'app envoie ce qui se mange (frigo d'abord, ce qui presse en tête, puis congélateur et placard), la date du jour et le jour où l'on cuisine. La fonction `cuisine` construit les plats autour de ces produits et dit pour chaque plat ce qu'il prend au stock (`duStock`, affiché « Avec ton stock : … »).

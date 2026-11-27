@@ -18,7 +18,7 @@ const SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["jour", "plat", "ingredients", "congele", "gamelle"],
+        required: ["jour", "plat", "ingredients", "duStock", "congele", "gamelle"],
         properties: {
           jour: { type: "string" },
           plat: { type: "string" },
@@ -26,6 +26,7 @@ const SCHEMA = {
             type: "array",
             items: { type: "object", additionalProperties: false, required: ["nom", "qte"], properties: { nom: { type: "string" }, qte: { type: "string" } } },
           },
+          duStock: { type: "array", items: { type: "string" } },
           congele: { type: "boolean" },
           gamelle: { type: "string" },
         },
@@ -43,17 +44,18 @@ Règles du foyer, à respecter toujours :
 - Respecte ce que chacun ne mange pas ou n'aime pas. Sers-toi de ce que chacun aime, sans le répéter toute la semaine.
 - Tout est cuisiné en une fois le dimanche (batch cooking), puis réchauffé. Les repas de lundi, mardi et mercredi se gardent au frigo. Ceux de jeudi et vendredi doivent très bien se congeler : mets congele à true pour eux, false pour les autres. Samedi et dimanche, si on te les demande : un repas frais et simple, congele false.
 - Choisis des plats qui partagent des bases (un même riz, une même sauce tomate, des légumes rôtis) pour que le dimanche reste court. Des plats de tous les jours, de saison, pas chers.
-- Utilise d'abord ce qui est au stock, surtout ce qui est à manger vite.
+- PARS DU STOCK. Avant de choisir les plats, regarde ce qu'il y a à la maison : d'abord le frigo (surtout ce qui est à manger vite), puis le congélateur, puis le placard. Construis les plats AUTOUR de ces produits : chaque produit frais du frigo doit servir dans un repas de la semaine s'il se garde jusqu'au jour où l'on cuisine. On n'achète que le complément. Un produit dont la date est passée avant le jour où l'on cuisine ne compte pas.
 - Ne repropose pas les plats récents ni ceux à éviter. Varie : pas deux soirs de suite la même viande ou le même féculent.
 
 Pour chaque jour demandé, et seulement ceux-là, donne :
 - jour : la date AAAA-MM-JJ, telle qu'on te l'a donnée.
 - plat : le nom du plat, court, commence par une majuscule (« Curry de pois chiches », « Poulet rôti, riz, légumes »).
 - ingredients : ce qu'il faut pour le nombre de portions du soir, plus une portion si une gamelle est prévue le lendemain avec ce plat. nom au pluriel courant, en minuscules (« carottes », « lait de coco ») ; qte courte (« 500 g », « 2 », « 1 boîte »). Ne mets pas le sel, le poivre, l'huile ni l'eau. Au plus 10 ingrédients.
+- duStock : les produits du stock que ce plat utilise, recopiés EXACTEMENT comme dans la liste « À la maison » (vide si aucun). Ils figurent aussi dans ingredients, sous ce même nom exact (pour ne pas les racheter).
 - gamelle : si une gamelle est demandée ce jour-là, ce qu'elle contient, en quelques mots. Le plus économe : la portion en plus du plat de la veille (« Chili de mardi »). Le lundi : un plat du batch. Si la personne ne peut pas réchauffer, une gamelle qui se mange froide. Sinon "".
 Un soir à 0 portion : personne ne mange à la maison, ne propose rien pour ce jour (ne le mets pas dans repas), sauf si une gamelle est demandée.
 
-reponse : une phrase courte et chaleureuse, en tutoyant, qui résume la semaine (« Une semaine autour du riz et des légumes rôtis, avec le curry jeudi au congélateur. »).`;
+reponse : une phrase courte et chaleureuse, en tutoyant, qui résume la semaine et dit ce qui est utilisé du stock (« Je pars de ton poulet et de tes courgettes, avec le curry jeudi au congélateur. »).`;
 
 function cors(origine: string | null) {
   return {
@@ -77,7 +79,7 @@ const aDuPorc = (t: string) => PORC.test(t.replace(PERMIS, " "));
 
 // Ce que le modèle renvoie est vérifié : seulement les jours demandés, une fois chacun, et jamais de porc.
 // deno-lint-ignore no-explicit-any
-function nettoyer(lu: any, demandes: Set<string>) {
+function nettoyer(lu: any, demandes: Set<string>, auStock: Set<string>) {
   const vus = new Set<string>();
   // deno-lint-ignore no-explicit-any
   const repas = liste(lu?.repas, MAX_JOURS).flatMap((r: any) => {
@@ -88,7 +90,8 @@ function nettoyer(lu: any, demandes: Set<string>) {
     if (aDuPorc(plat) || ingredients.some((i) => aDuPorc(i.nom))) return [];
     vus.add(jour);
     const gamelle = court(r?.gamelle, 80);
-    return [{ jour, plat, ingredients, congele: r?.congele === true, gamelle: aDuPorc(gamelle) ? "" : gamelle }];
+    const duStock = [...new Set(liste(r?.duStock, 12).map((n) => court(n, 60)).filter((n) => auStock.has(n)))];
+    return [{ jour, plat, ingredients, duStock, congele: r?.congele === true, gamelle: aDuPorc(gamelle) ? "" : gamelle }];
   });
   return { repas, reponse: court(lu?.reponse, 300) };
 }
@@ -117,7 +120,12 @@ Deno.serve(async (req) => {
     rechauffe: ["oui", "non", "pas"].includes(x?.rechauffe) ? x.rechauffe : "",
   })).filter((x) => x.prenom);
   // deno-lint-ignore no-explicit-any
-  const stock = liste(d?.stock, 40).map((p: any) => ({ nom: court(p?.nom, 60), avant: JOUR.test(p?.avant ?? "") ? p.avant : "" })).filter((p) => p.nom);
+  const stock = liste(d?.stock, 60).map((p: any) => ({
+    nom: court(p?.nom, 60), avant: JOUR.test(p?.avant ?? "") ? p.avant : "",
+    lieu: ["frigo", "congelateur", "placard"].includes(p?.lieu) ? p.lieu as string : "placard", moitie: p?.moitie === true,
+  })).filter((p) => p.nom);
+  const aujourdhui = JOUR.test(d?.aujourdhui ?? "") ? d.aujourdhui as string : new Date().toISOString().slice(0, 10);
+  const cuisine = JOUR.test(d?.cuisine ?? "") ? d.cuisine as string : aujourdhui;
   const noms = (x: unknown, n: number) => liste(x, n).map((p) => court(p, 80)).filter(Boolean);
   const recents = noms(d?.recents, 20), eviter = noms(d?.eviter, 20);
   // deno-lint-ignore no-explicit-any
@@ -128,7 +136,11 @@ Deno.serve(async (req) => {
   const situation = [
     `Les jours à prévoir :\n${jours.map((j) => `- ${nomJour(j.jour)} ${j.jour} : soir ${j.soir} portion${j.soir > 1 ? "s" : ""}${j.gamelle ? `, gamelle du midi${mangeur ? ` pour ${mangeur}` : ""}` : ""}`).join("\n")}`,
     gouts.length ? `Les goûts :\n${gouts.map((x) => `- ${x.prenom} aime : ${x.aime.join(", ") || "pas précisé"}. Ne mange pas ou n'aime pas : ${x.evite || "rien de précisé"}.${x.rechauffe === "non" ? " Ne peut PAS réchauffer au travail." : x.rechauffe === "oui" ? " Peut réchauffer au travail." : ""}`).join("\n")}` : "Goûts : pas encore donnés.",
-    stock.length ? `Au stock :\n${stock.map((p) => `- ${p.nom}${p.avant ? ` (à manger avant le ${p.avant})` : ""}`).join("\n")}` : "Stock : rien de noté.",
+    `Aujourd'hui : ${nomJour(aujourdhui)} ${aujourdhui}. On cuisine le ${nomJour(cuisine)} ${cuisine}.`,
+    stock.length ? `À la maison (pars de là) :\n${[["frigo", "Frigo"], ["congelateur", "Congélateur"], ["placard", "Placard"]].map(([id, nom]) => {
+      const ici = stock.filter((p) => p.lieu === id);
+      return ici.length ? `${nom} :\n${ici.map((p) => `- ${p.nom}${p.moitie ? " (entamé, il en reste la moitié)" : ""}${p.avant ? ` (à manger avant le ${p.avant})` : ""}`).join("\n")}` : "";
+    }).filter(Boolean).join("\n")}` : "À la maison : rien de noté.",
     gardes.length ? `Déjà décidé cette semaine (ne change pas, sers-t'en pour varier et pour les gamelles) :\n${gardes.map((r) => `- ${nomJour(r.jour)} ${r.jour} : ${r.plat}`).join("\n")}` : "",
     recents.length ? `Plats récents, à ne pas reproposer : ${recents.join(" ; ")}.` : "",
     eviter.length ? `À éviter cette fois (la personne veut autre chose) : ${eviter.join(" ; ")}.` : "",
@@ -146,7 +158,7 @@ Deno.serve(async (req) => {
     if (reponse.stop_reason === "refusal") return repondre({ erreur: "refus" }, 422, origine);
     if (reponse.stop_reason === "max_tokens") return repondre({ erreur: "lecture" }, 502, origine);
     const brut = reponse.content.flatMap((b) => (b.type === "text" ? [b.text] : [])).join("");
-    return repondre(nettoyer(JSON.parse(brut), new Set(jours.map((j) => j.jour))), 200, origine);
+    return repondre(nettoyer(JSON.parse(brut), new Set(jours.map((j) => j.jour)), new Set(stock.map((p) => p.nom))), 200, origine);
   } catch (e) {
     if (e instanceof Anthropic.AuthenticationError) return repondre({ erreur: "cle" }, 503, origine);
     if (e instanceof Anthropic.RateLimitError) return repondre({ erreur: "occupe" }, 429, origine);

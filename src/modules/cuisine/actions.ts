@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { nouvelId } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
 import { db } from "../../data/db";
-import { apresAchat, apresRefus, cleDe, habituelsDus, nouvelArticle, type Article, type Gouts, type Habitude, type Lieu, type Repas, type Lu, type Rayon } from "./donnees";
+import { apresAchat, apresRefus, cleDe, habituelsDus, nouvelArticle, type Article, type Gouts, type Habitude, type Lieu, type Repas, type Reste, type Lu, type Rayon } from "./donnees";
 
 // Les gestes du module Cuisine sur ses propres tables. Tout ce qui retire montre « Annuler ».
 
@@ -144,6 +144,23 @@ export async function retirerProduit(id: string) {
   if (!p) return;
   await db.cuisine_stock.delete(id);
   toast(`${p.nom} retiré du stock`, { action: { label: "Annuler", onClick: () => db.cuisine_stock.put(p) } });
+}
+
+// Dire ce qu'il reste d'un produit. « Presque fini » le remet aux courses ; « fini » le sort du stock et le remet aux courses.
+// Annuler remet le produit comme il était et retire l'article que ce geste avait ajouté.
+export async function noterReste(id: string, reste: Reste | "plein" | "fini") {
+  const p = await db.cuisine_stock.get(id);
+  if (!p || (reste !== "fini" && (p.reste ?? "plein") === reste)) return;
+  let ajoutes: Article[] = [];
+  if (reste === "fini") await db.cuisine_stock.delete(id);
+  else await db.cuisine_stock.update(id, { reste: reste === "plein" ? undefined : reste });
+  if (reste === "fini" || reste === "peu") ajoutes = await ajouterArticles([{ nom: p.nom, qte: "" }], true);
+  if (reste !== "fini" && reste !== "peu") return;
+  const debut = reste === "fini" ? `${p.nom} : fini` : `${p.nom} : presque fini`;
+  toast(ajoutes.length ? `${debut}, ajouté aux courses` : `${debut}, déjà dans les courses`, { action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_stock, db.cuisine_courses, async () => {
+    await db.cuisine_stock.put(p);
+    await db.cuisine_courses.bulkDelete(ajoutes.map((a) => a.id));
+  }) } });
 }
 
 export const enregistrerGouts = (g: Omit<Gouts, "maj">) => db.cuisine_gouts.put({ ...g, maj: Date.now() });

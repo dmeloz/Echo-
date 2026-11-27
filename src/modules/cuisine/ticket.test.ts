@@ -9,7 +9,7 @@ vi.stubGlobal("localStorage", { getItem: (k: string) => memoire.get(k) ?? null, 
 
 import { db } from "../../data/db";
 import { lireFile } from "../../sync/file";
-import { ajouterArticles } from "./actions";
+import { ajouterArticles, noterReste } from "./actions";
 import { nettoyerLecture, nettoyerTicket } from "./donnees";
 import { dejaRange, jourDuTicket, rangerTicket } from "./ticket";
 
@@ -114,5 +114,39 @@ describe("ranger le ticket", () => {
     expect(nettoyerTicket({ id: "t", date: "hier", par: "moi" })).toBeNull();
     expect(nettoyerTicket({ id: "t", date: "2026-11-27", par: "elle", total: "12", lignes: [{ nom: "Lait", prix: 1.6 }, { prix: 3 }] }))
       .toMatchObject({ total: 0, monnaie: "CHF", lignes: [{ nom: "Lait", qte: "", prix: 1.6 }] });
+  });
+});
+
+describe("ce qu'il reste d'un produit", () => {
+  const lait = { id: "p1", nom: "Lait", lieu: "frigo" as const, cree: 1 };
+  it("à moitié ne touche pas aux courses ; presque fini le remet aux courses, Annuler défait", async () => {
+    await db.cuisine_stock.add(lait);
+    await noterReste("p1", "moitie");
+    expect((await db.cuisine_stock.get("p1"))!.reste).toBe("moitie");
+    expect(await db.cuisine_courses.count()).toBe(0);
+    expect(toast).not.toHaveBeenCalled();
+    await noterReste("p1", "peu");
+    expect((await db.cuisine_courses.toArray()).map((a) => a.nom)).toEqual(["Lait"]);
+    await toast.mock.calls.at(-1)![1].action.onClick();
+    expect((await db.cuisine_stock.get("p1"))!.reste).toBe("moitie");
+    expect(await db.cuisine_courses.count()).toBe(0);
+    await noterReste("p1", "plein");
+    expect((await db.cuisine_stock.get("p1"))!.reste).toBeUndefined();
+  });
+  it("fini sort le produit du stock et le remet aux courses sans doubler", async () => {
+    await db.cuisine_stock.add(lait);
+    await ajouterArticles([{ nom: "Lait", qte: "" }], true);
+    await noterReste("p1", "fini");
+    expect(await db.cuisine_stock.count()).toBe(0);
+    expect(await db.cuisine_courses.count()).toBe(1);
+    await toast.mock.calls.at(-1)![1].action.onClick();
+    expect(await db.cuisine_stock.get("p1")).toEqual(lait);
+    expect(await db.cuisine_courses.count()).toBe(1); // l'article était déjà là avant : il reste
+  });
+  it("racheté (ticket), un produit presque fini redevient plein", async () => {
+    await db.cuisine_stock.add({ id: "p2", nom: "Riz basmati", lieu: "placard", reste: "peu", cree: 1 });
+    const lu = nettoyerLecture(brut, []);
+    await rangerTicket(lu, lu.lignes.slice(2, 3), NOW);
+    expect(await db.cuisine_stock.toArray()).toEqual([{ id: "p2", nom: "Riz basmati", lieu: "placard", cree: 1 }]);
   });
 });
