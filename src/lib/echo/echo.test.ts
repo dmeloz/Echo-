@@ -7,7 +7,7 @@ vi.stubGlobal("navigator", {});
 import { db } from "../../data/db";
 import { plusJours } from "../dates";
 import type { Tache } from "../types";
-import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, MODELE_ECHO, MODELE_PLAN, OUTILS_ECHO, coutMicro, demandeTour, estPlan, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, MODELE_ECHO, MODELE_PLAN, OUTILS_ECHO, coutMicro, demandeTour, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
 import { executer, lancerEcho, type Appeler, type Bloc, type Message, type Tour } from "./boucle";
 import { OUTILS_BASE, type ContexteEcho } from "./outils";
 import { nettoyerJournal } from "./journal";
@@ -50,34 +50,15 @@ describe("la liste fermée des outils", () => {
 });
 
 describe("le choix du modèle", () => {
-  it("Sonnet pour organiser, Haiku pour une petite chose", () => {
-    expect(estPlan("Ok demain je dois fair les comision aller a landi aller chez fileman Sarah est occuper de 10h- 11h")).toBe(true);
-    expect(estPlan("cette semaine garage, banque et ménage")).toBe(true);
-    expect(estPlan("dentiste jeudi 15h pour Sarah")).toBe(false);
-    expect(estPlan("plus de lait")).toBe(false);
-  });
-  it("toute la phrase garde le même modèle, et la note de l'app ne compte pas", () => {
-    const m = (p: string) => demandeTour("Aujourd'hui : x", [{ role: "user", content: p }]).model;
-    expect(m("demain je dois aller à Landi, chez Fileman et faire les commissions")).toBe(MODELE_PLAN);
-    expect(m("[Note de l'app : Dany a dit oui. Fait : Ajouter : Landi, Fileman, commissions, garage, banque, ménage.]\noui merci")).toBe(MODELE_ECHO);
-    const suite = demandeTour("Aujourd'hui : x", [
-      { role: "user", content: "demain je dois aller à Landi et chez Fileman" },
-      { role: "assistant", content: [{ type: "tool_use", id: "a", name: "voir_jours", input: {} }] },
-      { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "{}" }] },
-    ]);
-    expect(suite.model).toBe(MODELE_PLAN);
-    expect(suite).toMatchObject({ fallbacks: "default" });
-  });
-  it("une réponse à un plan reste avec Sonnet ; budget presque fini : Haiku ; un repli garde l'en-tête", () => {
-    const plan = { role: "user", content: "demain je dois aller à Landi et chez Fileman" };
+  it("Sonnet pour toute la discussion ; budget presque fini : Haiku ; un repli garde l'en-tête", () => {
+    const m = (p: string, sansPlan = false) => demandeTour("Aujourd'hui : x", [{ role: "user", content: p }], undefined, { sansPlan });
+    expect(m("plus de lait").model).toBe(MODELE_PLAN);
+    expect(m("demain je dois aller à Landi et chez Fileman")).toMatchObject({ model: MODELE_PLAN, fallbacks: "default", betas: ["server-side-fallback-2026-07-01"] });
+    expect(m("plus de lait", true).model).toBe(MODELE_ECHO);
+    expect("fallbacks" in m("plus de lait", true)).toBe(false);
     const rep = [{ type: "text", text: "Voici ton programme." }];
-    const apres = [plan, { role: "assistant", content: rep }, { role: "user", content: "mets plutôt Landi l'après-midi" }];
-    expect(demandeTour("Aujourd'hui : x", apres).model).toBe(MODELE_PLAN);
-    expect(demandeTour("Aujourd'hui : x", apres, undefined, { sansPlan: true }).model).toBe(MODELE_ECHO);
     const repli = [{ role: "user", content: "salut" }, { role: "assistant", content: [{ type: "fallback" }, ...rep] }, { role: "user", content: "merci" }];
-    expect(demandeTour("Aujourd'hui : x", repli)).toMatchObject({ model: MODELE_ECHO, betas: ["server-side-fallback-2026-07-01"] });
-    expect(estPlan("range la vaisselle et sors la poubelle")).toBe(false);
-    expect(estPlan("dentiste demain et pharmacie")).toBe(false);
+    expect(demandeTour("Aujourd'hui : x", repli, undefined, { sansPlan: true })).toMatchObject({ model: MODELE_ECHO, betas: ["server-side-fallback-2026-07-01"] });
   });
   it("le coût suit le vrai modèle, même avec un nom daté", () => {
     const u = { input_tokens: 1000, output_tokens: 1000, cache_read_input_tokens: 10000 };
