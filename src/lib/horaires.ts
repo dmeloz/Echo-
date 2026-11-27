@@ -50,6 +50,12 @@ export function ligneAccueil(code: Code | undefined, nowMin: number): string | n
   return reste.length ? `Travail ${reste.map(plageFr).join(" et ")}` : null;
 }
 
+// Le prochain début de travail d'aujourd'hui (« 08:00 »), s'il n'a pas encore commencé. Pour l'heure de départ.
+export function prochainDebut(code: Code | undefined, nowMin: number): string | null {
+  if (!code || !CODES[code].travail) return null;
+  return CODES[code].plages.map(([a]) => a).find((a) => minutes(a) > nowMin) ?? null;
+}
+
 // Tous les jours d'un mois « 2026-12 », du 1er au dernier.
 export function joursDuMois(mois: string): string[] {
   const [a, m] = mois.split("-").map(Number);

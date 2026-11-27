@@ -1,5 +1,5 @@
 import { CalendarClock, CalendarDays, Sun } from "pulsoicon-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CartePremier } from "../components/CartePremier";
 import { LigneTache } from "../components/LigneTache";
 import { auJour, heureFr, minutes } from "../lib/dates";
@@ -10,7 +10,8 @@ import { changerNiveau, cocher, effacerExemples, ranger } from "../data/actions"
 import { triJour } from "../lib/ordre";
 import { plusJours } from "../lib/dates";
 import { poserReglage, useAvecPhoto, useHoraires, useReglage } from "../data/hooks";
-import { ligneAccueil } from "../lib/horaires";
+import { ligneAccueil, prochainDebut } from "../lib/horaires";
+import { departTravail } from "../lib/trajet";
 import type { Module } from "../modules/contrat";
 import { tachesDuJour } from "../lib/journee";
 
@@ -59,6 +60,17 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
   // Une seule petite ligne pour le travail du jour ; elle disparaît une fois le travail fini.
   const codeDuJour = useHoraires().find((h) => h.qui === proprio && h.jour === today)?.code;
   const travail = ligneAccueil(codeDuJour, nowMin);
+  // « pars à 7 h 30 » : l'heure de départ pour le prochain début de travail (Réglages → Agenda → Trajets).
+  const debut = prochainDebut(codeDuJour, nowMin);
+  const trajets = useReglage<unknown>("trajets", null);
+  const [depart, setDepart] = useState<{ pour: string; heure: string } | null>(null);
+  useEffect(() => {
+    if (!debut) return;
+    let vivant = true;
+    departTravail(today, debut).then((d) => { if (vivant && typeof d !== "string") setDepart({ pour: `${today} ${debut}`, heure: d.depart }); }).catch(() => {});
+    return () => { vivant = false; };
+  }, [today, debut, trajets]);
+  const pars = debut && depart?.pour === `${today} ${debut}` ? depart.heure : null;
   // Poser une ligne ailleurs : devant une voisine, tout en haut (elle passe « En premier ») ou après la dernière ligne montrée.
   const poserLigne = (t: Tache, avantId: string | null) => {
     const apresDerniere = () => { const sans = liste.filter((x) => x.id !== t.id); const d = montres.filter((x) => x.id !== t.id).at(-1); return d ? sans[sans.indexOf(d) + 1]?.id ?? null : null; };
@@ -82,7 +94,7 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
       {parLautre.length > 0 && (
         <p className="autre-fait">{noms[lautre]} a fait « {parLautre[0].titre} »{parLautre.length > 1 ? ` et ${parLautre.length - 1} autre${parLautre.length > 2 ? "s" : ""} chose${parLautre.length > 2 ? "s" : ""}` : ""}.</p>
       )}
-      {travail && codeDuJour && <p className={`travail-accueil code-${codeDuJour.toLowerCase()}`}>{travail}</p>}
+      {travail && codeDuJour && <p className={`travail-accueil code-${codeDuJour.toLowerCase()}`}>{travail}{pars ? ` · pars à ${heureFr(pars).replace(/^0/, "")}` : ""}</p>}
       {taches.some((t) => t.ex) && (
         <div className="exemples">
           <span>Exemples pour essayer. Glisse une tâche vers la droite pour la monter, vers la gauche pour la descendre.</span>
