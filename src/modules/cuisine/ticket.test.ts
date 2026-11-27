@@ -9,8 +9,8 @@ vi.stubGlobal("localStorage", { getItem: (k: string) => memoire.get(k) ?? null, 
 
 import { db } from "../../data/db";
 import { lireFile } from "../../sync/file";
-import { ajouterArticles, noterReste } from "./actions";
-import { nettoyerLecture, nettoyerTicket } from "./donnees";
+import { ajouterArticles, ajouterProduit, compterProduit, noterReste } from "./actions";
+import { lireQuantite, nettoyerLecture, nettoyerTicket } from "./donnees";
 import { dejaRange, jourDuTicket, rangerTicket } from "./ticket";
 
 const NOW = new Date("2026-11-27T18:00:00");
@@ -84,7 +84,7 @@ describe("ranger le ticket", () => {
     const lu = nettoyerLecture(brut, []);
     const bilan = await rangerTicket(lu, lu.lignes.slice(1, 2), NOW);
     expect(bilan.stock).toBe(0);
-    expect(await db.cuisine_stock.toArray()).toEqual([{ id: "p1", nom: "Blanc de poulet", lieu: "frigo", avant: "2026-11-29", cree: 1 }]);
+    expect(await db.cuisine_stock.toArray()).toEqual([{ id: "p1", nom: "Blanc de poulet", lieu: "frigo", avant: "2026-11-29", qte: "500 g", cree: 1 }]);
     await toast.mock.calls.at(-1)![1].action.onClick();
     expect((await db.cuisine_stock.get("p1"))!.avant).toBe("2026-11-20");
   });
@@ -147,6 +147,45 @@ describe("ce qu'il reste d'un produit", () => {
     await db.cuisine_stock.add({ id: "p2", nom: "Riz basmati", lieu: "placard", reste: "peu", cree: 1 });
     const lu = nettoyerLecture(brut, []);
     await rangerTicket(lu, lu.lignes.slice(2, 3), NOW);
-    expect(await db.cuisine_stock.toArray()).toEqual([{ id: "p2", nom: "Riz basmati", lieu: "placard", cree: 1 }]);
+    expect(await db.cuisine_stock.toArray()).toEqual([{ id: "p2", nom: "Riz basmati", lieu: "placard", qte: "1 kg", cree: 1 }]);
+  });
+});
+
+describe("compter les unités d'un produit", () => {
+  it("lit le nombre d'unités dans la quantité", () => {
+    expect(lireQuantite("6 x 25 cl")).toEqual({ nb: 6, qte: "25 cl" });
+    expect(lireQuantite("6×25cl")).toEqual({ nb: 6, qte: "25cl" });
+    expect(lireQuantite("4")).toEqual({ nb: 4 });
+    expect(lireQuantite("1")).toEqual({});
+    expect(lireQuantite("500 g")).toEqual({ qte: "500 g" });
+    expect(lireQuantite("")).toEqual({});
+  });
+  it("un de moins à chaque fois ; au dernier il part aux courses, à zéro il sort du stock", async () => {
+    await ajouterProduit("6 crèmes", "frigo");
+    const [p] = await db.cuisine_stock.toArray();
+    expect(p).toMatchObject({ nom: "Crèmes", nb: 6 });
+    for (let i = 0; i < 4; i++) await compterProduit(p.id, -1);
+    expect((await db.cuisine_stock.get(p.id))!.nb).toBe(2);
+    expect(await db.cuisine_courses.count()).toBe(0);
+    await compterProduit(p.id, -1);
+    expect((await db.cuisine_stock.get(p.id))!.nb).toBe(1);
+    expect((await db.cuisine_courses.toArray()).map((a) => a.nom)).toEqual(["Crèmes"]);
+    await toast.mock.calls.at(-1)![1].action.onClick();
+    expect((await db.cuisine_stock.get(p.id))!.nb).toBe(2);
+    expect(await db.cuisine_courses.count()).toBe(0);
+    await compterProduit(p.id, -1); await compterProduit(p.id, -1);
+    expect(await db.cuisine_stock.count()).toBe(0);
+    expect(await db.cuisine_courses.count()).toBe(1);
+  });
+  it("le ticket garde le nombre, et un rachat s'ajoute à ce qu'il reste", async () => {
+    const lu = nettoyerLecture({ ...brut, lignes: [{ nom: "Crème demi-écrémée", qte: "6 x 25 cl", prix: 5.4, lieu: "frigo", jours: 0, course: "", sur: true }] }, []);
+    await rangerTicket(lu, lu.lignes, NOW);
+    const [p] = await db.cuisine_stock.toArray();
+    expect(p).toMatchObject({ nb: 6, qte: "25 cl" });
+    await db.cuisine_stock.update(p.id, { nb: 1 });
+    await rangerTicket({ ...lu, total: 9 }, lu.lignes, NOW);
+    expect((await db.cuisine_stock.toArray()).map((x) => x.nb)).toEqual([7]);
+    await toast.mock.calls.at(-1)![1].action.onClick();
+    expect((await db.cuisine_stock.get(p.id))!.nb).toBe(1);
   });
 });

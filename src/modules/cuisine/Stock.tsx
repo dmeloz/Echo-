@@ -1,11 +1,11 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { ChevronLeft, House, Package, Plus, Refrigerator, Snowflake } from "pulsoicon-react";
+import { ChevronLeft, House, Minus, Package, Plus, Refrigerator, Snowflake } from "pulsoicon-react";
 import { useEffect, useState } from "react";
 import { db } from "../../data/db";
 import { auJour, libelleJour } from "../../lib/dates";
 import type { ContexteModule } from "../contrat";
 import { vibrer } from "../../lib/gestes";
-import { ajouterProduit, noterReste, retirerProduit } from "./actions";
+import { ajouterProduit, compterProduit, noterReste, retirerProduit } from "./actions";
 import { LIEUX, RESTES, montant, type LectureTicket, type Lieu, type Produit, type Reste } from "./donnees";
 import { PhotoTicket } from "./Ticket";
 
@@ -47,7 +47,7 @@ export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: Lectu
           ajouterProduit(nom.value, lieu, avant.value); f.reset(); nom.focus();
         }}>
           <label className="vh" htmlFor="stock-nom">Produit</label>
-          <input id="stock-nom" name="nom" className="saisie" placeholder="Ajouter un produit" maxLength={60} enterKeyHint="done" />
+          <input id="stock-nom" name="nom" className="saisie" placeholder="Ajouter : « 6 crèmes », « beurre »" maxLength={60} enterKeyHint="done" />
           <label className="puce">À manger avant <input type="date" name="avant" min={today} /></label>
           <button type="submit" className="rond-champ plein" aria-label="Ajouter au stock"><Plus size={20} strokeWidth={2.4} /></button>
         </form>
@@ -56,18 +56,30 @@ export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: Lectu
             {ici.map((p) => (
               <li key={p.id} className={ouvert === p.id ? "ouvert" : ""}>
                 <button type="button" className="stock-ligne" aria-expanded={ouvert === p.id} onClick={() => setOuvert(ouvert === p.id ? null : p.id)}>
-                  <b>{p.nom}</b>
+                  <b>{p.nom}{p.qte && <i> {p.qte}</i>}</b>
                   {p.avant && <span className={p.avant <= limite ? "vite" : ""}>{quand(p)}</span>}
-                  <Jauge reste={p.reste} />
+                  {p.nb ? <span className={`compte${p.nb === 1 ? " dernier" : ""}`} aria-label={`Il en reste ${p.nb}`}>×{p.nb}</span> : <Jauge reste={p.reste} />}
                 </button>
                 {ouvert === p.id && (
                   <div className="stock-plus">
                     <span className="lab">Il en reste</span>
-                    <div className="stock-restes" role="group" aria-label={`Ce qu'il reste de ${p.nom}`}>
-                      {RESTES.map((r) => <button key={r.id} type="button" className="puce" aria-pressed={(p.reste ?? "plein") === r.id} onClick={() => { vibrer(); noterReste(p.id, r.id); }}>{r.nom}</button>)}
-                      <button type="button" className="puce" onClick={() => { vibrer(12); setOuvert(null); noterReste(p.id, "fini"); }}>Fini</button>
-                    </div>
-                    <p className="aide-champ">Presque fini ou fini : Echo le remet dans les courses.</p>
+                    {p.nb ? (
+                      <div className="stock-restes" role="group" aria-label={`Ce qu'il reste de ${p.nom}`}>
+                        <div className="compteur">
+                          <button type="button" aria-label="Un de moins" onClick={() => { vibrer(); if (p.nb === 1) setOuvert(null); compterProduit(p.id, -1); }}><Minus size={18} strokeWidth={2.4} /></button>
+                          <output aria-live="polite">{p.nb}</output>
+                          <button type="button" aria-label="Un de plus" onClick={() => { vibrer(); compterProduit(p.id, 1); }}><Plus size={18} strokeWidth={2.4} /></button>
+                        </div>
+                        <button type="button" className="puce" onClick={() => { vibrer(12); setOuvert(null); noterReste(p.id, "fini"); }}>Fini</button>
+                      </div>
+                    ) : (
+                      <div className="stock-restes" role="group" aria-label={`Ce qu'il reste de ${p.nom}`}>
+                        {RESTES.map((r) => <button key={r.id} type="button" className="puce" aria-pressed={(p.reste ?? "plein") === r.id} onClick={() => { vibrer(); noterReste(p.id, r.id); }}>{r.nom}</button>)}
+                        <button type="button" className="puce" onClick={() => { vibrer(12); setOuvert(null); noterReste(p.id, "fini"); }}>Fini</button>
+                      </div>
+                    )}
+                    <p className="aide-champ">{p.nb ? "Au dernier, Echo le remet dans les courses." : "Presque fini ou fini : Echo le remet dans les courses."}</p>
+                    {!p.nb && <button type="button" className="bouton-texte" onClick={() => compterProduit(p.id, 1)}>J'en ai plusieurs</button>}
                     <button type="button" className="bouton-texte danger" onClick={() => { setOuvert(null); retirerProduit(p.id); }}>Retirer sans racheter</button>
                   </div>
                 )}

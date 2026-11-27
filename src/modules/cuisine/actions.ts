@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { nouvelId } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
 import { db } from "../../data/db";
-import { apresAchat, apresRefus, cleDe, habituelsDus, nouvelArticle, type Article, type Gouts, type Habitude, type Lieu, type Repas, type Reste, type Lu, type Rayon } from "./donnees";
+import { apresAchat, apresRefus, cleDe, habituelsDus, lireArticles, lireQuantite, nouvelArticle, type Article, type Gouts, type Habitude, type Lieu, type Repas, type Reste, type Lu, type Rayon } from "./donnees";
 
 // Les gestes du module Cuisine sur ses propres tables. Tout ce qui retire montre « Annuler ».
 
@@ -135,9 +135,11 @@ export async function poserRepas(jour: string, plat: string) {
 }
 
 export async function ajouterProduit(nom: string, lieu: Lieu, avant = "") {
-  const n = nom.trim().slice(0, 60);
+  // « 6 crèmes » : le nombre devant devient le compteur du produit.
+  const lu = lireArticles(nom)[0];
+  const n = (lu?.nom ?? nom).trim().slice(0, 60);
   if (!n) return;
-  await db.cuisine_stock.add({ id: nouvelId(), nom: n.charAt(0).toUpperCase() + n.slice(1), lieu, ...(avant ? { avant } : {}), cree: Date.now() });
+  await db.cuisine_stock.add({ id: nouvelId(), nom: n.charAt(0).toUpperCase() + n.slice(1), lieu, ...(avant ? { avant } : {}), ...lireQuantite(lu?.qte ?? ""), cree: Date.now() });
 }
 export async function retirerProduit(id: string) {
   const p = await db.cuisine_stock.get(id);
@@ -158,6 +160,21 @@ export async function noterReste(id: string, reste: Reste | "plein" | "fini") {
   if (reste !== "fini" && reste !== "peu") return;
   const debut = reste === "fini" ? `${p.nom} : fini` : `${p.nom} : presque fini`;
   toast(ajoutes.length ? `${debut}, ajouté aux courses` : `${debut}, déjà dans les courses`, { action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_stock, db.cuisine_courses, async () => {
+    await db.cuisine_stock.put(p);
+    await db.cuisine_courses.bulkDelete(ajoutes.map((a) => a.id));
+  }) } });
+}
+
+// Compter les unités : une de moins, une de plus. À la dernière, le produit est remis aux courses ; à zéro, il est fini.
+export async function compterProduit(id: string, delta: number) {
+  const p = await db.cuisine_stock.get(id);
+  if (!p) return;
+  const n = Math.min(99, (p.nb ?? 1) + delta);
+  if (n <= 0) return noterReste(id, "fini");
+  await db.cuisine_stock.update(id, { nb: n, reste: undefined });
+  if (n !== 1 || delta >= 0) return;
+  const ajoutes = await ajouterArticles([{ nom: p.nom, qte: "" }], true);
+  toast(ajoutes.length ? `${p.nom} : plus qu'un, ajouté aux courses` : `${p.nom} : plus qu'un, déjà dans les courses`, { action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_stock, db.cuisine_courses, async () => {
     await db.cuisine_stock.put(p);
     await db.cuisine_courses.bulkDelete(ajoutes.map((a) => a.id));
   }) } });

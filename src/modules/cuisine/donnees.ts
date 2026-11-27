@@ -36,7 +36,16 @@ export const LIEUX: Array<{ id: Lieu; nom: string }> = [
 // reste : ce qu'il reste du produit. Absent = plein ; « peu » = presque fini (il est alors remis aux courses).
 export type Reste = "moitie" | "peu";
 export const RESTES: Array<{ id: Reste | "plein"; nom: string }> = [{ id: "plein", nom: "Plein" }, { id: "moitie", nom: "À moitié" }, { id: "peu", nom: "Presque fini" }];
-export interface Produit { id: string; nom: string; lieu: Lieu; avant?: string; reste?: Reste; cree: number }
+// nb : le nombre d'unités qu'il reste, quand le produit se compte (6 briques de crème). qte : la taille d'une unité (« 25 cl »).
+export interface Produit { id: string; nom: string; lieu: Lieu; avant?: string; reste?: Reste; nb?: number; qte?: string; cree: number }
+// « 6 x 25 cl » = 6 unités de 25 cl ; « 6 » = 6 unités ; « 500 g » = une quantité, pas un nombre. Une seule unité ne se compte pas.
+export function lireQuantite(texte: string): { nb?: number; qte?: string } {
+  const t = texte.replace(/\s+/g, " ").trim().slice(0, 20);
+  const m = /^(\d{1,2})(?:\s*[x×*]\s*(.+))?$/i.exec(t);
+  if (!m) return t ? { qte: t } : {};
+  const n = Number(m[1]);
+  return { ...(n >= 2 ? { nb: n } : {}), ...(m[2] ? { qte: m[2].trim() } : {}) };
+}
 export type Rechauffe = "" | "oui" | "non" | "pas";
 export interface Gouts { qui: Personne; aime: string[]; evite: string; rechauffe: Rechauffe; maj: number }
 
@@ -252,7 +261,9 @@ export function nettoyerProduit(x: unknown): Produit | null {
   const o = obj(x), id = txt(o.id, 80), nom = txt(o.nom, 60).trim(), avant = txt(o.avant, 10);
   if (!id || !nom || !LIEUX.some((l) => l.id === o.lieu)) return null;
   const reste = (["moitie", "peu"] as const).find((r) => r === o.reste);
-  return { id, nom, lieu: o.lieu as Lieu, ...(JOUR_ISO.test(avant) ? { avant } : {}), ...(reste ? { reste } : {}), cree: nb(o.cree) ?? Date.now() };
+  const n = nb(o.nb), qte = txt(o.qte, 20).trim();
+  return { id, nom, lieu: o.lieu as Lieu, ...(JOUR_ISO.test(avant) ? { avant } : {}), ...(reste ? { reste } : {}),
+    ...(n !== null && Number.isInteger(n) && n >= 1 && n <= 99 ? { nb: n } : {}), ...(qte ? { qte } : {}), cree: nb(o.cree) ?? Date.now() };
 }
 export function nettoyerGouts(x: unknown): Gouts | null {
   const o = obj(x);
