@@ -96,8 +96,6 @@ Page à trois parties : Semaine, Courses, Stock (elle s'ouvre sur Courses le ven
 - Un produit presque fini ne compte plus comme « au stock » pour la semaine d'Echo. Racheté par un ticket, il redevient plein.
 - La semaine d'Echo part du stock : l'app envoie ce qui se mange (frigo d'abord, ce qui presse en tête, puis congélateur et placard), la date du jour et le jour où l'on cuisine. La fonction `cuisine` construit les plats autour de ces produits et dit pour chaque plat ce qu'il prend au stock (`duStock`, affiché « Avec ton stock : … »).
 - Un produit qui se compte a un compteur (`nb`, et `qte` = la taille d'une unité) : « 6 x 25 cl » lu sur le ticket, « 6 crèmes » écrit à la main, ou « J'en ai plusieurs ». Moins un à chaque fois (`compterProduit`) : au dernier il est remis aux courses, à zéro il sort du stock. Un rachat s'ajoute à ce qu'il reste.
-<<<<<<< HEAD
-=======
 - Pas encore construits (donc absents de l'écran) : code-barres, photo du ticket, plusieurs magasins, repas proposés par Echo, batch cooking.
 
 ## Echo qui agit (lot 1 du moteur, 2026-11-27)
@@ -113,4 +111,3 @@ Donner des outils à un module :
 1. Décrire l'outil dans `OUTILS_ECHO` (supabase/functions/_shared/echo-outils.ts), avec son genre.
 2. Fournir son exécutant dans le champ `outils` du module (`lire` ou `preparer`, voir `Executant` dans src/lib/echo/outils.ts).
 3. Ajouter un cas aux phrases d'essai (`essais/echo.essais.ts`) et lancer `ANTHROPIC_API_KEY=… npm run essais` avant la mise en ligne.
->>>>>>> origin/base-app-aujourdhui
