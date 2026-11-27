@@ -41,6 +41,16 @@ Règles :
 2. L'ajouter à la liste `MODULES` de `src/modules/registre.ts`.
 3. Passer `etat` à `"construit"` et fournir `Page` (et `Tuile` si besoin) quand il est prêt.
 
+## La synchro à deux : ce qu'elle garantit (2026-11-27)
+
+Le moteur est dans `src/sync/` (`moteur.ts`, `file.ts`, `fusion.ts`, `genres.ts`). Les tests sont dans `src/sync/fiable.test.ts`, contre un faux serveur (`faux-serveur.ts`).
+
+- **Deux changements sur la même ligne** : au premier changement fait sur un téléphone, la file garde « la base » (la ligne d'avant). Avant d'envoyer, le moteur relit la ligne du foyer ; si l'autre l'a changée entre-temps, les champs sont fusionnés un par un (les étapes d'une tâche, une par une). Le même champ changé des deux côtés : la version de celui qui envoie est gardée, et il est prévenu par un message. Effacée ici mais changée par l'autre : sa version revient, avec un message.
+- La fusion vaut pour les tâches et pour les genres marqués `fusion: true` dans `genres.ts`. **Pour un nouveau genre** : mettre `fusion: true` seulement si chaque champ veut dire quelque chose tout seul (un article, une corvée, un papier). Pas pour une ligne dont les champs vont ensemble (un repas et ses ingrédients, un poste de budget et ses montants) : là, la dernière version arrivée gagne en entier.
+- **Entrer dans le foyer** (`entrer` puis `partager`) : le téléphone envoie seulement ce que le foyer n'a pas. Ce que le foyer a déjà, même supprimé, gagne. Une table qui range ses lignes par personne (`qui`, `par`) doit être ajoutée à l'échange des places dans `entrer`.
+- **Une ligne refusée par le serveur** (genre oublié dans la migration, donnée trop grande) ne bloque plus rien : les autres partent, la réception continue, et la ligne refusée repart à son prochain changement ou au prochain lancement.
+- Une ligne reçue illisible (tâche, horaire, module) est ignorée : elle n'efface jamais celle du téléphone.
+
 ## Agenda · Mes horaires (2026-11-26)
 
 Troisième vue du Planning. Un code de travail par jour et par personne (table Dexie `horaires`, clé `[qui+jour]`), repris de la fiche du chef de Melo :
