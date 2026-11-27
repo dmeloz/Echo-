@@ -260,7 +260,7 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 @keyframes echo-point { 0%, 100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
 @media (prefers-reduced-motion: reduce) { .echo-points i { animation: none; opacity: .7; } }
 .apercu.echo-propose { max-height: 52vh; overflow-y: auto; }
-.echo-dit { margin: 0; font-size: 14.5px; color: var(--encre); }
+.echo-dit { margin: 0; font-size: 14.5px; color: var(--encre); white-space: pre-line; }
 .echo-avant { font-size: 13px; color: rgb(18 40 58 / .6); border-bottom: 1px solid rgb(18 40 58 / .08); margin-bottom: 8px; padding-bottom: 6px; }
 .echo-avant p { margin: 0 0 6px; }
 .apercu.echo-propose .ligne-ap + .ligne-ap { border-top: 1px solid rgb(18 40 58 / .08); padding-top: 8px; }

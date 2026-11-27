@@ -32,9 +32,17 @@ export interface ResultatEcho {
 // Bien en dessous de MAX_CONVERSATION : la phrase qui vient ajoutera ses propres résultats d'outils.
 const TAILLE_MAX = 60_000;
 // La phrase passe toujours entière (jusqu'à MAX_PHRASE) ; ce sont les notes de l'app qui sont raccourcies s'il le faut.
+// Chaque note tient sur sa ligne et reste entière (le serveur les reconnaît ainsi) : c'est son texte qui est raccourci.
 function avecNotes(notes: string[], phrase: string) {
   const p = phrase.slice(0, MAX_PHRASE);
-  const avant = notes.filter(Boolean).map((n) => `[Note de l'app : ${n}]\n`).join("").slice(0, MAX_PHRASE - p.length);
+  let place = MAX_PHRASE - p.length, avant = "";
+  for (const n of notes.filter(Boolean)) {
+    const texte = n.replace(/[\[\]\n\r]+/g, " ").trim().slice(0, Math.max(0, place - 30));
+    if (!texte) break;
+    const ligne = `[Note de l'app : ${texte}]\n`;
+    avant += ligne;
+    place -= ligne.length;
+  }
   return avant + p;
 }
 function reprendre(avant: Message[], phrase: string, note: string): Message[] {
@@ -59,7 +67,9 @@ export function situation(ctx: ContexteEcho, memoire: Souvenir[] = []) {
 }
 
 const texteDe = (blocs: Bloc[]) =>
-  blocs.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join(" ").replace(/\s+/g, " ").trim();
+  // Les retours à la ligne restent (un programme de la journée, une ligne par créneau).
+  blocs.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join("\n")
+    .replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 const estOutil = (b: Bloc): b is Extract<Bloc, { type: "tool_use" }> =>
   b.type === "tool_use" && typeof b.id === "string" && typeof b.name === "string" && !!b.input && typeof b.input === "object";
 

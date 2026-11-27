@@ -14,15 +14,16 @@ import type { Horaire } from "../src/lib/horaires";
 import type { Tache } from "../src/lib/types";
 import { lancerEcho, type Appeler, type ResultatEcho, type Tour } from "../src/lib/echo/boucle";
 import { OUTILS_BASE, type Action, type ContexteEcho } from "../src/lib/echo/outils";
-import { demandeTour } from "../supabase/functions/_shared/echo-outils";
+import { coutMicro, demandeTour } from "../supabase/functions/_shared/echo-outils";
 
 const cle = process.env.ANTHROPIC_API_KEY;
 const client = cle ? new Anthropic() : null;
 let micro = 0;
 
 const appeler: Appeler = async ({ situation, messages }) => {
-  const r = await client!.messages.create({ ...demandeTour(situation, messages), messages: messages as Anthropic.MessageParam[] });
-  micro += (r.usage.input_tokens + (r.usage.cache_creation_input_tokens ?? 0) + (r.usage.cache_read_input_tokens ?? 0)) * 0.1 + r.usage.output_tokens * 0.5;
+  const d = demandeTour(situation, messages);
+  const r = await client!.beta.messages.create({ ...d, messages: messages as Anthropic.Beta.BetaMessageParam[] });
+  micro += coutMicro(r.model ?? d.model, r.usage);
   return { content: r.content, stop_reason: r.stop_reason ?? "" } as Tour;
 };
 
@@ -43,6 +44,20 @@ interface Cas {
 const brouillon = (a: Action) => a.brouillon!;
 
 const CAS: Record<string, Cas> = {
+  "organiser une journée (vraie demande de Dany)": {
+    phrase: "Ok demain je dois fair les comision aller a landi aller chez fileman Sarah est occuper de 10h- 11h  et a un rdv manucure a placer a concenece entre 13 et 17h",
+    horaires: [h("2026-11-27", "Repos")],
+    verifier: (r, a) => {
+      const b = a.map(brouillon);
+      // Trois choses pour Dany, séparées, toutes à une heure ; la manucure de Sarah entre 13 h et 17 h.
+      expect(b.filter((x) => x.qui === "moi").length).toBeGreaterThanOrEqual(3);
+      expect(b.every((x) => x.jour === "2026-11-27" && !!x.heure)).toBe(true);
+      const manucure = b.find((x) => /manucure/i.test(x.titre));
+      expect(manucure).toMatchObject({ qui: "elle" });
+      expect(manucure!.heure >= "13:00" && manucure!.heure <= "16:00").toBe(true);
+      expect(r.reponse.split("\n").length).toBeGreaterThan(2); // le programme, une ligne par créneau
+    },
+  },
   "un rendez-vous pour Sarah": {
     phrase: "dentiste jeudi 15h pour Sarah",
     verifier: (_r, a) => {
