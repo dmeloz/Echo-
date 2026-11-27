@@ -22,7 +22,8 @@ export const nomRayon = (r: Rayon) => RAYONS.find((x) => x.id === r)?.nom ?? "Au
 const estRayon = (x: unknown): x is Rayon => RAYONS.some((r) => r.id === x);
 
 export type Auteur = Personne | "echo"; // « echo » = un achat habituel remis tout seul
-export interface Article { id: string; nom: string; qte: string; rayon: Rayon; par: Auteur; fait: number | null; faitPar?: Personne; cree: number }
+// pour = les jours des repas pour lesquels Echo a mis cet article (il repart avec eux si le repas change).
+export interface Article { id: string; nom: string; qte: string; rayon: Rayon; par: Auteur; fait: number | null; faitPar?: Personne; cree: number; pour?: string[] }
 // Ce qu'Echo retient d'un produit : son rayon, et quand on l'a acheté (pour le remettre tout seul).
 export interface Habitude { cle: string; nom: string; qte: string; rayon: Rayon; achats: number[]; refus: number; pause?: number }
 // Le repas du soir d'un jour. Quand Echo le propose : ses ingrédients, s'il vient du congélateur, la gamelle du midi.
@@ -174,13 +175,29 @@ export function besoins(jours: string[], travail: Travail[]): Besoin[] {
   });
 }
 
-// Ce qu'il faut acheter pour les repas validés : leurs ingrédients, sans ce qui est déjà au stock, chaque produit une fois.
-export function manquants(repas: Repas[], stock: Produit[]): Lu[] {
+// Deux quantités du même produit : on additionne quand l'unité est la même (« 300 g » + « 200 g »), sinon on les écrit côte à côte.
+export function additionner(a: string, b: string): string {
+  if (!a || !b) return a || b;
+  const lire = (q: string) => q.match(/^(\d+(?:,\d+)?)\s*(.*)$/);
+  const x = lire(a), y = lire(b);
+  if (x && y && x[2].toLowerCase() === y[2].toLowerCase()) {
+    const somme = Math.round((Number(x[1].replace(",", ".")) + Number(y[1].replace(",", "."))) * 100) / 100;
+    return `${String(somme).replace(".", ",")}${x[2] ? ` ${x[2]}` : ""}`;
+  }
+  return `${a} + ${b}`.slice(0, 20);
+}
+
+// Ce qu'il faut acheter pour des repas : leurs ingrédients, sans ce qui est déjà au stock. Un produit commun à plusieurs
+// repas n'apparaît qu'une fois, avec les quantités ajoutées et les jours concernés.
+export interface Achat extends Lu { jours: string[] }
+export function manquants(repas: Repas[], stock: Produit[]): Achat[] {
   const auStock = new Set(stock.map((p) => cleDe(p.nom)));
-  const vus = new Map<string, Lu>();
+  const vus = new Map<string, Achat>();
   for (const r of repas) for (const i of r.ingredients ?? []) {
-    const cle = cleDe(i.nom);
-    if (cle && !auStock.has(cle) && !vus.has(cle)) vus.set(cle, { nom: i.nom.charAt(0).toUpperCase() + i.nom.slice(1), qte: i.qte });
+    const cle = cleDe(i.nom), deja = vus.get(cle);
+    if (!cle || auStock.has(cle)) continue;
+    if (deja) { deja.qte = additionner(deja.qte, i.qte); if (!deja.jours.includes(r.jour)) deja.jours.push(r.jour); }
+    else vus.set(cle, { nom: i.nom.charAt(0).toUpperCase() + i.nom.slice(1), qte: i.qte, jours: [r.jour] });
   }
   return [...vus.values()];
 }
@@ -210,7 +227,8 @@ export function nettoyerArticle(x: unknown): Article | null {
   const o = obj(x), id = txt(o.id, 80), nom = txt(o.nom, 60).trim();
   if (!id || !nom) return null;
   return { id, nom, qte: txt(o.qte, 20), rayon: estRayon(o.rayon) ? o.rayon : "autre", par: personne(o.par) ? o.par : o.par === "echo" ? "echo" : "moi",
-    fait: nb(o.fait), ...(personne(o.faitPar) ? { faitPar: o.faitPar } : {}), cree: nb(o.cree) ?? Date.now() };
+    fait: nb(o.fait), ...(personne(o.faitPar) ? { faitPar: o.faitPar } : {}), cree: nb(o.cree) ?? Date.now(),
+    ...(Array.isArray(o.pour) && o.pour.length ? { pour: o.pour.filter((j): j is string => typeof j === "string" && JOUR_ISO.test(j)).slice(0, 7) } : {}) };
 }
 export function nettoyerHabitude(x: unknown): Habitude | null {
   const o = obj(x), cle = txt(o.cle, 80), nom = txt(o.nom, 60).trim();

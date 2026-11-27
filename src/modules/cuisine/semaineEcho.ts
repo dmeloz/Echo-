@@ -2,10 +2,10 @@ import { toast } from "sonner";
 import { db } from "../../data/db";
 import { plusJours } from "../../lib/dates";
 import { CODES, type Horaire } from "../../lib/horaires";
-import type { Noms } from "../../lib/types";
+import type { Noms, Personne } from "../../lib/types";
 import { entetesIA } from "../../sync/client";
-import { ajouterArticles } from "./actions";
-import { besoins, manquants, nettoyerRepas, type Besoin, type Repas, type Travail } from "./donnees";
+import { retirerCoursesDe } from "./actions";
+import { besoins, cleDe, manquants, nettoyerRepas, nouvelArticle, type Article, type Besoin, type Repas, type Travail } from "./donnees";
 
 // La semaine proposée par Echo : la demande part vers la fonction « cuisine » du projet Supabase (Claude Haiku 5.5).
 // Echo propose, on change un plat ou on valide : rien ne va aux courses avant « Valider ».
@@ -18,6 +18,7 @@ const MESSAGES: Record<string, string> = {
   refus: "Echo n'a pas pu préparer cette semaine.",
   occupe: "Echo est très demandé. Réessaie dans une minute.",
   lecture: "Echo s'est emmêlé. Réessaie.",
+  requete: "Rien à prévoir pour ce jour : personne ne mange à la maison.",
   service: "Echo ne répond pas pour l'instant.",
 };
 export class ErreurSemaine extends Error {}
@@ -59,48 +60,78 @@ async function demander(corps: unknown): Promise<{ repas: Repas[]; reponse: stri
 }
 
 // « Prévoir ma semaine » : Echo remplit les jours donnés. Ses repas restent une proposition jusqu'à « Valider ».
+// La réponse peut mettre une minute : on n'écrit que les jours restés vides entre-temps.
 export async function proposerSemaine(aPrevoir: Besoin[], noms: Noms, semaine: string[]) {
   const { repas, reponse } = await demander(await preparerDemande(aPrevoir, noms, semaine));
   const demandes = new Set(aPrevoir.map((b) => b.jour));
-  await db.cuisine_repas.bulkPut(repas.filter((r) => demandes.has(r.jour)).map((r) => ({ ...r, propose: true })));
+  await db.transaction("rw", db.cuisine_repas, async () => {
+    for (const r of repas) if (demandes.has(r.jour) && !(await db.cuisine_repas.get(r.jour))) await db.cuisine_repas.put({ ...r, propose: true });
+  });
   return reponse;
 }
 
+// Mettre aux courses ce qu'il manque pour des repas. Un produit déjà dans la liste n'est pas touché (ni sa quantité, ni sa case).
+// Renvoie les articles créés, pour pouvoir annuler exactement ceux-là.
+async function versCourses(repas: Repas[]): Promise<Article[]> {
+  let crees: Article[] = [];
+  await db.transaction("rw", db.cuisine_courses, db.cuisine_habitudes, db.cuisine_stock, db.reglages, async () => {
+    const par = ((await db.reglages.get("proprio"))?.valeur as Personne | undefined) ?? "moi";
+    const habitudes = await db.cuisine_habitudes.toArray();
+    const presents = new Set((await db.cuisine_courses.toArray()).map((a) => cleDe(a.nom)));
+    crees = manquants(repas, await db.cuisine_stock.toArray()).filter((m) => !presents.has(cleDe(m.nom)))
+      .map((m, i) => ({ ...nouvelArticle(m, par, habitudes, i), pour: m.jours }));
+    await db.cuisine_courses.bulkAdd(crees);
+  });
+  return crees;
+}
+const dire = (n: number) => `${n} article${n > 1 ? "s" : ""} ajouté${n > 1 ? "s" : ""} aux courses`;
+
 // « Changer » : un autre plat pour ce jour, sans reproposer celui-ci ni ceux de la semaine.
+// Si le jour a changé pendant l'attente (écrit à la main, retiré), la réponse d'Echo est laissée de côté.
 export async function changerRepas(b: Besoin, actuel: Repas, noms: Noms, semaine: string[]) {
   const autres = (await db.cuisine_repas.where("jour").anyOf(semaine).toArray()).map((r) => r.plat);
   const { repas } = await demander(await preparerDemande([b], noms, semaine, [...new Set([actuel.plat, ...autres])]));
   const nouveau = repas.find((r) => r.jour === b.jour);
   if (!nouveau) throw new ErreurSemaine(MESSAGES.lecture);
-  await db.cuisine_repas.put({ ...nouveau, ...(actuel.propose ? { propose: true } : {}) });
-  // Un plat déjà validé qui change : ses ingrédients manquants partent aux courses tout de suite.
-  if (!actuel.propose) await versCourses([nouveau]);
-}
-
-async function versCourses(repas: Repas[]) {
-  const aAcheter = manquants(repas, await db.cuisine_stock.toArray());
-  return aAcheter.length ? (await ajouterArticles(aAcheter, true)).length : 0;
+  let anciens: Article[] = [], ecrit = false;
+  await db.transaction("rw", db.cuisine_repas, db.cuisine_courses, async () => {
+    const la = await db.cuisine_repas.get(b.jour);
+    if (!la || la.plat !== actuel.plat || !!la.propose !== !!actuel.propose) return;
+    await db.cuisine_repas.put({ ...nouveau, ...(actuel.propose ? { propose: true } : {}) });
+    if (!actuel.propose) anciens = await retirerCoursesDe(b.jour);
+    ecrit = true;
+  });
+  if (!ecrit || actuel.propose) return;
+  // Un plat déjà validé qui change : ses courses suivent, et on le dit.
+  const crees = await versCourses([nouveau]);
+  toast(crees.length ? `Plat changé. ${dire(crees.length)}.` : "Plat changé, courses mises à jour.", { duration: 6000, action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_repas, db.cuisine_courses, async () => {
+    await db.cuisine_repas.put(actuel);
+    await db.cuisine_courses.bulkDelete(crees.map((a) => a.id));
+    await db.cuisine_courses.bulkPut(anciens);
+  }) } });
 }
 
 // « Valider » : la proposition devient la semaine, et ce qu'il manque part dans les courses. Annuler remet tout comme avant.
 export async function validerSemaine(semaine: string[]) {
   const proposes = (await db.cuisine_repas.where("jour").anyOf(semaine).toArray()).filter((r) => r.propose);
   if (!proposes.length) return;
-  const avant = (await db.cuisine_courses.toArray()).map((a) => a.id);
   await db.cuisine_repas.bulkPut(proposes.map(({ propose: _p, ...r }) => r));
-  const n = await versCourses(proposes);
-  toast(n ? `Semaine validée. ${n} article${n > 1 ? "s" : ""} ajouté${n > 1 ? "s" : ""} aux courses.` : "Semaine validée. Rien à acheter en plus.", {
+  const crees = await versCourses(proposes);
+  toast(crees.length ? `Semaine validée. ${dire(crees.length)}.` : "Semaine validée. Rien à acheter en plus.", {
     duration: 6000,
     action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_repas, db.cuisine_courses, async () => {
       await db.cuisine_repas.bulkPut(proposes);
-      const ajoutes = (await db.cuisine_courses.toCollection().primaryKeys()).filter((id) => !avant.includes(id));
-      await db.cuisine_courses.bulkDelete(ajoutes);
+      await db.cuisine_courses.bulkDelete(crees.map((a) => a.id));
     }) },
   });
 }
 
-// Refuser la proposition : les jours proposés redeviennent vides.
-export const refuserProposition = async (semaine: string[]) =>
-  db.cuisine_repas.bulkDelete((await db.cuisine_repas.where("jour").anyOf(semaine).toArray()).filter((r) => r.propose).map((r) => r.jour));
+// Refuser la proposition : les jours proposés redeviennent vides (avec Annuler).
+export async function refuserProposition(semaine: string[]) {
+  const proposes = (await db.cuisine_repas.where("jour").anyOf(semaine).toArray()).filter((r) => r.propose);
+  if (!proposes.length) return;
+  await db.cuisine_repas.bulkDelete(proposes.map((r) => r.jour));
+  toast("Proposition retirée", { action: { label: "Annuler", onClick: () => db.cuisine_repas.bulkPut(proposes) } });
+}
 
 export { besoins };

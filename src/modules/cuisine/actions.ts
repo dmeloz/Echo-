@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { nouvelId } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
 import { db } from "../../data/db";
-import { apresAchat, apresRefus, cleDe, habituelsDus, nouvelArticle, type Article, type Gouts, type Habitude, type Lieu, type Lu, type Rayon } from "./donnees";
+import { apresAchat, apresRefus, cleDe, habituelsDus, nouvelArticle, type Article, type Gouts, type Habitude, type Lieu, type Repas, type Lu, type Rayon } from "./donnees";
 
 // Les gestes du module Cuisine sur ses propres tables. Tout ce qui retire montre « Annuler ».
 
@@ -103,13 +103,35 @@ export const oublierHabitude = (cle: string) => db.cuisine_habitudes.delete(cle)
 
 /* ---------- Semaine, stock, goûts (formes simples du lot 1) ---------- */
 
-// Écrire soi-même le repas d'un jour (ou le retirer). Un plat écrit à la main n'a plus les ingrédients d'Echo.
+// Les articles qu'Echo avait mis aux courses pour le repas d'un jour repartent avec lui (sauf ceux déjà pris,
+// ou qui servent aussi à un autre repas). Renvoie de quoi les remettre.
+export async function retirerCoursesDe(jour: string) {
+  const touches = (await db.cuisine_courses.toArray()).filter((a) => a.pour?.includes(jour));
+  for (const a of touches) {
+    const pour = a.pour!.filter((j) => j !== jour);
+    if (!pour.length && !a.fait) await db.cuisine_courses.delete(a.id);
+    else await db.cuisine_courses.update(a.id, { pour: pour.length ? pour : undefined });
+  }
+  return touches;
+}
+
+// Écrire soi-même le repas d'un jour (ou le retirer). Un plat écrit à la main n'est plus une proposition d'Echo
+// et n'a plus ses ingrédients : ceux qu'il avait mis aux courses repartent. Annuler remet tout.
 export async function poserRepas(jour: string, plat: string) {
-  const avant = await db.cuisine_repas.get(jour), p = plat.trim().slice(0, 80);
-  if (p) { await db.cuisine_repas.put({ jour, plat: p, ...(avant?.propose ? { propose: true } : {}) }); return; }
-  if (!avant) return;
-  await db.cuisine_repas.delete(jour);
-  toast(`${avant.plat} retiré`, { action: { label: "Annuler", onClick: () => db.cuisine_repas.put(avant) } });
+  const p = plat.trim().slice(0, 80);
+  let avant: Repas | undefined, courses: Article[] = [];
+  await db.transaction("rw", db.cuisine_repas, db.cuisine_courses, async () => {
+    avant = await db.cuisine_repas.get(jour);
+    if (!p && !avant) return;
+    courses = await retirerCoursesDe(jour);
+    if (p) await db.cuisine_repas.put({ jour, plat: p }); else await db.cuisine_repas.delete(jour);
+  });
+  const ancien = avant;
+  if (!ancien || (p && !courses.length)) return;
+  toast(p ? "Repas changé, courses mises à jour" : `${ancien.plat} retiré`, { action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_repas, db.cuisine_courses, async () => {
+    await db.cuisine_repas.put(ancien);
+    await db.cuisine_courses.bulkPut(courses);
+  }) } });
 }
 
 export async function ajouterProduit(nom: string, lieu: Lieu, avant = "") {

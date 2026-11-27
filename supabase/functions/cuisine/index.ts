@@ -70,7 +70,10 @@ const JOUR = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
 const court = (s: unknown, n: number) => (typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, n) : "");
 // deno-lint-ignore no-explicit-any
 const liste = (x: unknown, max: number): any[] => (Array.isArray(x) ? x.slice(0, max) : []);
-const PORC = /\b(porc|jambon|lardons?|bacon|chorizo|saucisson|saindoux|pancetta|coppa|rillettes)\b/i;
+// Jamais de porc. On regarde le début des mots (« jambonneau », « saucisses ») ; une version à la volaille ou au bœuf est permise.
+const PORC = /(^|[^a-zà-ÿœ])(porc|cochon|jambon|lard|bacon|chorizo|saucisse|saucisson|saindoux|pancetta|coppa|rillette|cervelas|salami|prosciutto|mortadelle|andouill|boudin|speck|guanciale|travers|cordon bleu|knacki|wienerli)/i;
+const PERMIS = /(jambon|bacon|lardons?|saucisses?|saucisson|chorizo|salami|cervelas|rillettes?)\s+(de|d'|à la|au)\s*(dinde|volaille|poulet|b[oœ]uf|boeuf|veau|agneau|canard|oie|thon|saumon)/gi;
+const aDuPorc = (t: string) => PORC.test(t.replace(PERMIS, " "));
 
 // Ce que le modèle renvoie est vérifié : seulement les jours demandés, une fois chacun, et jamais de porc.
 // deno-lint-ignore no-explicit-any
@@ -82,9 +85,10 @@ function nettoyer(lu: any, demandes: Set<string>) {
     if (!plat || typeof jour !== "string" || !demandes.has(jour) || vus.has(jour)) return [];
     // deno-lint-ignore no-explicit-any
     const ingredients = liste(r?.ingredients, 12).map((i: any) => ({ nom: court(i?.nom, 60), qte: court(i?.qte, 20) })).filter((i) => i.nom);
-    if (PORC.test(plat) || ingredients.some((i) => PORC.test(i.nom))) return [];
+    if (aDuPorc(plat) || ingredients.some((i) => aDuPorc(i.nom))) return [];
     vus.add(jour);
-    return [{ jour, plat, ingredients, congele: r?.congele === true, gamelle: court(r?.gamelle, 80) }];
+    const gamelle = court(r?.gamelle, 80);
+    return [{ jour, plat, ingredients, congele: r?.congele === true, gamelle: aDuPorc(gamelle) ? "" : gamelle }];
   });
   return { repas, reponse: court(lu?.reponse, 300) };
 }

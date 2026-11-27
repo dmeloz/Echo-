@@ -21,7 +21,10 @@ export function Semaine({ now, noms, proprio }: ContexteModule) {
   const [prochaine, setProchaine] = useState(() => [5, 6, 0].includes(now.getDay()));
   const debut = plusJours(lundi, prochaine ? 7 : 0);
   const jours = Array.from({ length: 7 }, (_, i) => plusJours(debut, i));
-  const repas = useLiveQuery(() => db.cuisine_repas.where("jour").between(jours[0], jours[6], true, true).toArray(), [debut], [] as Repas[]);
+  // undefined tant que la base n'a pas répondu POUR CETTE semaine : pas d'écran « rien de prévu » avant de savoir.
+  const lu = useLiveQuery(async () => ({ debut, liste: await db.cuisine_repas.where("jour").between(jours[0], jours[6], true, true).toArray() }), [debut]);
+  const charge = lu?.debut === debut;
+  const repas: Repas[] = charge ? lu.liste : [];
   const horaires = useHoraires();
   const [ouvert, setOuvert] = useState<string | null>(null);
   const [ecrit, setEcrit] = useState<string | null>(null);
@@ -50,8 +53,7 @@ export function Semaine({ now, noms, proprio }: ContexteModule) {
     return `Soir : ${b.soir} portion${b.soir > 1 ? "s" : ""}${qui ? `, ${qui}` : ""}`;
   };
 
-  return (
-    <>
+  const tete = (
       <div className="semaine-tete">
         <div className="vue-choix petit" role="group" aria-label="Quelle semaine">
           <button type="button" aria-pressed={!prochaine} onClick={() => { setProchaine(false); setOuvert(null); }}>Cette semaine</button>
@@ -59,6 +61,12 @@ export function Semaine({ now, noms, proprio }: ContexteModule) {
         </div>
         <span>{court(jours[0], { day: "numeric", month: "short" })} – {court(jours[6], { day: "numeric", month: "short" })}</span>
       </div>
+  );
+  if (!charge) return tete;
+
+  return (
+    <>
+      {tete}
 
       {pense === "semaine" && (
         <div className="g barre-echo" role="status"><span className="echo-points" aria-hidden="true"><i /><i /><i /></span><b>Echo prépare la semaine…</b></div>
@@ -118,7 +126,7 @@ export function Semaine({ now, noms, proprio }: ContexteModule) {
                     {r.congele && <p>Vient du congélateur : à sortir la veille.</p>}
                     {r.ingredients && r.ingredients.length > 0 && <p className="ingredients">{r.ingredients.map((i) => (i.qte ? `${i.nom} (${i.qte})` : i.nom)).join(", ")}</p>}
                     <div className="rangee">
-                      <button type="button" className="puce" disabled={!!pense} onClick={() => avecEcho(j, () => changerRepas(b, r, noms, jours))}>Changer</button>
+                      {(b.soir > 0 || b.gamelle) && <button type="button" className="puce" disabled={!!pense} onClick={() => avecEcho(j, () => changerRepas(b, r, noms, jours))}>Changer</button>}
                       <button type="button" className="puce" onClick={() => { setOuvert(null); setEcrit(j); }}>Écrire</button>
                       <button type="button" className="puce" onClick={() => { setOuvert(null); poserRepas(j, ""); }}>Retirer</button>
                     </div>
