@@ -9,10 +9,10 @@ vi.stubGlobal("localStorage", { getItem: (k: string) => stock.get(k) ?? null, se
 
 import { db } from "../../data/db";
 import { GENRES } from "../../sync/genres";
-import { ajouterAPayer, ajouterCategorie, ajouterDepense, ajouterPoste, arreterPoste, changerValeur, commencer, estPaye, marquerPaye, noterSolde, recalculerVirements, retirerDerniereValeur } from "./actions";
+import { ajouterAPayer, ajouterCategorie, ajouterDepense, ajouterPoste, arreterPoste, changerValeur, commencer, estPaye, marquerPaye, noterSolde, payer, recalculerVirements, retirerDerniereValeur } from "./actions";
 import {
-  DEPART, avancee, bilan, bornes, changer, chf, cleCategorie, dernierSolde, duMois, effets, enveloppes, historique, lireMontant, moisDe, nettoyerAPayer, nettoyerCategorie, nettoyerDepense, nettoyerPoste,
-  nettoyerSolde, nomMois, parMois, periode, plusMoisB, proposerVirements, toutesCategories, valeurDe, type Depense, type Poste,
+  DEPART, aRemplir, avancee, bilan, bornes, changer, chf, cleCategorie, dernierSolde, duMois, effets, enveloppes, historique, lireMontant, moisDe, nettoyerAPayer, nettoyerCategorie, nettoyerDepense, nettoyerPoste,
+  nettoyerSolde, nomMois, parMois, periode, plusMoisB, posteRempli, proposerVirements, toutesCategories, valeurDe, type Depense, type Poste,
 } from "./donnees";
 import { budget } from "./index";
 
@@ -75,12 +75,32 @@ describe("les montants datés", () => {
     expect(valeurDe(p, "2027-01")).toBe(50_000);
     expect(valeurDe(p, "2026-11")).toBe(50_000);
   });
-  it("reposer une valeur pour le même mois la remplace, et la plus récente gagne", () => {
+  it("reposer une valeur pour le même mois : la plus récente gagne, l'ancienne reste dans l'historique", () => {
     let p = changer(FOYER[6], { c: 210_000, des: M, quand: 5 });
     p = changer(p, { c: 220_000, des: M, quand: 6 });
-    expect(p.valeurs).toHaveLength(2);
+    expect(p.valeurs).toHaveLength(3);
     expect(valeurDe(p, M)).toBe(220_000);
-    expect(historique(p)[0].c).toBe(220_000);
+    expect(historique(p).map((v) => v.c)).toEqual([220_000, 210_000, 200_000]);
+  });
+  it("une valeur durable reposée après un « une seule fois » du même mois passe devant", () => {
+    let p = changer(FOYER[6], { c: 50_000, des: M, une: true, quand: 5 });
+    expect(valeurDe(p, M)).toBe(50_000);
+    p = changer(p, { c: 150_000, des: M, quand: 6 });
+    expect(valeurDe(p, M)).toBe(150_000);
+    expect(effets([FOYER[4], FOYER[5], changer(FOYER[6], { c: 50_000, des: M, une: true, quand: 5 })], "loyer", { c: 150_000, des: M })).not.toEqual([]);
+    // Un « une seule fois » posé après garde la main sur son mois, pas sur le suivant.
+    p = changer(p, { c: 70_000, des: M, une: true, quand: 7 });
+    expect([valeurDe(p, M), valeurDe(p, "2027-01")]).toEqual([70_000, 150_000]);
+  });
+  it("zéro n'est « à remplir » que tant que personne ne l'a choisi", () => {
+    const vide = poste({ id: "x", sorte: "foyer" }, 0);
+    expect(aRemplir(vide, M)).toBe(true);
+    expect(aRemplir(changer(vide, { c: 0, des: M, par: "moi" }), M)).toBe(false);
+    expect(aRemplir(FOYER[6], M)).toBe(false);
+    expect([posteRempli(vide), posteRempli(FOYER[6]), posteRempli(null)]).toEqual([false, true, false]);
+    expect(GENRES.budget_poste.garderLocal!(FOYER[6], vide)).toBe(true);
+    expect(GENRES.budget_poste.garderLocal!(vide, FOYER[6])).toBe(false);
+    expect(GENRES.budget_poste.garderLocal!(FOYER[6], FOYER[6])).toBe(false); // deux lignes remplies : celle du foyer gagne
   });
   it("un poste arrêté reste dans les mois d'avant", () => {
     const p = { ...FOYER[8], fin: "2027-01" };
@@ -207,9 +227,14 @@ describe("les gestes sur les postes", () => {
   it("revenir à la valeur d'avant, sans jamais vider un poste", async () => {
     await db.budget_postes.bulkAdd(FOYER);
     expect(await retirerDerniereValeur("loyer")).toBe(false); // une seule valeur : rien à retirer
-    await changerValeur("loyer", { c: 210_000, des: M, quand: 9 });
+    await changerValeur("loyer", { c: 210_000, des: "2027-01", quand: 9 });
+    await changerValeur("loyer", { c: 220_000, des: "2027-01", quand: 10 }); // une correction pour le même mois
     expect(await retirerDerniereValeur("loyer")).toBe(true);
-    expect(valeurDe((await db.budget_postes.get("loyer"))!, M)).toBe(200_000);
+    expect(valeurDe((await db.budget_postes.get("loyer"))!, "2027-01")).toBe(210_000); // la valeur juste avant, pas celle de décembre
+    expect(await retirerDerniereValeur("loyer")).toBe(true);
+    expect(valeurDe((await db.budget_postes.get("loyer"))!, "2027-01")).toBe(200_000);
+    await changerValeur("part-plaisir", { c: 30, des: M });
+    expect(toast.mock.calls.at(-1)![0]).toBe("part-plaisir : 30 %");
   });
   it("ajouter une charge, sans doublon ; l'arrêter la garde dans le passé", async () => {
     const p = (await ajouterPoste({ nom: "netflix", sorte: "perso", qui: "elle", c: 2_000, des: M }))!;
@@ -240,6 +265,12 @@ describe("à payer : ce que le module Maison passe au Budget", () => {
     expect(await ajouterAPayer({ ...ligne, c: 31_000 })).toMatchObject({ c: 31_000, paye: "2026-12-02" });
     expect(await db.budget_apayer.count()).toBe(1);
     expect(await estPaye("inconnu")).toBe(false);
+    // Cochée par erreur sur l'écran : « Annuler » la remet à payer.
+    await marquerPaye("papier-1", false);
+    await payer((await db.budget_apayer.get("papier-1"))!, new Date("2026-12-03T12:00:00"));
+    expect(await estPaye("papier-1")).toBe("2026-12-03");
+    await annuler();
+    expect(await estPaye("papier-1")).toBe(false);
   });
   it("refuse une ligne qui n'a pas la bonne forme", async () => {
     expect(await ajouterAPayer({ ...ligne, c: 12.5 })).toBeNull(); // des centimes entiers
@@ -265,6 +296,8 @@ describe("écrire et lire un montant", () => {
     expect(lireMontant("")).toBeNull();
     expect(lireMontant("douze")).toBeNull();
     expect(lireMontant("-5")).toBeNull();
+    expect(lireMontant("1000000")).toBe(100_000_000);
+    expect(lireMontant("1200000")).toBeNull(); // au-delà du plafond, comme pour ce qui arrive du foyer
   });
 });
 

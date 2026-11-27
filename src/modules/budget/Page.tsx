@@ -8,10 +8,10 @@ import { auJour } from "../../lib/dates";
 import { vibrer } from "../../lib/gestes";
 import { autre, type Noms, type Personne } from "../../lib/types";
 import type { ContexteModule } from "../contrat";
-import { commencer, marquerPaye, retirerDepense } from "./actions";
+import { commencer, payer, retirerDepense } from "./actions";
 import { FeuilleChanger, FeuilleDepense, FeuillePoste, FeuilleSolde, type Nouveau } from "./Feuilles";
 import {
-  avancee, bilan, chf, dernierSolde, duMois, enveloppes, jourLong, moisDe, nomMois, parMois, periode, plusMoisB, resteAPayer, toutesCategories, valeurDe, vivants,
+  aRemplir, avancee, bilan, chf, dernierSolde, duMois, enveloppes, jourLong, moisDe, nomMois, parMois, periode, plusMoisB, resteAPayer, toutesCategories, valeurDe, vivants,
   type APayer, type Bilan, type Categorie, type CompteSolde, type Depense, type Poste, type Solde,
 } from "./donnees";
 
@@ -44,14 +44,14 @@ function Mois({ postes, b, mois, noms, proprio, depenses, categories, apayer, to
   const { restants } = avancee(mois, today);
   const enCours = mois === moisDe(today);
   const ds = duMois(depenses, mois);
-  const aRemplir = vivants(postes, mois).filter((p) => p.sorte !== "part" && valeurDe(p, mois) === 0).length;
+  const vides = vivants(postes, mois).filter((p) => aRemplir(p, mois)).length;
   const dus = resteAPayer(apayer);
   const cats = new Map(toutesCategories(categories).map((c) => [c.id, c.nom]));
   return (
     <>
-      {aRemplir > 0 && (
+      {vides > 0 && (
         <button type="button" className="budget-a-remplir" onClick={() => onPartie("charges")}>
-          <b>{aRemplir > 1 ? `${aRemplir} montants à remplir` : "1 montant à remplir"}</b><span>Touche les lignes à zéro pour mettre vos vrais chiffres.</span>
+          <b>{vides > 1 ? `${vides} montants à remplir` : "1 montant à remplir"}</b><span>Touche les lignes à zéro pour mettre vos vrais chiffres.</span>
         </button>
       )}
       <div className="budget-duo">
@@ -94,7 +94,7 @@ function Mois({ postes, b, mois, noms, proprio, depenses, categories, apayer, to
         <section className="g liste-stock budget-liste"><span className="lab">À payer</span>
           <ul>{dus.map((l) => (
             <li key={l.id}><div className="corvee">
-              <button type="button" className="coche" aria-label={`${l.titre} : c'est payé`} onClick={() => { vibrer(12); marquerPaye(l.id); }} />
+              <button type="button" className="coche" aria-label={`${l.titre} : c'est payé`} onClick={() => { vibrer(12); payer(l); }} />
               <div className="stock-ligne"><b>{l.titre}<small>{[l.emetteur, `pour le ${jourLong(l.echeance)}`].filter(Boolean).join(" · ")}</small></b><span className={`compte${l.echeance < today ? " attend" : ""}`}>{chf(l.c)}</span></div>
             </div></li>
           ))}</ul>
@@ -162,7 +162,7 @@ function Charges({ postes, b, mois, noms, proprio, ouvrir, onChacun, onNouveau, 
           return (
             <button key={x.cle} type="button" className={`g budget-bulle ${taille}`} style={{ "--rang": i } as React.CSSProperties} onClick={() => { vibrer(4); if (seul) ouvrir(seul.id); else onGroupe(x.nom); }}>
               <span className="budget-bulle-tete"><i className={`pt ${x.compte}`} /><b>{x.nom}</b></span>
-              <span className="budget-bulle-pied">{x.c === 0 ? <em>À remplir</em> : <Chf c={x.c} />}{seul?.rythme === "an" && x.c > 0 && <small>{chf(valeurDe(seul, mois) ?? 0)} par an</small>}{!seul && <small>{x.postes.length} lignes</small>}</span>
+              <span className="budget-bulle-pied">{x.postes.every((p) => aRemplir(p, mois)) ? <em>À remplir</em> : <Chf c={x.c} />}{seul?.rythme === "an" && x.c > 0 && <small>{chf(valeurDe(seul, mois) ?? 0)} par an</small>}{!seul && <small>{x.postes.length} lignes</small>}</span>
             </button>
           );
         })}
@@ -189,7 +189,7 @@ function Chacun({ postes, b, mois, noms, proprio, ouvrir, qui, onRetour, onNouve
   const siens = vivants(postes, mois).filter((p) => p.qui === qui);
   const ligne = (p: Poste, signe: string) => (
     <li key={p.id}><button type="button" className="stock-ligne" onClick={() => ouvrir(p.id)}>
-      <b>{p.nom}{p.note && <small>{p.note}</small>}</b><span className="compte">{parMois(p, mois) === 0 ? "À remplir" : `${signe}${chf(parMois(p, mois) ?? 0)}`}</span>
+      <b>{p.nom}{p.note && <small>{p.note}</small>}</b><span className="compte">{aRemplir(p, mois) ? "À remplir" : `${signe}${chf(parMois(p, mois) ?? 0)}`}</span>
     </button></li>
   );
   return (
@@ -270,7 +270,7 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
   const [groupe, setGroupe] = useState<string | null>(null);
   useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie, chacun]);
   // Le geste « retour » de l'app (glisser vers la droite) ferme le détail de chacun.
-  useEffect(() => { const retour = () => setChacun(null); window.addEventListener("echo-retour", retour); return () => window.removeEventListener("echo-retour", retour); }, []);
+  useEffect(() => { const retour = () => { setChacun(null); setGroupe(null); }; window.addEventListener("echo-retour", retour); return () => window.removeEventListener("echo-retour", retour); }, []);
 
   if (!donnees) return null;
   const { postes, depenses, categories, soldes, apayer } = donnees;

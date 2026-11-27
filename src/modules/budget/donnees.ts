@@ -60,8 +60,9 @@ export interface Poste {
 }
 export const PART_PLAISIR = "part-plaisir";
 
-// La valeur d'un poste pour un mois : celle posée « une seule fois » pour ce mois, sinon la dernière qui vaut à partir d'un mois passé ou de celui-ci.
-// null : le poste n'existe pas (encore, ou plus) ce mois-là.
+// La valeur d'un poste pour un mois : la dernière qui vaut à partir d'un mois passé ou de celui-ci ; une valeur « une seule fois » pour ce mois
+// passe devant, sauf si on a reposé depuis une valeur durable pour ce même mois (la dernière décision gagne).
+// Rien n'est jamais effacé : les valeurs remplacées restent dans l'historique. null : le poste n'existe pas (encore, ou plus) ce mois-là.
 export function valeurDe(p: Poste, mois: string): number | null {
   if (p.fin && mois >= p.fin) return null;
   let une: Valeur | null = null, durable: Valeur | null = null;
@@ -69,7 +70,8 @@ export function valeurDe(p: Poste, mois: string): number | null {
     if (v.une) { if (v.des === mois && (!une || v.quand >= une.quand)) une = v; }
     else if (v.des <= mois && (!durable || v.des > durable.des || (v.des === durable.des && v.quand >= durable.quand))) durable = v;
   }
-  return durable ? (une ?? durable).c : null;
+  if (!durable) return null;
+  return une && !(durable.des === mois && durable.quand > une.quand) ? une.c : durable.c;
 }
 // Ce que le poste pèse sur un mois (un douzième pour un poste à l'année).
 export function parMois(p: Poste, mois: string): number | null {
@@ -122,11 +124,16 @@ export function proposerVirements(postes: Poste[], mois: string): Deux | null {
 /* ---------- Changer une valeur sans rien casser ---------- */
 
 export interface Changement { c: number; des: string; une?: boolean; par?: Personne; quand?: number }
-// Le poste avec sa nouvelle valeur. Une valeur déjà posée pour le même mois (et de la même sorte) est remplacée.
+// Le poste avec sa nouvelle valeur, ajoutée à la suite : la plus récente gagne, les anciennes restent pour l'historique et le retour en arrière.
 export function changer(p: Poste, x: Changement): Poste {
-  const v: Valeur = { des: x.des, c: x.c, ...(x.une ? { une: true } : {}), quand: x.quand ?? Date.now(), ...(x.par ? { par: x.par } : {}) };
-  return { ...p, valeurs: [...p.valeurs.filter((a) => !(a.des === v.des && !!a.une === !!v.une)), v] };
+  const dernier = p.valeurs.reduce((m, a) => Math.max(m, a.quand), 0);
+  const v: Valeur = { des: x.des, c: x.c, ...(x.une ? { une: true } : {}), quand: Math.max(x.quand ?? Date.now(), dernier + 1), ...(x.par ? { par: x.par } : {}) };
+  return { ...p, valeurs: [...p.valeurs, v].slice(-200) };
 }
+// Une ligne de départ que personne n'a encore remplie (zéro n'est pas « à remplir » une fois que quelqu'un l'a choisi).
+export const aRemplir = (p: Poste, mois: string) => p.sorte !== "part" && valeurDe(p, mois) === 0 && p.valeurs.every((v) => !v.par);
+// Au moment d'entrer dans un foyer : la ligne de ce téléphone est gardée si celle du foyer est encore vide et que celle-ci est remplie.
+export const posteRempli = (p: Poste | null | undefined) => !!p && p.valeurs.some((v) => v.c > 0);
 // Ce que ça change : une ligne par total qui bouge, avant → après, pour le mois où le changement prend effet.
 export interface Effet { quoi: "reste-moi" | "reste-elle" | "commun" | "plaisir" | "epargne"; avant: number; apres: number }
 export function effets(postes: Poste[], id: string, x: Changement): Effet[] {
@@ -197,6 +204,10 @@ export const resteAPayer = (lignes: APayer[]) => lignes.filter((l) => !l.paye).s
 
 /* ---------- Écrire et lire un montant ---------- */
 
+const MAX = 100_000_000; // un million de francs : au-delà, ce n'est pas un montant de foyer
+// Un poste « part » garde un pour cent, pas des centimes.
+export const ecrire = (p: Pick<Poste, "sorte">, c: number) => (p.sorte === "part" ? `${c} %` : chf(c));
+
 // 200000 → « 2 000 », 983 → « 9.83 » (les centimes seulement quand il y en a).
 export function chf(c: number): string {
   const n = Math.abs(Math.round(c)), francs = Math.floor(n / 100), cts = n % 100;
@@ -207,7 +218,8 @@ export function chf(c: number): string {
 export function lireMontant(texte: string): number | null {
   const t = texte.replace(/[\s'’  ]/g, "").replace(",", ".").replace(/(chf|fr\.?|francs?)$/i, "");
   if (!/^\d{1,7}(\.\d{0,2})?$/.test(t)) return null;
-  return Math.round(Number(t) * 100);
+  const c = Math.round(Number(t) * 100);
+  return c <= MAX ? c : null; // le même plafond que pour ce qui arrive du foyer
 }
 
 /* ---------- Le premier jour : les lignes de départ, sans montant ---------- */
@@ -232,7 +244,6 @@ const txt = (x: unknown, max: number) => (typeof x === "string" ? x.slice(0, max
 const nb = (x: unknown) => (typeof x === "number" && Number.isFinite(x) ? x : null);
 const personne = (x: unknown): x is Personne => x === "moi" || x === "elle";
 const JOUR_ISO = /^\d{4}-\d{2}-\d{2}$/, MOIS_ISO = /^\d{4}-(0[1-9]|1[0-2])$/;
-const MAX = 100_000_000; // un million de francs : au-delà, ce n'est pas un montant de foyer
 const centimes = (x: unknown) => { const n = nb(x); return n !== null && Number.isInteger(n) && n >= 0 && n <= MAX ? n : null; };
 const SORTES: Sorte[] = ["revenu", "perso", "virement", "foyer", "part"];
 

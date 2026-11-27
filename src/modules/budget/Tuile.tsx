@@ -3,17 +3,17 @@ import { Wallet } from "pulsoicon-react";
 import { db } from "../../data/db";
 import { auJour } from "../../lib/dates";
 import type { ContexteModule } from "../contrat";
-import { bilan, chf, moisDe, resteAPayer } from "./donnees";
+import { aRemplir, bilan, chf, moisDe, resteAPayer } from "./donnees";
 
 // La tuile de l'accueil : ce qui te reste ce mois-ci, ou la prochaine facture à payer.
 export function TuileBudget({ proprio, now, aller }: ContexteModule) {
   const d = useLiveQuery(async () => ({ postes: await db.budget_postes.toArray(), apayer: await db.budget_apayer.toArray() }), [], undefined);
   let texte = "Votre budget à deux";
   if (d?.postes.length) {
-    const b = bilan(d.postes, moisDe(auJour(0, now)));
+    const mois = moisDe(auJour(0, now)), b = bilan(d.postes, mois);
     const du = resteAPayer(d.apayer)[0];
     texte = du && du.echeance <= auJour(7, now) ? `À payer : ${du.titre}, ${chf(du.c)}`
-      : b.revenu[proprio] > 0 ? `Il te reste ${chf(b.reste[proprio])} · commun ${chf(b.resteCommun)}` : "Des montants à remplir";
+      : !d.postes.some((p) => aRemplir(p, mois)) || b.revenu[proprio] > 0 ? `Il te reste ${chf(b.reste[proprio])} · commun ${chf(b.resteCommun)}` : "Des montants à remplir";
   }
   return (
     <a className="tuile" href="#budget" onClick={(e) => { e.preventDefault(); aller("budget"); }}>

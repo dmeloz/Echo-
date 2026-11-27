@@ -3,7 +3,7 @@ import { db } from "../../data/db";
 import { auJour, nouvelId, sansAccents } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
 import {
-  CATS_BASE, DEPART, changer, chf, cleCategorie, moisDe, nettoyerAPayer, proposerVirements, valeurDe,
+  CATS_BASE, DEPART, changer, chf, cleCategorie, ecrire, moisDe, nettoyerAPayer, proposerVirements, valeurDe,
   type APayer, type Categorie, type Changement, type Compte, type CompteSolde, type Depense, type Payeur, type Poste, type Rythme, type Solde, type Sorte,
 } from "./donnees";
 
@@ -55,7 +55,7 @@ export async function changerValeur(id: string, x: Changement): Promise<boolean>
   const apres = changer(avant, x);
   await db.budget_postes.put(apres);
   // On ne remet l'ancien état que si personne n'a rechangé le poste entre-temps.
-  toast(`${avant.nom} : ${chf(x.c)}${avant.sorte === "part" ? " %" : ""}`, annuler(async () => {
+  toast(`${avant.nom} : ${ecrire(avant, x.c)}`, annuler(async () => {
     const la = await db.budget_postes.get(id);
     if (la && JSON.stringify(la.valeurs) === JSON.stringify(apres.valeurs)) await db.budget_postes.put({ ...la, valeurs: avant.valeurs });
   }));
@@ -140,6 +140,11 @@ export async function ajouterAPayer(ligne: Omit<APayer, "cree" | "paye"> & { pay
     await db.budget_apayer.put(garde);
     return garde;
   });
+}
+// Cocher une facture depuis l'écran : payée aujourd'hui, avec « Annuler ».
+export async function payer(l: APayer, now = new Date()) {
+  await marquerPaye(l.id, auJour(0, now));
+  toast(`${l.titre} : payé`, annuler(() => marquerPaye(l.id, false)));
 }
 // Payé (avec son jour), ou plus payé.
 export const marquerPaye = (id: string, jour: string | false = auJour(0)) => db.budget_apayer.update(id, { paye: jour });

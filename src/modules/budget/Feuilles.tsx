@@ -5,7 +5,7 @@ import { vibrer } from "../../lib/gestes";
 import type { Noms, Personne } from "../../lib/types";
 import { ajouterCategorie, ajouterDepense, ajouterPoste, arreterPoste, changerPoste, changerValeur, noterSolde, recalculerVirements, retirerDerniereValeur } from "./actions";
 import {
-  chf, effets, historique, lireMontant, nomMois, plusMoisB, proposerVirements, toutesCategories, valeurDe,
+  chf, ecrire, effets, historique, lireMontant, nomMois, plusMoisB, proposerVirements, toutesCategories, valeurDe,
   type Categorie, type Compte, type CompteSolde, type Effet, type Payeur, type Poste, type Rythme, type Sorte,
 } from "./donnees";
 
@@ -64,7 +64,8 @@ export function FeuilleChanger({ poste, postes, mois, noms, proprio, onFermer }:
   const des = quand === "suivant" ? plusMoisB(mois, 1) : mois;
   const x = lu === null ? null : { c: lu, des, une: quand === "une-fois", par: proprio };
   const change = x ? effets(postes, poste.id, x) : [];
-  const pareil = lu === null || (lu === (valeurDe(poste, des) ?? -1) && quand !== "une-fois");
+  // Rien à valider si le mois visé a déjà ce montant (« seulement ce mois » avec le même montant ne change rien non plus).
+  const pareil = lu === null || lu === (valeurDe(poste, des) ?? -1);
   const histo = historique(poste);
   const calcule = poste.sorte === "virement" ? proposerVirements(postes, mois) : null;
   const titre = poste.sorte === "virement" || poste.sorte === "revenu" ? `${poste.nom} · ${poste.qui === proprio ? "toi" : noms[poste.qui ?? "moi"]}` : poste.nom;
@@ -116,7 +117,7 @@ export function FeuilleChanger({ poste, postes, mois, noms, proprio, onFermer }:
       {histo.length > 1 && (
         <div className="champ"><span className="lab">Historique</span>
           <ul className="budget-histo">
-            {histo.slice(0, 5).map((v) => <li key={`${v.des}-${v.quand}-${v.une ? 1 : 0}`}><b>{chf(v.c)}{part ? " %" : ""}</b><span>{v.une ? `seulement ${nomMois(v.des).toLowerCase()}` : `à partir de ${nomMois(v.des).toLowerCase()} ${v.des.slice(0, 4)}`}{v.par ? ` · ${v.par === proprio ? "toi" : noms[v.par]}` : ""}</span></li>)}
+            {histo.slice(0, 5).map((v) => <li key={`${v.des}-${v.quand}-${v.une ? 1 : 0}`}><b>{ecrire(poste, v.c)}</b><span>{v.une ? `seulement ${nomMois(v.des).toLowerCase()}` : `à partir de ${nomMois(v.des).toLowerCase()} ${v.des.slice(0, 4)}`}{v.par ? ` · ${v.par === proprio ? "toi" : noms[v.par]}` : ""}</span></li>)}
           </ul>
           <button type="button" className="bouton-texte gauche" onClick={async () => { if (await retirerDerniereValeur(poste.id)) onFermer(); }}>Revenir à la valeur d'avant</button>
         </div>
@@ -178,10 +179,9 @@ export function FeuilleDepense({ categories, noms, proprio, onFermer }: { catego
   const c = lireMontant(texte);
   const pret = c !== null && c > 0;
   const toutes = toutesCategories(categories);
-  const creer = async () => { const n = await ajouterCategorie(nouvelle ?? ""); if (n) { setCat(n.id); setNouvelle(null); } };
   const autre: Personne = proprio === "moi" ? "elle" : "moi";
   return (
-    <Feuille titre="Nouvelle dépense" onFermer={onFermer} onValider={async () => { if (!pret) return; if (nouvelle?.trim()) await creer(); await ajouterDepense({ c: c!, quoi, cat, qui }); onFermer(); }}>
+    <Feuille titre="Nouvelle dépense" onFermer={onFermer} onValider={async () => { if (!pret) return; const creee = nouvelle?.trim() ? await ajouterCategorie(nouvelle) : null; await ajouterDepense({ c: c!, quoi, cat: creee?.id ?? cat, qui }); onFermer(); }}>
       <ChampMontant id="b-dep-montant" valeur={texte} onChange={setTexte} focus />
       <div className="champ"><label htmlFor="b-dep-quoi">C'est quoi</label>
         <input id="b-dep-quoi" className="saisie" maxLength={80} enterKeyHint="done" value={quoi} onChange={(e) => setQuoi(e.target.value)} /></div>
