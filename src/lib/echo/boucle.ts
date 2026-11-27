@@ -59,7 +59,9 @@ export function situation(ctx: ContexteEcho, memoire: Souvenir[] = []) {
 }
 
 const texteDe = (blocs: Bloc[]) =>
-  blocs.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join(" ").replace(/\s+/g, " ").trim();
+  // Les retours à la ligne restent (un programme de la journée, une ligne par créneau).
+  blocs.flatMap((b) => (b.type === "text" && typeof b.text === "string" ? [b.text] : [])).join("\n")
+    .replace(/[ \t]+/g, " ").replace(/ *\n */g, "\n").replace(/\n{3,}/g, "\n\n").trim();
 const estOutil = (b: Bloc): b is Extract<Bloc, { type: "tool_use" }> =>
   b.type === "tool_use" && typeof b.id === "string" && typeof b.name === "string" && !!b.input && typeof b.input === "object";
 

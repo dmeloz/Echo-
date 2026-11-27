@@ -43,6 +43,20 @@ interface Cas {
 const brouillon = (a: Action) => a.brouillon!;
 
 const CAS: Record<string, Cas> = {
+  "organiser une journée (vraie demande de Dany)": {
+    phrase: "Ok demain je dois fair les comision aller a landi aller chez fileman Sarah est occuper de 10h- 11h  et a un rdv manucure a placer a concenece entre 13 et 17h",
+    horaires: [h("2026-11-27", "Repos")],
+    verifier: (r, a) => {
+      const b = a.map(brouillon);
+      // Trois choses pour Dany, séparées, toutes à une heure ; la manucure de Sarah entre 13 h et 17 h.
+      expect(b.filter((x) => x.qui === "moi").length).toBeGreaterThanOrEqual(3);
+      expect(b.every((x) => x.jour === "2026-11-27" && !!x.heure)).toBe(true);
+      const manucure = b.find((x) => /manucure/i.test(x.titre));
+      expect(manucure).toMatchObject({ qui: "elle" });
+      expect(manucure!.heure >= "13:00" && manucure!.heure <= "16:00").toBe(true);
+      expect(r.reponse.split("\n").length).toBeGreaterThan(2); // le programme, une ligne par créneau
+    },
+  },
   "un rendez-vous pour Sarah": {
     phrase: "dentiste jeudi 15h pour Sarah",
     verifier: (_r, a) => {
