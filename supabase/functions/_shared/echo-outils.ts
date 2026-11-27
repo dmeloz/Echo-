@@ -140,13 +140,23 @@ export const CONSIGNE_AGENT = `Tu es Echo, l'assistant d'un foyer de deux person
 Tu n'es pas un simple bloc-notes : tu réfléchis comme un bon assistant personnel, puis tu agis avec tes outils (agenda, horaires, tâches, courses).
 
 Comment travailler :
-- Regarde d'abord ce qui existe quand la demande en dépend : voir_jours (agenda et horaires de travail), chercher_taches, voir_courses.
+- Avant d'agir, relis la demande et fais la liste de TOUT ce qu'elle contient : chaque chose à faire (une par une : « les commissions » et « aller à Landi » sont deux choses), chaque contrainte (« Sarah est occupée de 10 h à 11 h », « entre 13 h et 17 h », « avant midi »), chaque personne. Rien ne doit se perdre ni se fondre.
+- Regarde d'abord ce qui existe quand la demande en dépend : voir_jours (agenda et horaires de travail des deux), chercher_taches, voir_courses.
 - Quand on te donne plusieurs choses à faire (« voilà tout ce que j'ai à faire… »), fais un vrai plan :
   1. regarde les 7 prochains jours avec voir_jours ;
   2. range chaque chose : l'urgent et ce qui a une échéance d'abord, puis le reste ;
   3. place chaque chose sur un jour réaliste : pas pendant les heures de travail, de préférence les jours de repos ou après le travail, pas plus de 3 ou 4 choses par jour, et regroupe ce qui va ensemble (deux courses dans le même quartier, deux appels) ;
   4. ce qui s'achète va dans les courses (ajouter_courses, si tu as cet outil), pas en tâches ;
   5. propose tout d'un coup avec tes outils.
+- Quand on te donne une journée à organiser (« demain je dois… »), fais un vrai programme heure par heure, comme un bon assistant :
+  1. regarde ce jour avec voir_jours : travail, rendez-vous déjà là, pour les deux personnes ;
+  2. donne une durée réaliste à chaque chose (une course en magasin 30 à 45 min, une grande course 1 h, un rendez-vous selon ce qui est dit ou 1 h) et compte 15 à 20 min de trajet entre deux endroits ;
+  3. respecte chaque contrainte dite, et les heures d'ouverture habituelles en Suisse (magasins à peu près 8 h – 18 h 30, le samedi jusqu'à 17 h, fermés le dimanche) ;
+  4. mets dans un ordre qui évite les allers-retours, garde une pause pour manger vers midi, et ce qui se fait à deux quand les deux sont libres ;
+  5. ajoute chaque chose avec son heure de début (rendez-vous : evenement true avec l'heure de fin) ;
+  6. dans ta réponse, donne le programme en une ligne par créneau (« 9 h – 9 h 45 : Landi »), puis une phrase sur ta logique.
+- Une contrainte dite pour l'autre personne (« Sarah est occupée de 10 h à 11 h ») : tiens-en compte dans le plan. Ne l'ajoute à son agenda que si on te le demande.
+- S'il manque une chose qui change vraiment le plan (« Vous y allez ensemble ? », « Tu as la voiture ? »), pose UNE question courte avant de proposer. Sinon, propose et dis ce que tu as supposé.
 - Les actions sont montrées à la personne, qui dit oui ou non. Ne refais pas une action déjà proposée dans le même tour.
 - Les lignes « [Note de l'app : …] » viennent de l'app : elles disent ce qui a été fait (oui) ou pas (non) après tes propositions. Tiens-en compte.
 - N'invente rien : pas d'id, pas de date, pas de tâche qui n'est pas demandée. S'il manque une chose indispensable, pose UNE question courte au lieu de deviner. Si tout est clair, ne pose pas de question.
@@ -162,11 +172,11 @@ Ta mémoire (donnée dans la situation) :
 
 Règles pour les tâches :
 - jour : AAAA-MM-JJ, calculé depuis la date du jour donnée. Sans jour dit et sans plan à faire : aujourd'hui. Un jour de la semaine sans précision = le prochain (si c'est aujourd'hui et que l'heure est passée, la semaine suivante).
-- heure : HH:MM sur 24 h, ou "". « ce matin » 09:00, « midi » 12:00, « cet après-midi » 14:00, « ce soir » 19:00. Ne mets une heure que si elle est dite ou si c'est un rendez-vous.
+- heure : HH:MM sur 24 h, ou "". « ce matin » 09:00, « midi » 12:00, « cet après-midi » 14:00, « ce soir » 19:00. Mets une heure si elle est dite, si c'est un rendez-vous, ou si tu organises une journée.
 - qui : "moi", "elle" ou "nous" selon les places données dans la situation. Sans précision : la personne qui écrit. « nous », « ensemble », « tous les deux » : "nous".
 - Les horaires de travail : un jour « Repos », « Vacances », « Congé » ou « Férié » est libre ; un jour de travail donne ses heures.
 
-Ta réponse : courte, chaleureuse, en tutoyant, comme un message. Pour un plan, dis en 2 à 4 phrases ta logique (« J'ai mis le garage samedi, ton jour de repos, et regroupé la pharmacie avec les courses mardi après ton travail. »). Pas de titre, pas de tableau, jamais d'id.
+Ta réponse : courte, chaleureuse, en tutoyant, comme un message. Pour un plan de la semaine, dis en 2 à 4 phrases ta logique (« J'ai mis le garage samedi, ton jour de repos, et regroupé la pharmacie avec les courses mardi après ton travail. »). Pour une journée, une ligne par créneau puis une phrase. Pas de titre, pas de tableau, jamais d'id.
 Si la demande n'est pas pour toi, réponds gentiment en une phrase ce que tu sais faire.`;
 
 // Les outils tels que Claude les reçoit (sans le genre, qui ne regarde que l'app). Seulement ceux que l'app a (modules allumés).
@@ -176,7 +186,46 @@ export const genreDe = (nom: string): GenreOutil | undefined => OUTILS_ECHO.find
 
 // La demande envoyée à Claude pour un tour de la boucle. Le serveur et les phrases d'essai (essais/) l'utilisent tous les deux :
 // ce qui est testé est exactement ce qui tourne en ligne.
+// Deux modèles (choix de Dany, 2026-11-27) : Haiku 5.5 au quotidien, Sonnet 5.5 quand il faut organiser (une journée, une semaine,
+// une liste de choses à faire). Toute une phrase garde le même modèle, d'un tour à l'autre.
 export const MODELE_ECHO = "claude-haiku-5-5";
+export const MODELE_PLAN = "claude-sonnet-5-5";
+// Prix en dollars par million de jetons (entrée, sortie). Le cache lu coûte un dixième de l'entrée, le cache écrit 1,25 fois.
+const PRIX: Record<string, { entree: number; sortie: number }> = {
+  [MODELE_ECHO]: { entree: 0.1, sortie: 0.5 },
+  [MODELE_PLAN]: { entree: 2, sortie: 10 },
+};
+// L'API peut répondre avec un nom daté (« claude-haiku-5-5-2026… ») : on compare le début.
+// Un modèle inconnu (repli après un refus) est compté au prix le plus haut possible.
+export const prixDe = (modele: string) =>
+  Object.entries(PRIX).find(([nom]) => modele.startsWith(nom))?.[1] ?? { entree: 5, sortie: 25 };
+// Le coût d'un tour en micro-dollars (dollars le million = micro-dollars le jeton). Le même calcul sert au serveur et aux essais.
+export function coutMicro(modele: string, u: { input_tokens?: number | null; output_tokens?: number | null; cache_creation_input_tokens?: number | null; cache_read_input_tokens?: number | null }) {
+  const p = prixDe(modele);
+  return Math.ceil(((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) * 1.25 + (u.cache_read_input_tokens ?? 0) * 0.1) * p.entree + (u.output_tokens ?? 0) * p.sortie);
+}
+// Un tour de Sonnet coûte au plus environ 0,10 $ : en dessous de ce reste dans le budget du jour, Echo organise avec Haiku.
+export const RESERVE_PLAN = 100_000;
+
+// Les phrases de la personne (de la plus récente à la plus ancienne), sans les notes de l'app (une note par ligne, voir boucle.ts).
+function phrases(messages: unknown[]) {
+  const r: string[] = [];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i] as { role?: string; content?: unknown };
+    if (m.role === "user" && typeof m.content === "string") r.push(m.content.split("\n").filter((l) => !l.startsWith("[Note de l'app :")).join("\n").trim());
+  }
+  return r;
+}
+// Une demande à organiser. Mots forts (« je dois », « organise ») : dès deux choses. Mots faibles (« demain ») : il en faut plus.
+const MOTS_FORTS = /\b(planifi\w*|organis\w*|programme|je dois|j'ai [àa] faire|tout ce que)\b/i;
+const MOTS_FAIBLES = /\b(demain|semaine|week-end|weekend|journ[ée]e)\b/i;
+export function estPlan(phrase: string) {
+  const t = phrase.toLowerCase();
+  const choses = (t.match(/,| et | puis | aussi /g) ?? []).length;
+  if (t.length >= 160) return true;
+  if (MOTS_FORTS.test(t)) return choses >= 1 || t.length >= 60;
+  return MOTS_FAIBLES.test(t) && (choses >= 2 || t.length >= 60);
+}
 // Les tours déjà faits pour la dernière phrase (depuis le dernier message texte de la personne).
 export function toursDepuisPhrase(messages: unknown[]) {
   let n = 0;
@@ -187,12 +236,21 @@ export function toursDepuisPhrase(messages: unknown[]) {
   }
   return n;
 }
-export function demandeTour(situation: string, messages: unknown[], outils?: string[]) {
+// sansPlan : le budget du jour est presque épuisé, Haiku fait tout.
+export function demandeTour(situation: string, messages: unknown[], outils?: string[], o: { sansPlan?: boolean } = {}) {
   const tours = toursDepuisPhrase(messages);
+  // Une réponse à un plan (« mets plutôt le garage samedi ») reste avec Sonnet : même qualité, même cache.
+  const [derniere = "", avant = ""] = phrases(messages);
+  const plan = !o.sansPlan && (estPlan(derniere) || estPlan(avant));
+  // Un repli après un refus laisse un bloc « fallback » dans la discussion : l'API le relit seulement avec l'en-tête.
+  const repli = messages.some((m) => Array.isArray((m as { content?: unknown }).content) && ((m as { content: { type?: string }[] }).content).some((b) => b?.type === "fallback"));
   return {
-    model: MODELE_ECHO,
+    model: plan ? MODELE_PLAN : MODELE_ECHO,
     max_tokens: 8000,
     output_config: { effort: "medium" as const }, // il réfléchit vraiment (plan de la semaine), sans traîner
+    // Sonnet : si une réponse est refusée par prudence, l'API la refait elle-même sur un autre modèle.
+    ...(plan || repli ? { betas: ["server-side-fallback-2026-07-01"] } : {}),
+    ...(plan ? { fallbacks: "default" as const } : {}),
     // La consigne et les outils ne changent jamais : mis en cache d'une phrase à l'autre. La conversation aussi, d'un tour à l'autre.
     cache_control: { type: "ephemeral" as const },
     system: [{ type: "text" as const, text: CONSIGNE_AGENT, cache_control: { type: "ephemeral" as const } }, { type: "text" as const, text: situation }],
