@@ -7,10 +7,11 @@ vi.stubGlobal("navigator", {});
 import { db } from "../../data/db";
 import { plusJours } from "../dates";
 import type { Tache } from "../types";
-import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, MODELE_ECHO, MODELE_PLAN, OUTILS_ECHO, coutMicro, demandeTour, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, MODELE_ECHO, MODELE_PLAN, OUTILS_ECHO, coutMicro, demandeTour, estPlan, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
 import { executer, lancerEcho, type Appeler, type Bloc, type Message, type Tour } from "./boucle";
 import { OUTILS_BASE, type ContexteEcho } from "./outils";
 import { nettoyerJournal } from "./journal";
+import { motDuMatin, NOTE_BONJOUR } from "./initiative";
 import { MODULES, outilsEcho } from "../../modules/registre";
 
 const TOUS = outilsEcho(MODULES);
@@ -50,16 +51,31 @@ describe("la liste fermée des outils", () => {
 });
 
 describe("le choix du modèle", () => {
-  it("Sonnet pour toute la discussion ; budget presque fini : Haiku ; un repli garde l'en-tête", () => {
-    const m = (p: string, sansPlan = false) => demandeTour("Aujourd'hui : x", [{ role: "user", content: p }], undefined, { sansPlan });
-    expect(m("plus de lait").model).toBe(MODELE_PLAN);
+  it("Sonnet pour organiser, Haiku pour une phrase simple", () => {
+    expect(estPlan("Ok demain je dois fair les comision aller a landi aller chez fileman Sarah est occuper de 10h- 11h")).toBe(true);
+    expect(estPlan("cette semaine garage, banque et ménage")).toBe(true);
+    expect(estPlan("dentiste jeudi 15h pour Sarah")).toBe(false);
+    expect(estPlan("plus de lait")).toBe(false);
+    expect(estPlan("range la vaisselle et sors la poubelle")).toBe(false);
+    expect(estPlan("j’ai à faire le garage, les courses")).toBe(true); // l'apostrophe courbe de l'iPhone
+  });
+  it("toute la phrase garde le même modèle ; une réponse à un plan reste avec Sonnet ; budget presque fini : Haiku", () => {
+    const m = (p: string, sansPlan = false) => demandeTour("Le foyer : x", [{ role: "user", content: p }], undefined, { sansPlan });
+    expect(m("plus de lait").model).toBe(MODELE_ECHO);
+    expect("fallbacks" in m("plus de lait")).toBe(false);
+    expect(m("plus de lait")).toMatchObject({ betas: ["thinking-binding-controls-2026-08-01"], thinking: { type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } } });
     expect(m("demain je dois aller à Landi et chez Fileman")).toMatchObject({ model: MODELE_PLAN, fallbacks: "default", betas: ["thinking-binding-controls-2026-08-01", "server-side-fallback-2026-07-01"] });
-    expect(m("plus de lait", true).model).toBe(MODELE_ECHO);
-    expect("fallbacks" in m("plus de lait", true)).toBe(false);
+    expect(m("demain je dois aller à Landi et chez Fileman", true).model).toBe(MODELE_ECHO);
+    // La note de l'app ne compte pas.
+    expect(m("[Note de l'app : Dany a dit oui. Fait : Ajouter : Landi, Fileman, commissions, garage, banque, ménage.]\noui merci").model).toBe(MODELE_ECHO);
+    const plan = { role: "user", content: "demain je dois aller à Landi et chez Fileman" };
+    const outil = [plan, { role: "assistant", content: [{ type: "tool_use", id: "a", name: "voir_jours", input: {} }] }, { role: "user", content: [{ type: "tool_result", tool_use_id: "a", content: "{}" }] }];
+    expect(demandeTour("Le foyer : x", outil).model).toBe(MODELE_PLAN);
     const rep = [{ type: "text", text: "Voici ton programme." }];
+    expect(demandeTour("Le foyer : x", [plan, { role: "assistant", content: rep }, { role: "user", content: "mets plutôt Landi l'après-midi" }]).model).toBe(MODELE_PLAN);
+    // Un repli après un refus garde l'en-tête, même avec Haiku.
     const repli = [{ role: "user", content: "salut" }, { role: "assistant", content: [{ type: "fallback" }, ...rep] }, { role: "user", content: "merci" }];
-    expect(demandeTour("Aujourd'hui : x", repli, undefined, { sansPlan: true })).toMatchObject({ model: MODELE_ECHO, betas: ["thinking-binding-controls-2026-08-01", "server-side-fallback-2026-07-01"] });
-    expect(m("plus de lait", true)).toMatchObject({ betas: ["thinking-binding-controls-2026-08-01"], thinking: { type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } } });
+    expect(demandeTour("Le foyer : x", repli)).toMatchObject({ model: MODELE_ECHO, betas: ["thinking-binding-controls-2026-08-01", "server-side-fallback-2026-07-01"] });
   });
   it("le coût suit le vrai modèle, même avec un nom daté", () => {
     const u = { input_tokens: 1000, output_tokens: 1000, cache_read_input_tokens: 10000 };
@@ -320,5 +336,21 @@ describe("le journal (synchro)", () => {
     expect(nettoyerJournal({ id: "a", quand: 1, par: "Dany", demande: "x", action: "Ajouter : Garage", outil: "ajouter_tache" })).toMatchObject({ id: "a", action: "Ajouter : Garage" });
     expect(nettoyerJournal({ id: "a", quand: "hier", action: "x" })).toBeNull();
     expect(nettoyerJournal(null)).toBeNull();
+  });
+});
+
+describe("le mot du matin", () => {
+  it("Echo ne reçoit que les outils pour regarder, et son mot revient avec une note pour la suite", async () => {
+    const outilsRecus: string[][] = [];
+    const s = scenario([{ content: [outil("a", "voir_jours", { du: "2026-11-26", au: "2026-11-26" })], stop_reason: "tool_use" }, texte("Bonjour Dany ! Dentiste à 15 h.")]);
+    const appeler: Appeler = (c, d) => { outilsRecus.push(c.outils); return s.appeler(c, d); };
+    const m = await motDuMatin(ctx, appeler, TOUS);
+    expect(m?.texte).toBe("Bonjour Dany ! Dentiste à 15 h.");
+    expect(m?.note).toContain("Bonjour Dany");
+    expect(s.recus[0][0].content).toContain(NOTE_BONJOUR);
+    expect(demandeTour("Le foyer : x", s.recus[0]).model).toBe(MODELE_ECHO); // un petit mot : Haiku
+    expect(outilsRecus[0]).toContain("voir_jours");
+    expect(outilsRecus[0]).not.toContain("ajouter_tache");
+    expect(outilsRecus[0].every((n) => OUTILS_ECHO.find((o) => o.name === n)?.genre === "lire")).toBe(true);
   });
 });
