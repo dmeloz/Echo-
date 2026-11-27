@@ -4,7 +4,7 @@ import { auJour, heureFr, libelleJour, nouvelId, plusJours, sansAccents } from "
 import { completer } from "../fixes";
 import { CODES, phraseDe } from "../horaires";
 import { autre, type Noms, type Personne, type Qui, type Repete, type Tache } from "../types";
-import { oublier, retenir } from "./memoire";
+import { oublier, refusSouvenir, retenir, texteSouvenir, type Refus } from "./memoire";
 import { genreDe, type GenreOutil } from "../../../supabase/functions/_shared/echo-outils";
 
 // Ce que fait l'app quand Echo demande un outil (la liste fermée est dans supabase/functions/_shared/echo-outils.ts).
@@ -194,22 +194,33 @@ export const OUTILS_BASE: Record<string, Executant> = {
   modifier_tache: { preparer: modifierTache },
   cocher_tache: { preparer: cocherTache },
   supprimer_tache: { preparer: supprimerTache },
-  // Ce qu'Echo aimerait savoir faire : gardé sur ce téléphone, montré dans Réglages → Echo (les 30 derniers).
-  // La mémoire : sans confirmation (elle se voit et s'efface dans Réglages → Echo).
+  // La mémoire : retenir et oublier sont proposés comme des petites choses (le journal les note, Annuler les défait).
   retenir: {
-    lire: async (e, ctx) => {
-      const s = await retenir(typeof e.texte === "string" ? e.texte : "", ctx.noms[ctx.proprio]);
-      return typeof s === "string" ? { erreur: s } : { note: "Retenu.", id: s.id };
+    preparer: async (e, ctx) => {
+      const t = texteSouvenir(typeof e.texte === "string" ? e.texte : "");
+      const refus = await refusSouvenir(t);
+      if (refus) return REFUS_ECHO[refus];
+      return {
+        outil: "retenir", genre: "petit", libelle: "Retenir", details: [t],
+        faire: async () => {
+          const s = await retenir(t, ctx.noms[ctx.proprio]);
+          if (typeof s === "string") throw new Error(REFUS_ECHO[s]);
+          return () => oublier(s.id);
+        },
+      };
     },
   },
   oublier: {
-    lire: async (e) => {
-      const id = typeof e.id === "string" ? e.id : "";
-      if (!id || !(await db.echo_memoire.get(id))) return { erreur: "Ce souvenir n'existe pas (regarde les id de ta mémoire)." };
-      await oublier(id);
-      return { note: "Oublié." };
+    preparer: async (e) => {
+      const s = typeof e.id === "string" ? await db.echo_memoire.get(e.id) : undefined;
+      if (!s) return "Ce souvenir n'existe pas (regarde les id de ta mémoire).";
+      return {
+        outil: "oublier", genre: "petit", libelle: "Oublier", details: [s.texte],
+        faire: async () => { await oublier(s.id); return () => db.echo_memoire.put(s); },
+      };
     },
   },
+  // Ce qu'Echo aimerait savoir faire : gardé sur ce téléphone, montré dans Réglages → Echo (les 30 derniers).
   signaler_manque: {
     lire: async (e) => {
       const besoin = court(e.besoin, 200);
@@ -221,6 +232,11 @@ export const OUTILS_BASE: Record<string, Executant> = {
   },
 };
 export interface Manque { quand: number; besoin: string }
+const REFUS_ECHO: Record<Refus, string> = {
+  vide: "Dis en une phrase ce qu'il faut retenir.",
+  deja: "C'est déjà dans ta mémoire.",
+  pleine: "Ta mémoire est pleine : propose d'abord d'oublier un souvenir dépassé.",
+};
 
 // Le genre final d'une action : celui de la liste, ou plus strict si l'app l'a durci (jamais plus souple).
 export function genreFinal(a: Action): Action["genre"] {

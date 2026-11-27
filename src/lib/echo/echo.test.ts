@@ -251,19 +251,25 @@ describe("la boucle d'Echo", () => {
     ]);
     const recus: string[] = [];
     const appeler: Appeler = (c) => { recus.push(c.situation); return s.appeler(c); };
-    await lancerEcho("retiens que je fais les courses le samedi", ctx, { appeler, outils: TOUS, seul: false });
+    const r = await lancerEcho("retiens que je fais les courses le samedi", ctx, { appeler, outils: TOUS, seul: false });
+    expect(await db.echo_memoire.count()).toBe(0); // proposé, pas encore retenu
+    await executer(r.aConfirmer[0], "retiens", ctx);
     const [m] = await db.echo_memoire.toArray();
     expect(m).toMatchObject({ texte: "Dany fait les courses le samedi", par: "Dany" });
     expect(recus[0]).toMatch(/mémoire du foyer est vide/);
     await lancerEcho("salut", ctx, { appeler, outils: TOUS, seul: false });
     expect(recus[2]).toContain(`[${m.id}] Dany fait les courses le samedi`);
-    expect(await TOUS.retenir.lire!({ texte: "dany fait les courses le samedi" }, ctx)).toHaveProperty("erreur");
-    await TOUS.oublier.lire!({ id: m.id }, ctx);
+    expect(await TOUS.retenir.preparer!({ texte: "dany fait les courses le samedi" }, ctx)).toBe("C'est déjà dans ta mémoire.");
+    const o = await TOUS.oublier.preparer!({ id: m.id }, ctx);
+    if (typeof o === "string") throw new Error(o);
+    const remettre = await o.faire();
     expect(await db.echo_memoire.count()).toBe(0);
+    await remettre();
+    expect(await db.echo_memoire.count()).toBe(1);
   });
 
   it("la situation reste sous la limite du serveur, même mémoire pleine", async () => {
-    for (let i = 0; i < 45; i++) await db.echo_memoire.add({ id: "m" + i, quand: i, texte: "x".repeat(MAX_SOUVENIR), par: "Dany" });
+    for (let i = 0; i < 45; i++) await db.echo_memoire.add({ id: "x".repeat(20) + i, quand: i, texte: "x".repeat(MAX_SOUVENIR), par: "Dany" });
     const recus: string[] = [];
     await lancerEcho("salut", ctx, { appeler: async (c) => { recus.push(c.situation); return texte("ok"); }, outils: TOUS, seul: false });
     expect(recus[0].length).toBeLessThanOrEqual(MAX_SITUATION);

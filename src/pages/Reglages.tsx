@@ -14,8 +14,8 @@ import { exporter, importer } from "../data/sauvegarde";
 import { RAPPELS_DEFAUT, reglerRappels, type Rappels } from "../data/rappels";
 import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
 import type { Manque } from "../lib/echo/outils";
-import { oublier, retenir } from "../lib/echo/memoire";
-import { MAX_SOUVENIR } from "../../supabase/functions/_shared/echo-outils";
+import { oublier, retenir, type Refus } from "../lib/echo/memoire";
+import { MAX_SOUVENIR, MAX_SOUVENIRS } from "../../supabase/functions/_shared/echo-outils";
 
 type Theme = "foyer" | "echo" | "notifications" | "agenda" | "modules" | "app";
 // Un module construit peut avoir sa propre sous-page : sa ligne arrive dans le sommaire, à son nom.
@@ -316,32 +316,41 @@ function SectionEcho() {
   </>);
 }
 
+const REFUS_REGLAGES: Record<Refus, string> = { vide: "Écris d'abord ce qu'Echo doit savoir.", deja: "Echo le sait déjà.", pleine: `Echo retient ${MAX_SOUVENIRS} choses au plus : oublie d'abord celles qui ne servent plus.` };
+
 // La mémoire d'Echo, partagée au foyer : ce qu'il sait de vous. Chacun peut en ajouter ou en effacer.
 function MemoireEcho() {
   const souvenirs = useLiveQuery(() => db.echo_memoire.orderBy("quand").reverse().toArray(), [], []);
   const noms = useNoms();
   const { proprio } = useProfil();
   const [texte, setTexte] = useState("");
+  const [occupe, setOccupe] = useState(false);
   const ajouter = async () => {
-    const r = await retenir(texte, proprio ? noms[proprio] : "");
-    if (typeof r === "string") { toast(r); return; }
-    setTexte("");
+    if (occupe) return;
+    setOccupe(true);
+    try {
+      const r = await retenir(texte, proprio ? noms[proprio] : "");
+      if (typeof r === "string") { toast(REFUS_REGLAGES[r]); return; }
+      setTexte("");
+    } catch { toast("Pas enregistré. Réessaie."); } finally { setOccupe(false); }
   };
+  const effacer = (id: string) => oublier(id).catch(() => toast("Pas effacé. Réessaie."));
   return (
     <section className="g reglages">
       <span className="lab">Ce qu'Echo sait de vous</span>
-      {!souvenirs.length ? <p>Rien pour l'instant. Dis à Echo « retiens que… », ou il notera seul ce qui revient souvent. Vous le voyez tous les deux ici.</p> : (
+      {souvenirs.length > MAX_SOUVENIRS && <p className="aide-champ">Echo ne voit que les {MAX_SOUVENIRS} plus récents : oublie ceux qui ne servent plus.</p>}
+      {!souvenirs.length ? <p>Rien pour l'instant. Dis à Echo « retiens que… » : il te propose de le garder. Vous le voyez tous les deux ici.</p> : (
         <ul className="corbeille">
           {souvenirs.map((m) => (
             <li key={m.id}>
               <span><b>{m.texte}</b><small>{m.par ? `noté par ${m.par} · ` : ""}{new Date(m.quand).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</small></span>
-              <button type="button" className="bouton-texte" onClick={() => oublier(m.id)}>Oublier</button>
+              <button type="button" className="bouton-texte" onClick={() => effacer(m.id)}>Oublier</button>
             </li>
           ))}
         </ul>
       )}
       <form className="champ" onSubmit={(e) => { e.preventDefault(); ajouter(); }}>
-        <input value={texte} maxLength={MAX_SOUVENIR} placeholder="Ajouter : Sarah n'aime pas les champignons" onChange={(e) => setTexte(e.target.value)} />
+        <input value={texte} maxLength={MAX_SOUVENIR} disabled={occupe} placeholder="Ajouter : Sarah n'aime pas les champignons" onChange={(e) => setTexte(e.target.value)} />
       </form>
     </section>
   );

@@ -1,6 +1,6 @@
 import { db } from "../../data/db";
 import { auJour, nouvelId, z } from "../dates";
-import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SOUVENIRS, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SITUATION, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
 import { genreFinal, type Action, type ContexteEcho, type Executant } from "./outils";
 import { lireMemoire, memoirePourEcho, type Souvenir } from "./memoire";
 
@@ -50,11 +50,12 @@ export function situation(ctx: ContexteEcho, memoire: Souvenir[] = []) {
   const today = auJour(0, ctx.now);
   const jour = ctx.now.toLocaleDateString("fr-FR", { weekday: "long" });
   const { moi, elle } = ctx.noms;
-  return [
+  const tete = [
     `Aujourd'hui : ${jour} ${today}, il est ${z(ctx.now.getHours())}:${z(ctx.now.getMinutes())}.`,
     `Places du foyer : "moi" = ${moi}, "elle" = ${elle}. La personne qui écrit est ${ctx.noms[ctx.proprio]} (place "${ctx.proprio}").`,
-    memoirePourEcho(memoire),
   ].join("\n");
+  // La mémoire prend la place qui reste sous la limite du serveur (les souvenirs les plus récents d'abord).
+  return `${tete}\n${memoirePourEcho(memoire, MAX_SITUATION - tete.length - 100)}`;
 }
 
 const texteDe = (blocs: Bloc[]) =>
@@ -74,7 +75,7 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
 }): Promise<ResultatEcho> {
   const messages: Message[] = reprendre(o.discussion ?? [], phrase, o.note ?? "");
   const outils = Object.keys(o.outils);
-  const sit = situation(ctx, (await lireMemoire()).slice(-MAX_SOUVENIRS)); // deux téléphones peuvent dépasser un peu le plafond
+  const sit = situation(ctx, await lireMemoire());
   const aConfirmer: Action[] = [];
   const faites: Faite[] = o.faites ?? [];
   let dernierTexte = "";
