@@ -1,5 +1,5 @@
-import { CalendarClock, CalendarDays, Sun } from "pulsoicon-react";
-import { useState } from "react";
+import { CalendarClock, CalendarDays, Plus, Sun } from "pulsoicon-react";
+import { useEffect, useState } from "react";
 import { CartePremier } from "../components/CartePremier";
 import { LigneTache } from "../components/LigneTache";
 import { auJour, heureFr, minutes } from "../lib/dates";
@@ -10,18 +10,19 @@ import { changerNiveau, cocher, effacerExemples, ranger } from "../data/actions"
 import { triJour } from "../lib/ordre";
 import { plusJours } from "../lib/dates";
 import { poserReglage, useAvecPhoto, useHoraires, useReglage } from "../data/hooks";
-import { ligneAccueil } from "../lib/horaires";
+import { ligneAccueil, prochainDebut } from "../lib/horaires";
+import { departTravail } from "../lib/trajet";
 import type { Module } from "../modules/contrat";
 import { tachesDuJour } from "../lib/journee";
 
-interface Props { taches: Tache[]; noms: Noms; proprio: Personne; now: Date; modules: Module[]; onOuvrir: (t: Tache) => void; onAller: (id: string) => void }
+interface Props { taches: Tache[]; noms: Noms; proprio: Personne; now: Date; modules: Module[]; onOuvrir: (t: Tache) => void; onAller: (id: string) => void; onCreer: () => void }
 
 const VISIBLES = 3; // « Ensuite » : trois lignes au plus, le reste se déplie.
 
 // Accueil : une phrase, UNE chose mise en avant (en premier), la suite en calme, demain, puis les modules.
 type Filtre = "tout" | "moi" | "autre";
 
-export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAller }: Props) {
+export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAller, onCreer }: Props) {
   const today = auJour(0, now);
   const demain = auJour(1, now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -59,6 +60,25 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
   // Une seule petite ligne pour le travail du jour ; elle disparaît une fois le travail fini.
   const codeDuJour = useHoraires().find((h) => h.qui === proprio && h.jour === today)?.code;
   const travail = ligneAccueil(codeDuJour, nowMin);
+  // « pars à 7 h 30 » : l'heure de départ pour le prochain début de travail (Réglages → Agenda → Trajets).
+  const debut = prochainDebut(codeDuJour, nowMin);
+  const trajets = useReglage<unknown>("trajets", null);
+  const [depart, setDepart] = useState<{ pour: string; heure: string } | null>(null);
+  const [essai, setEssai] = useState(0);
+  useEffect(() => {
+    setDepart(null); // un réglage changé : l'ancienne heure ne vaut plus
+    if (!debut) return;
+    let vivant = true, minuteur = 0;
+    departTravail(today, debut).then((d) => {
+      if (!vivant) return;
+      if (typeof d !== "string") setDepart({ pour: `${today} ${debut}`, heure: d.depart });
+      // Pas de réseau, ou la session pas encore prête : on réessaie un peu plus tard (4 fois au plus).
+      else if (d === "service" && essai < 4) minuteur = window.setTimeout(() => setEssai((n) => n + 1), 60_000);
+    }).catch(() => {});
+    return () => { vivant = false; clearTimeout(minuteur); };
+  }, [today, debut, trajets, essai]);
+  // Plus affichée une fois l'heure de départ passée (ou si elle tombe la veille).
+  const pars = debut && depart?.pour === `${today} ${debut}` && depart.heure < debut && minutes(depart.heure) > nowMin ? depart.heure : null;
   // Poser une ligne ailleurs : devant une voisine, tout en haut (elle passe « En premier ») ou après la dernière ligne montrée.
   const poserLigne = (t: Tache, avantId: string | null) => {
     const apresDerniere = () => { const sans = liste.filter((x) => x.id !== t.id); const d = montres.filter((x) => x.id !== t.id).at(-1); return d ? sans[sans.indexOf(d) + 1]?.id ?? null : null; };
@@ -82,7 +102,7 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
       {parLautre.length > 0 && (
         <p className="autre-fait">{noms[lautre]} a fait « {parLautre[0].titre} »{parLautre.length > 1 ? ` et ${parLautre.length - 1} autre${parLautre.length > 2 ? "s" : ""} chose${parLautre.length > 2 ? "s" : ""}` : ""}.</p>
       )}
-      {travail && codeDuJour && <p className={`travail-accueil code-${codeDuJour.toLowerCase()}`}>{travail}</p>}
+      {travail && codeDuJour && <p className={`travail-accueil code-${codeDuJour.toLowerCase()}`}>{travail}{pars ? ` · pars à ${heureFr(pars).replace(/^0/, "")}` : ""}</p>}
       {taches.some((t) => t.ex) && (
         <div className="exemples">
           <span>Exemples pour essayer. Glisse une tâche vers la droite pour la monter, vers la gauche pour la descendre.</span>
@@ -102,9 +122,11 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
         <section className="g vide">
           <span className="vide-icone" aria-hidden="true"><Sun size={26} strokeWidth={1.5} /></span>
           <h2>Rien de prévu, rien ne presse</h2>
-          <p>Écris une chose en bas, par exemple « courses samedi 10 h ».</p>
+          <p>Ajoute une première chose, ou dis-la à Echo avec l'étoile en bas.</p>
         </section>
       )}
+      {/* Ajouter sans passer par Echo : un bouton visible, sous la carte du moment. */}
+      <button type="button" className="lt-ajout" onClick={onCreer}><Plus size={18} strokeWidth={2.4} />Ajouter une tâche</button>
 
       {(resteTout.length > 0 || faites.length > 0) && (
         <section className="g journee" aria-labelledby="lab-journee">
