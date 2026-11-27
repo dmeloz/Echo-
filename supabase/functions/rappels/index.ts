@@ -86,7 +86,11 @@ Deno.serve(async (req) => {
         const code = (err as { statusCode?: number }).statusCode;
         // Le téléphone a retiré son autorisation : on oublie cet abonnement.
         if (code === 404 || code === 410) await base.from("abonnements").delete().eq("id", l.id);
-        else console.warn("[rappels]", code, (err as Error).message);
+        else {
+          console.warn("[rappels]", code, (err as Error).message);
+          // L'envoi a raté : on oublie la clé, le passage suivant réessaie (tant que le rappel est dans sa fenêtre).
+          await base.from("rappels_envoyes").delete().eq("cle", e.cle);
+        }
       }
     }
   }

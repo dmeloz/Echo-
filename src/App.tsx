@@ -148,7 +148,7 @@ export default function App() {
               <h1 className="page-titre">{vue.libelle}</h1>
             </div>
             <div className="entete-droite">
-              {vue.id === "aujourdhui" && taches && <ResumeMatin taches={liste} noms={noms} proprio={proprio} now={now} />}
+              {vue.id === "aujourdhui" && taches && <ResumeMatin taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} />}
               {/* La place d'un module dans l'en-tête : il y pose un petit bouton (« Au magasin » pour Cuisine). */}
               <span id="entete-module" />
               <button type="button" className="loupe-ouvrir" aria-label="Chercher dans Echo" onClick={() => setRecherche("")}><Search size={20} strokeWidth={2} /></button>

@@ -283,6 +283,20 @@ export function quandPapier(p: Papier, now = new Date()): string {
 export const papiersDu = (papiers: Papier[], jour: string, aujourdhui: string, auBudget: ReadonlySet<string> = new Set()) =>
   papiers.filter((p) => aFairePapier(p) && !auBudget.has(idAPayer(p)) && (p.echeance === jour || (jour === aujourdhui && p.echeance! < aujourdhui)))
     .sort((a, b) => a.echeance!.localeCompare(b.echeance!));
+// Le résumé du matin : au plus deux phrases, ce qui tombe le jour raconté, puis ce qui traîne d'avant.
+// Le soir (demain), ce qui reste d'avant n'est pas dit « en retard » : il est simplement encore là.
+export function matinPapiers(papiers: Papier[], jour: string, demain = false): string[] {
+  const ouverts = papiers.filter((p) => aFairePapier(p) && p.echeance! <= jour).sort((a, b) => a.echeance!.localeCompare(b.echeance!));
+  const quoi = (p: Papier) => QUOIS.find((q) => q.id === p.quoi)!.nom.toLowerCase();
+  const dire = (liste: Papier[], seul: string, plusieurs: string) =>
+    liste.length === 1 ? `${liste[0].titre} : ${quoi(liste[0])}${seul}${liste[0].quoi === "payer" && liste[0].montant ? ` (${texteMontant(liste[0].montant)})` : ""}.`
+      : `${liste.length} papiers ${plusieurs} : ${liste.slice(0, 3).map((p) => p.titre).join(", ")}${liste.length > 3 ? "…" : ""}.`;
+  const duJour = ouverts.filter((p) => p.echeance === jour), avant = ouverts.filter((p) => p.echeance! < jour);
+  return [
+    duJour.length ? dire(duJour, demain ? " demain" : " aujourd'hui", `à régler ${demain ? "demain" : "aujourd'hui"}`) : "",
+    avant.length ? dire(avant, demain ? ", pas encore fait" : ", en retard", demain ? "pas encore réglés" : "en retard") : "",
+  ].filter(Boolean);
+}
 // C'est fait : une chose qui revient repart à la prochaine échéance ; sinon, elle garde le jour où c'est fait.
 export function apresFait(p: Papier, now = new Date()): Papier {
   const mois = REPETES.find((r) => r.id === p.repete)?.mois ?? 0;
