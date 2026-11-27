@@ -199,13 +199,14 @@ export const OUTILS_ECHO: OutilEcho[] = [
     genre: "petit",
     description: "Note dans le Budget une dépense DÉJÀ faite (« j'ai payé 45 fr. à la Migros », « resto hier 80 francs »). Pas pour une facture à payer plus tard (ranger_papier), ni pour une chose à acheter (courses). Ne paie rien : c'est une ligne dans le budget.",
     input_schema: {
-      type: "object", additionalProperties: false, required: ["montantFrancs", "quoi", "categorie", "payePar", "jour"],
+      type: "object", additionalProperties: false, required: ["montantFrancs", "quoi", "categorie", "payePar", "jour", "memeSiDejaNotee"],
       properties: {
         montantFrancs: { type: "number", description: "le montant en francs suisses (45.5)" },
         quoi: { type: "string", description: "court : le magasin ou la chose (« Migros », « Restaurant »)" },
         categorie: { type: "string", description: "le nom d'une catégorie du foyer : « Courses » (nourriture, supermarché), « Plaisir » (sorties, restaurant, cadeaux), « Frais divers » (le reste), ou une autre donnée par voir_budget" },
         payePar: { type: "string", enum: ["commun", "moi", "elle"], description: "« commun » (sans précision) : le compte commun. Une place du foyer seulement si on dit que la personne a payé avec son propre argent : le compte commun le lui devra." },
         jour: { type: "string", description: "AAAA-MM-JJ si ce n'est pas aujourd'hui, sinon \"\"" },
+        memeSiDejaNotee: { type: "boolean", description: "false. true seulement quand l'outil a répondu qu'une dépense pareille est déjà notée ET que la personne a confirmé que c'en est une autre." },
       },
     },
   },

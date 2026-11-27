@@ -263,12 +263,13 @@ export const resteAPayer = (lignes: APayer[]) => lignes.filter((l) => !l.paye).s
 export interface Point {
   mois: string; fini: boolean; restants: number;
   depense: number; avant: number | null;
-  cats: Array<{ cat: string; c: number; avant: number }>; // la plus grosse en tête
+  cats: Array<{ cat: string; c: number; avant: number }>; // la plus grosse en tête ; celles du mois d'avant aussi, même à zéro ce mois
   enveloppes: Enveloppe[];
   reste: Deux; resteCommun: number; epargne: number; plaisir: number;
   aPayer: { nombre: number; c: number; retard: number }; // ce qui reste à payer jusqu'à la fin de ce mois (les retards compris)
   payees: number; // les factures payées pendant ce mois
-  changements: Array<{ nom: string; sorte: Sorte; avant: number; apres: number }>; // les montants qui ne sont plus ceux du mois d'avant
+  // Les lignes qui ne sont plus celles du mois d'avant. avant null : une nouvelle ligne ; apres null : une ligne arrêtée.
+  changements: Array<{ id: string; nom: string; sorte: Sorte; qui?: Personne; avant: number | null; apres: number | null }>;
   aRendre: Deux;
 }
 export function pointDuMois(postes: Poste[], depenses: Depense[], apayer: APayer[], mois: string, today: string): Point {
@@ -280,13 +281,15 @@ export function pointDuMois(postes: Poste[], depenses: Depense[], apayer: APayer
   const dus = resteAPayer(apayer).filter((l) => l.echeance <= au);
   const changements: Point["changements"] = [];
   for (const p of postes) {
-    const avant = existait ? valeurDe(p, precedent) : null, apres = valeurDe(p, mois);
-    if (avant !== null && apres !== null && avant !== apres) changements.push({ nom: p.nom, sorte: p.sorte, avant, apres });
+    if (!existait) break; // le premier mois : rien à comparer
+    const avant = valeurDe(p, precedent), apres = valeurDe(p, mois);
+    // Une ligne posée à zéro (pas encore remplie) n'est pas une nouveauté, et une ligne à zéro qu'on arrête non plus.
+    if (avant !== apres && (avant || apres)) changements.push({ id: p.id, nom: p.nom, sorte: p.sorte, ...(p.qui ? { qui: p.qui } : {}), avant, apres });
   }
   return {
     mois, fini: today > au, restants: avancee(mois, today).restants,
     depense: somme(ds), avant: existait ? somme(dsAvant) : null,
-    cats: [...ici].map(([cat, c]) => ({ cat, c, avant: la.get(cat) ?? 0 })).sort((x, y) => y.c - x.c),
+    cats: [...new Set([...ici.keys(), ...la.keys()])].map((cat) => ({ cat, c: ici.get(cat) ?? 0, avant: la.get(cat) ?? 0 })).sort((x, y) => y.c - x.c || y.avant - x.avant),
     enveloppes: enveloppes(postes, depenses, mois).filter((e) => e.budget > 0 || e.depense > 0),
     reste: b.reste, resteCommun: b.resteCommun, epargne: b.epargne, plaisir: b.plaisir,
     aPayer: { nombre: dus.length, c: dus.reduce((s, l) => s + l.c, 0), retard: dus.filter((l) => l.echeance < today).length },

@@ -376,7 +376,7 @@ describe("lot 3 : le point du mois et les outils d'Echo", () => {
     const ds = [dep("a", "2026-11-26", 20_000), dep("b", "2026-12-02", 5_000, { cat: "plaisir" }), dep("c", "2026-11-10", 30_000), dep("d", "2026-11-12", 1_000, { cat: "divers" })];
     const p = pointDuMois(FOYER, ds, [], M, TODAY);
     expect(p).toMatchObject({ fini: false, depense: 25_000, avant: 31_000, restants: 15 });
-    expect(p.cats).toEqual([{ cat: "courses", c: 20_000, avant: 30_000 }, { cat: "plaisir", c: 5_000, avant: 0 }]);
+    expect(p.cats).toEqual([{ cat: "courses", c: 20_000, avant: 30_000 }, { cat: "plaisir", c: 5_000, avant: 0 }, { cat: "divers", c: 0, avant: 1_000 }]); // le détail du mois d'avant tombe juste avec son total
     expect(p.enveloppes.find((e) => e.cat === "courses")).toMatchObject({ budget: 50_000, depense: 20_000, reste: 30_000 });
     expect(pointDuMois(FOYER, ds, [], M, "2026-12-25").fini).toBe(true);
   });
@@ -389,11 +389,18 @@ describe("lot 3 : le point du mois et les outils d'Echo", () => {
     const postes = FOYER.map((x) => (x.id === "loyer" ? changer(x, { c: 210_000, des: M, par: "moi" }) : x));
     const facture = (id: string, echeance: string, paye: false | string = false) => nettoyerAPayer({ id, titre: id, emetteur: "", c: 8_000, echeance, repete: "", dossier: "autre", paye, cree: 1 })!;
     const p = pointDuMois(postes, [], [facture("retard", "2026-12-01"), facture("bientot", "2026-12-20"), facture("apres", "2027-01-05"), facture("ok", "2026-12-03", "2026-12-04")], M, TODAY);
-    expect(p.changements).toEqual([{ nom: "loyer", sorte: "foyer", avant: 200_000, apres: 210_000 }]);
+    expect(p.changements).toEqual([{ id: "loyer", nom: "loyer", sorte: "foyer", avant: 200_000, apres: 210_000 }]);
     expect(p.aPayer).toEqual({ nombre: 2, c: 16_000, retard: 1 });
     expect(p.payees).toBe(1);
   });
 
+  it("le point : une ligne nouvelle ou arrêtée est dite, avec la personne ; une ligne jamais remplie ne l'est pas", () => {
+    const postes = [...FOYER.map((x) => (x.id === "leasing" ? { ...x, fin: M } : x)), poste({ id: "sport", sorte: "perso", qui: "moi", valeurs: [{ des: M, c: 9_000, quand: 2 }] }, 0), poste({ id: "vide", sorte: "perso", qui: "moi", valeurs: [{ des: M, c: 0, quand: 2 }] }, 0)];
+    expect(pointDuMois(postes, [], [], M, TODAY).changements).toEqual([
+      { id: "leasing", nom: "leasing", sorte: "perso", qui: "elle", avant: 60_000, apres: null },
+      { id: "sport", nom: "sport", sorte: "perso", qui: "moi", avant: null, apres: 9_000 },
+    ]);
+  });
   it("Echo lit le budget avec les prénoms, jamais les places", async () => {
     await db.budget_postes.bulkAdd(FOYER);
     await db.budget_depenses.add(dep("m", "2026-12-02", 12_000, { quoi: "Migros" }));
@@ -403,7 +410,7 @@ describe("lot 3 : le point du mois et les outils d'Echo", () => {
     expect((r.enveloppes as Array<Record<string, string>>)[0]).toMatchObject({ nom: "courses", depense: "120 CHF", reste: "380 CHF" });
     expect(JSON.stringify(r)).not.toMatch(/"(moi|elle)"/);
     const p = await OUTILS_BUDGET.point_du_mois.lire!({ mois: "ce_mois" }, ctx) as Record<string, unknown>;
-    expect(p).toMatchObject({ depenseEnTout: "120 CHF", joursQuiRestent: 15, facturesEncoreAPayer: "aucune" });
+    expect(p).toMatchObject({ depenseJusquIci: "120 CHF", leMoisDAvantEnEntier: "0 CHF", joursQuiRestent: 15, facturesEncoreAPayer: "aucune" });
     expect(await OUTILS_BUDGET.point_du_mois.lire!({ mois: "mois_precedent" }, { ...ctx, now: new Date(2026, 10, 10) })).toHaveProperty("erreur");
   });
   it("Echo ne lit rien tant que le budget n'est pas rempli", async () => {
@@ -423,14 +430,20 @@ describe("lot 3 : le point du mois et les outils d'Echo", () => {
   });
   it("Echo note une dépense : ce qui ne tient pas debout est refusé avec une phrase", async () => {
     await db.budget_postes.bulkAdd(FOYER);
-    const e = { montantFrancs: 30, quoi: "Resto", categorie: "Plaisir", payePar: "elle", jour: "2026-12-09" };
+    const e = { montantFrancs: 30, quoi: "Resto", categorie: "Plaisir", payePar: "elle", jour: "2026-12-09", memeSiDejaNotee: false };
     const prep = (x: Record<string, unknown>) => OUTILS_BUDGET.ajouter_depense.preparer!({ ...e, ...x }, ctx);
     expect(await prep({})).toMatchObject({ details: ["Plaisir", "payé par Sarah", "9 décembre"] });
-    for (const faux of [{ montantFrancs: 0 }, { montantFrancs: -5 }, { montantFrancs: 200_000 }, { categorie: "Vacances" }, { jour: "2026-12-11" }, { jour: "2026-09-01" }, { jour: "demain" }])
+    for (const faux of [{ montantFrancs: 0 }, { montantFrancs: -5 }, { montantFrancs: 200_000 }, { categorie: "Vacances" }, { jour: "2026-12-11" }, { jour: "2026-09-01" }, { jour: "demain" }, { jour: "2026-11-31" }])
       expect(typeof await prep(faux)).toBe("string");
     // La même dépense déjà là (à la main ou par un ticket) : Echo demande avant de la doubler.
     await db.budget_depenses.add(dep("deja", "2026-12-09", 3_000, { cat: "plaisir" }));
     expect(await prep({})).toMatch(/déjà notée/);
+    expect(await prep({ memeSiDejaNotee: true })).toMatchObject({ outil: "ajouter_depense" }); // la personne a confirmé : c'en est une autre
+    // Le nom d'une catégorie comme la personne le dit, pas seulement sa clé.
+    expect(await prep({ categorie: "Frais divers" })).toMatchObject({ details: ["Frais divers", "payé par Sarah", "9 décembre"] });
+    expect(await prep({ categorie: "frais divers" })).toMatchObject({ outil: "ajouter_depense" });
+    // Deux prénoms pareils : on les distingue quand même.
+    expect((await OUTILS_BUDGET.voir_budget.lire!({}, { ...ctx, noms: { moi: "Alex", elle: "Alex" } }) as { resteAChacun: object }).resteAChacun).toEqual({ "Alex (qui écrit)": "1 200 CHF", "Alex (l'autre)": "1 800 CHF" });
   });
 });
 

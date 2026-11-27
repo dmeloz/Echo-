@@ -139,6 +139,7 @@ function PointDuMois({ postes, mois, noms, proprio, depenses, categories, apayer
   const avant = nomMois(plusMoisB(mois, -1)).toLowerCase(), ecart = p.avant === null ? 0 : p.depense - p.avant;
   const tenues = p.enveloppes.filter((e) => e.reste >= 0).length, depassees = p.enveloppes.length - tenues;
   const ecrit = (sorte: string, c: number) => (sorte === "part" ? `${c} %` : chf(c));
+  const aQui = (q?: Personne) => (!q ? "" : q === proprio ? " (toi)" : ` (${noms[q]})`);
   return (
     <>
       <button type="button" className="retour-agenda" onClick={onRetour}><ChevronLeft size={18} strokeWidth={2} animated={false} /> Budget</button>
@@ -149,7 +150,8 @@ function PointDuMois({ postes, mois, noms, proprio, depenses, categories, apayer
 
       <section className="g liste-stock budget-liste">
         <div className="budget-tete colonne"><small>Dépensé {p.fini ? "ce mois-là" : "jusqu'ici"}</small><Chf c={p.depense} grand />
-          {p.avant !== null && <small>{ecart === 0 ? `comme en ${avant}` : `${chf(Math.abs(ecart))} de ${ecart > 0 ? "plus" : "moins"} qu'en ${avant} (${chf(p.avant)})`}</small>}
+          {/* Un mois en cours ne se compare pas à un mois entier : on donne seulement le chiffre du mois d'avant. */}
+          {p.avant !== null && <small>{!p.fini ? `${chf(p.avant)} sur tout ${avant}` : ecart === 0 ? `comme en ${avant}` : `${chf(Math.abs(ecart))} de ${ecart > 0 ? "plus" : "moins"} qu'en ${avant} (${chf(p.avant)})`}</small>}
         </div>
         {p.cats.length === 0 ? <p className="aide-champ">Aucune dépense notée.</p> : (
           <ul>{p.cats.map((c) => (
@@ -186,7 +188,7 @@ function PointDuMois({ postes, mois, noms, proprio, depenses, categories, apayer
       {p.changements.length > 0 && (
         <section className="g liste-stock budget-liste"><span className="lab">Ce qui a changé depuis {avant}</span>
           <ul>{p.changements.map((c) => (
-            <li key={c.nom}><div className="stock-ligne"><b>{c.nom}<small>avant {ecrit(c.sorte, c.avant)}</small></b><span className="compte">{ecrit(c.sorte, c.apres)}</span></div></li>
+            <li key={c.id}><div className="stock-ligne"><b>{c.nom}{aQui(c.qui)}<small>{c.avant === null ? "nouvelle ligne" : `avant ${ecrit(c.sorte, c.avant)}`}</small></b><span className="compte">{c.apres === null ? "arrêtée" : ecrit(c.sorte, c.apres)}</span></div></li>
           ))}</ul>
         </section>
       )}
