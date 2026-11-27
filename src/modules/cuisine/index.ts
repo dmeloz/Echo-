@@ -4,6 +4,7 @@ import { lireDemande } from "./donnees";
 import { PageCuisine } from "./Page";
 import { ReglagesCuisine } from "./ReglagesCuisine";
 import { TuileCuisine } from "./Tuile";
+import { OUTILS_CUISINE } from "./outilsEcho";
 
 export const cuisine: Module = {
   id: "cuisine",
@@ -14,6 +15,7 @@ export const cuisine: Module = {
   Page: PageCuisine,
   Tuile: TuileCuisine,
   Reglages: ReglagesCuisine,
+  outils: OUTILS_CUISINE,
   // « plus de lait », « des œufs aux courses » : la phrase va à la liste de courses, pas dans les tâches.
   comprendre: (texte) => {
     const lus = lireDemande(texte);

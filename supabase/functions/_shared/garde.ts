@@ -6,7 +6,8 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 export interface Limites { parPersonne: number; tous: number }
-export type Garde = { ok: true } | { ok: false; erreur: "code" | "limite" | "service"; statut: number };
+// source : un membre du foyer, ou le code (pour séparer les budgets : le code ne peut pas épuiser celui des membres).
+export type Garde = { ok: true; source: "membre" | "code" } | { ok: false; erreur: "code" | "limite" | "service"; statut: number };
 
 function egal(a: string, b: string) {
   if (!a || !b || a.length !== b.length) return false;
@@ -32,5 +33,5 @@ export async function garder(req: Request, quoi: string, limites: Limites): Prom
   const { data: permis, error } = await base.rpc("noter_appel", { p_qui: qui, p_quoi: quoi, p_max_personne: limites.parPersonne, p_max_tous: limites.tous });
   if (error) { console.error("[garde] noter_appel", error.message); return { ok: false, erreur: "service", statut: 500 }; }
   if (permis !== true) return { ok: false, erreur: "limite", statut: 429 };
-  return { ok: true };
+  return { ok: true, source: qui === "code" ? "code" : "membre" };
 }
