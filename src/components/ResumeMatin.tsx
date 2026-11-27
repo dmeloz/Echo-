@@ -1,4 +1,4 @@
-import { CalendarDays, ListChecks, Sunrise, User, Volume2, X } from "pulsoicon-react";
+import { CalendarDays, ListChecks, Moon, Sunrise, User, Volume2, X } from "pulsoicon-react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { auJour } from "../lib/dates";
@@ -21,7 +21,10 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
   const fermer = useRef<HTMLButtonElement>(null);
   const today = auJour(0, now);
   const lu = luLe === today;
-  const travail = useHoraires().find((h) => h.qui === proprio && h.jour === today)?.code;
+  // Après 18 h, le soleil devient une lune : le résumé raconte demain (on prépare la journée la veille au soir).
+  const soir = now.getHours() >= 18;
+  const jourResume = soir ? auJour(1, now) : today;
+  const travail = useHoraires().find((h) => h.qui === proprio && h.jour === jourResume)?.code;
 
   useEffect(() => {
     if (!ouvert) return;
@@ -34,7 +37,8 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
   }, [ouvert]);
 
   if (!actif) return null;
-  const r = construireResume(taches, noms, proprio, now, travail);
+  const demainMatin = new Date(now); demainMatin.setDate(now.getDate() + 1); demainMatin.setHours(6, 0, 0, 0);
+  const r = construireResume(taches, noms, proprio, soir ? demainMatin : now, travail, soir);
 
   function terminer() {
     if (parle()) speechSynthesis.cancel();
@@ -51,12 +55,12 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
     setLecture(true);
     speechSynthesis.speak(u);
   };
-  const date = now.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
+  const date = (soir ? demainMatin : now).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" });
 
   return (
     <>
-      <button type="button" className={`matin-bouton${!lu && now.getHours() < 12 ? " nouveau" : ""}`} aria-label={lu ? "Revoir le résumé du matin" : "Ouvrir ton résumé du matin"} onClick={() => setOuvert(true)}>
-        <Sunrise size={20} strokeWidth={2} />
+      <button type="button" className={`matin-bouton${!lu && now.getHours() < 12 ? " nouveau" : ""}`} aria-label={soir ? "Ta journée de demain" : lu ? "Revoir le résumé du matin" : "Ouvrir ton résumé du matin"} onClick={() => setOuvert(true)}>
+        {soir ? <Moon size={20} strokeWidth={2} /> : <Sunrise size={20} strokeWidth={2} />}
       </button>
 
       {ouvert && createPortal(
@@ -68,7 +72,7 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
           </div>
           <div className="resume-corps">
             <span className="resume-date">{date}</span>
-            <h2 id="resume-titre">Bonjour {noms[proprio]}</h2>
+            <h2 id="resume-titre">{soir ? `Demain, ${noms[proprio]}` : `Bonjour ${noms[proprio]}`}</h2>
             <p className="resume-phrase">{r.phrase}</p>
             {r.sections.map((s, i) => {
               const Icone = ICONES[s.id];
@@ -83,11 +87,11 @@ export function ResumeMatin({ taches, noms, proprio, now }: Props) {
                 </section>
               );
             })}
-            {!r.sections.length && <p className="resume-vide">Rien d'écrit pour aujourd'hui. Note une chose en bas de l'accueil quand elle te vient.</p>}
+            {!r.sections.length && <p className="resume-vide">{soir ? "Rien d'écrit pour demain. Note une chose avec l'étoile si elle te vient ce soir." : "Rien d'écrit pour aujourd'hui. Note une chose en bas de l'accueil quand elle te vient."}</p>}
           </div>
           <div className="resume-pied">
             {parle() && <button className="bouton second" onClick={ecouter} aria-pressed={lecture}><Volume2 size={18} strokeWidth={2} /> {lecture ? "Arrêter" : "Écouter"}</button>}
-            <button className="bouton" onClick={terminer}>Commencer ma journée</button>
+            <button className="bouton" onClick={terminer}>{soir ? "Bonne soirée" : "Commencer ma journée"}</button>
           </div>
         </div>
         </>,

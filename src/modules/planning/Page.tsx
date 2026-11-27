@@ -4,6 +4,7 @@ import { auJour, heureFr, libelleJour, minutes } from "../../lib/dates";
 import { autre, type Personne, type Tache } from "../../lib/types";
 import { changerHeure, deplacer } from "../../data/actions";
 import { initialeDe, nomDe, poserReglage, useHoraires, useReglage, useTaches } from "../../data/hooks";
+import { useModulesActifs } from "../registre";
 import type { ContexteModule } from "../contrat";
 import { charge, duJour, faitesDuJour, joursAVenir, proposerDeplacement, proposerRepos } from "./semaine";
 import { CODES, heuresDe, phraseDe, type Code } from "../../lib/horaires";
@@ -21,7 +22,7 @@ const classeQui = (t: Tache) => (t.qui === "nous" ? "nous" : t.qui);
 
 // Le planning : aujourd'hui et les six jours suivants, jour par jour ou toute la semaine d'un coup.
 // Il lit les mêmes tâches que l'accueil (celles qui ont un jour, et une heure si on veut).
-export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
+export function PagePlanning({ noms, proprio, now, ouvrir, aller }: ContexteModule) {
   const taches = useTaches() ?? [];
   const choix = useReglage<string>("planningVue", "jour");
   const vue: Vue = choix === "semaine" || choix === "mois" ? choix : "jour";
@@ -79,7 +80,7 @@ export function PagePlanning({ noms, proprio, now, ouvrir }: ContexteModule) {
       <IdeeEcho taches={taches} travail={travail} proprio={proprio} lautre={lautre} noms={noms} now={now} refusees={refusees} onRefuser={(id) => setRefusees((r) => [...r, id])} />
 
       {vue === "jour"
-        ? <VueJour taches={taches} jour={jourVu} today={today} now={now} noms={noms} ouvrir={ouvrir} travail={travail.get(jourVu)} />
+        ? <VueJour taches={taches} jour={jourVu} today={today} now={now} noms={noms} ouvrir={ouvrir} travail={travail.get(jourVu)} proprio={proprio} aller={aller} />
         : <VueSemaine taches={taches} jours={jours} today={today} now={now} noms={noms} proprio={proprio} lautre={lautre} travail={travail} onJour={choisirJour} />}
       </>}
     </>
@@ -168,7 +169,7 @@ function BandeauTravail({ code }: { code: Code }) {
   );
 }
 
-function VueJour({ taches, jour, today, now, noms, ouvrir, travail }: { taches: Tache[]; jour: string; today: string; now: Date; noms: ContexteModule["noms"]; ouvrir: (t: Tache) => void; travail?: Code }) {
+function VueJour({ taches, jour, today, now, noms, ouvrir, travail, proprio, aller }: { taches: Tache[]; jour: string; today: string; now: Date; noms: ContexteModule["noms"]; ouvrir: (t: Tache) => void; travail?: Code; proprio: Personne; aller: (id: string) => void }) {
   const liste = duJour(taches, jour, today);
   const avecHeure = liste.filter((t) => t.heure && t.jour === jour);
   const sansHeure = liste.filter((t) => !t.heure || t.jour !== jour);
@@ -203,6 +204,7 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail }: { taches: 
           {jour === today && iMaintenant === -1 && <li className="lt-rang fin"><span className="maintenant-p" aria-hidden="true" /></li>}
         </ol>
       )}
+      {jour === today && <LignesModules noms={noms} proprio={proprio} now={now} ouvrir={ouvrir} aller={aller} />}
       {sansHeure.length > 0 && (
         <>
           <span className="lab">Sans heure</span>
@@ -253,4 +255,10 @@ function VueSemaine({ travail, taches, jours, today, now, noms, onJour }: PropsS
       <p className="aide-champ">Les points sous chaque jour : bleu pour {noms.moi}, turquoise pour {noms.elle}. Ce qui est à deux compte pour les deux.</p>
     </>
   );
+}
+
+// Les lignes du jour des autres modules (les corvées de Maison), lues par la base (le registre) : les modules ne s'appellent pas entre eux.
+function LignesModules(ctx: ContexteModule) {
+  const { actifs } = useModulesActifs();
+  return <>{actifs.filter((m) => m.Journee && m.etat === "construit").map((m) => { const J = m.Journee!; return <J key={m.id} {...ctx} />; })}</>;
 }

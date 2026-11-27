@@ -28,6 +28,8 @@ export interface Module {
   Page?: ComponentType<ContexteModule>;   // la page du module
   Tuile?: ComponentType<ContexteModule>;  // sa tuile sur l'accueil (sinon une tuile simple)
   Reglages?: ComponentType<ContexteModule>; // sa sous-page dans les Réglages (une ligne du sommaire à son nom)
+  // Une petite ligne dans la journée (accueil, sous « Ensuite », et vue Jour de l'Agenda pour aujourd'hui). Rien à dire : elle ne rend rien.
+  Journee?: ComponentType<ContexteModule>;
   // Ce que le module sait faire d'une phrase écrite dans la barre d'Echo. null : ce n'est pas pour lui.
   comprendre?: (texte: string) => PourModule | null;
   // Ce que l'assistant Echo peut faire dans ce module : nom de l'outil → ce que fait l'app.
