@@ -1,10 +1,10 @@
-// Envoie les rappels d'Echo : à l'heure d'une tâche, et le résumé du matin.
+// Envoie les rappels d'Echo : à l'heure d'une tâche, le résumé du matin, et le matin les papiers qui arrivent à échéance.
 // Appelée chaque minute par la base (pg_cron). Elle refuse tout appel sans le secret echo_cron.
 // Les secrets (echo_cron et les clés d'envoi) sont fabriqués et gardés par le serveur, dans le coffre de la base :
 // jamais dans l'app ni dans le dépôt.
 import { createClient } from "npm:@supabase/supabase-js@2";
 import webpush from "npm:web-push@3.6.7";
-import { aEnvoyer, type Abonne, type TacheLue } from "./quoi.ts";
+import { aEnvoyer, type Abonne, type PapierLu, type TacheLue } from "./quoi.ts";
 
 interface Ligne { id: string; user_id: string; endpoint: string; p256dh: string; auth: string; fuseau: string; a_l_heure: boolean; matin: string | null }
 
@@ -49,12 +49,31 @@ Deno.serve(async (req) => {
     taches.set(e.foyer_id, [...(taches.get(e.foyer_id) ?? []), d]);
   }
 
+  // Les papiers du foyer encore à régler, dont l'échéance tombe dans les 8 jours (rappel 7 jours avant, la veille, le jour même).
+  const limite = new Date(now.getTime() + 9 * 86400_000).toISOString().slice(0, 10), depuis = new Date(now.getTime() - 2 * 86400_000).toISOString().slice(0, 10);
+  // Lus par pages, comme les tâches. Une erreur ici n'empêche pas les rappels des tâches.
+  const lusPapiers: Array<{ foyer_id: string; data: unknown }> = [];
+  for (let de = 0; ; de += 1000) {
+    const { data: page, error: e } = await base.from("elements").select("foyer_id, data")
+      .eq("genre", "papier").eq("supprime", false).in("foyer_id", foyers)
+      .is("data->>fait", null).gte("data->>echeance", depuis).lte("data->>echeance", limite)
+      .order("foyer_id").order("cle").range(de, de + 999);
+    if (e) { console.warn("[rappels] papiers", e.message); break; }
+    lusPapiers.push(...(page ?? []));
+    if (!page || page.length < 1000) break;
+  }
+  const papiers = new Map<string, PapierLu[]>();
+  for (const e of lusPapiers) {
+    const d = e.data as PapierLu | null;
+    if (d && typeof d.id === "string") papiers.set(e.foyer_id, [...(papiers.get(e.foyer_id) ?? []), d]);
+  }
+
   let envoyes = 0;
   for (const l of abonnes as Ligne[]) {
     const m = parUser.get(l.user_id);
     if (!m) continue;
     const a: Abonne = { id: l.id, place: m.place, fuseau: l.fuseau, aLHeure: l.a_l_heure, matin: l.matin };
-    const envois = aEnvoyer(a, taches.get(m.foyer_id) ?? [], now);
+    const envois = aEnvoyer(a, taches.get(m.foyer_id) ?? [], now, papiers.get(m.foyer_id) ?? []);
     if (!envois.length) continue;
     // Une clé déjà notée = déjà envoyé : seules les nouvelles reviennent.
     const { data: nouvelles } = await base.from("rappels_envoyes").upsert(envois.map((e) => ({ cle: e.cle })), { onConflict: "cle", ignoreDuplicates: true }).select("cle");

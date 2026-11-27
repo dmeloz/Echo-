@@ -772,6 +772,9 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .corbeille li { display: flex; align-items: center; gap: 10px; }
 .corbeille span { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-wrap: anywhere; }
 .corbeille small { color: var(--discret); font-size: var(--t-petit); }
+.nouveautes { gap: 14px; }
+.nouveautes li { align-items: flex-start; }
+.nouveautes .nouveaute-point { margin-top: 4px; font-size: 14.5px; line-height: 1.4; color: var(--encre); }
 
 /* ===== Module Cuisine ===== */
 /* Le petit bouton qu'un module pose dans l'en-tête (« Au magasin »). */
