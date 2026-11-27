@@ -4,8 +4,8 @@ import { locale } from "../../sync/file";
 
 // Annuler une action d'Echo plus tard, depuis son journal (Réglages → Echo), et pas seulement dans les 10 secondes.
 // Pendant qu'Echo fait une action, on note chaque ligne qu'elle touche : ce qu'elle était avant, ce qu'elle est après.
-// Annuler remet l'« avant », seulement si la ligne est encore comme Echo l'a laissée (sinon quelqu'un l'a changée depuis :
-// on n'écrase pas son geste). Gardé sur ce téléphone, pour les 30 dernières actions, 7 jours.
+// Annuler retire ce qu'Echo a ajouté, et remet ce qu'il a changé ou supprimé seulement si la ligne est encore comme il l'a
+// laissée (sinon quelqu'un l'a changée depuis : on n'écrase pas son geste). Gardé sur ce téléphone, pour les 30 dernières actions, 7 jours.
 
 export interface Retour { table: string; cle: string; avant: unknown | null; apres: unknown | null }
 interface Garde { quand: number; retours: Retour[] }
@@ -18,6 +18,9 @@ const copie = <T>(x: T): T => (x == null ? x : structuredClone(x));
 // Même contenu, quel que soit l'ordre des champs (une ligne revenue du serveur peut les ranger autrement).
 const range = (_k: string, v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v);
 const pareil = (a: unknown, b: unknown) => JSON.stringify(a ?? null, range) === JSON.stringify(b ?? null, range);
+
+// Le lien avec iCloud est posé après coup par la synchro : il ne compte pas comme un changement, et on le garde.
+const sansLien = (x: unknown) => (x && typeof x === "object" ? { ...x, ical: undefined } : x);
 
 // Fait l'action en notant les lignes qu'elle touche (les changements venus de l'autre téléphone ne comptent pas).
 export async function suivre<T>(faire: () => Promise<T>): Promise<{ resultat: T; retours: Retour[] }> {
@@ -75,8 +78,16 @@ export async function annulerDuJournal(id: string, now = Date.now()): Promise<{ 
     for (const r of [...g.retours].reverse()) {
       if (!noms.includes(r.table)) continue;
       const t = db.table(r.table);
-      if (!pareil(await t.get(r.cle), r.apres)) { changes++; continue; }
-      if (r.avant == null) await t.delete(r.cle); else await t.put(r.avant);
+      const la = await t.get(r.cle);
+      if (r.avant == null) {
+        // Echo l'avait ajoutée : on la retire, même retouchée depuis (c'est ce que « Annuler » veut dire). Déjà partie : rien à faire.
+        if (la == null) { changes++; continue; }
+        await t.delete(r.cle);
+      } else {
+        // Echo l'avait changée ou supprimée : on ne remet l'ancienne que si personne n'y a touché depuis.
+        if (!pareil(sansLien(la), sansLien(r.apres))) { changes++; continue; }
+        await t.put(la?.ical ? { ...(r.avant as object), ical: la.ical } : r.avant);
+      }
       remis++;
     }
   });

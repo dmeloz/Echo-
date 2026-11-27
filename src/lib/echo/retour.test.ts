@@ -75,6 +75,19 @@ describe("annuler depuis le journal", () => {
     expect((await db.taches.get("a"))!.heure).toBe("18:00");
     expect((await db.taches.get("b"))!.heure).toBe("15:00");
   });
+  it("retire ce qu'Echo a ajouté même retouché, et garde le lien iCloud posé depuis", async () => {
+    await db.taches.add(tache({ id: "a" }));
+    await executer(action(async () => {
+      await db.taches.add(tache({ id: "n" }));
+      await db.taches.update("a", { heure: "16:00" });
+      return async () => {};
+    }), "essai", ctx);
+    await db.taches.update("n", { fin: "16:00", ical: { uid: "n", href: "/n.ics" } });
+    await db.taches.update("a", { ical: { uid: "a", href: "/a.ics" } });
+    expect(await annulerDuJournal(await idJournal())).toEqual({ remis: 2, changes: 0 });
+    expect(await db.taches.get("n")).toBeUndefined();
+    expect(await db.taches.get("a")).toMatchObject({ heure: "15:00", ical: { href: "/a.ics" } });
+  });
   it("ne barre pas la ligne quand rien n'a pu être remis", async () => {
     await db.taches.add(tache({ id: "a" }));
     await executer(action(async () => { await db.taches.update("a", { heure: "16:00" }); return async () => {}; }), "essai", ctx);
