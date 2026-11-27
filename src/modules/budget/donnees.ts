@@ -153,7 +153,8 @@ export const historique = (p: Poste) => [...p.valeurs].sort((a, b) => b.quand - 
 /* ---------- Les dépenses du jour, les catégories, les enveloppes ---------- */
 
 export type Payeur = Personne | "commun";
-export interface Depense { id: string; jour: string; c: number; quoi: string; cat: string; qui: Payeur; cree: number }
+// rembourse : pour une dépense payée par l'un des deux, le jour où le compte commun la lui a rendue (« Entre nous »).
+export interface Depense { id: string; jour: string; c: number; quoi: string; cat: string; qui: Payeur; cree: number; rembourse?: string }
 export interface Categorie { id: string; nom: string; cree: number }
 // Trois catégories pour commencer (choix de Dany) ; les autres se créent à l'usage et sont gardées pour le foyer.
 export const CATS_BASE: Categorie[] = [{ id: "courses", nom: "Courses", cree: 0 }, { id: "plaisir", nom: "Plaisir", cree: 0 }, { id: "divers", nom: "Frais divers", cree: 0 }];
@@ -180,6 +181,44 @@ export function enveloppes(postes: Poste[], depenses: Depense[], mois: string): 
   }
   if (!liste.some((e) => e.cat === "plaisir")) liste.push({ cat: "plaisir", nom: "Plaisir", budget: b.plaisir, depense: par("plaisir"), reste: b.plaisir - par("plaisir") });
   return liste;
+}
+
+/* ---------- Les tickets de caisse de Cuisine comptent dans les Courses ---------- */
+
+// Ce que le Budget lit d'un ticket gardé par Cuisine (table cuisine_tickets) : il ne copie rien, il compte.
+export interface TicketLu { id: string; magasin: string; date: string; total: number; monnaie: string; cree: number }
+export const ID_TICKET = "ticket:";
+export const estTicket = (d: Pick<Depense, "id">) => d.id.startsWith(ID_TICKET);
+// Un ticket en francs avec un total devient une dépense « Courses », payée par le compte commun (on peut dire que c'est quelqu'un d'autre).
+export function depenseDuTicket(t: TicketLu): Depense | null {
+  const c = Math.round(t.total * 100);
+  if (t.monnaie !== "CHF" || !Number.isInteger(c) || c <= 0 || c > MAX || !JOUR_ISO.test(t.date)) return null;
+  return { id: ID_TICKET + t.id, jour: t.date, c, quoi: t.magasin || "Ticket de caisse", cat: "courses", qui: "commun", cree: t.cree };
+}
+// Toutes les dépenses : celles notées à la main, et une par ticket. Un ticket retouché dans le Budget (qui a payé) a sa ligne à lui, qui passe devant ;
+// si le ticket est retiré de Cuisine, sa ligne retouchée ne compte plus.
+export function avecTickets(depenses: Depense[], tickets: TicketLu[]): Depense[] {
+  const la = new Set(tickets.map((t) => ID_TICKET + t.id)), retouches = new Set(depenses.filter(estTicket).map((d) => d.id));
+  return [...depenses.filter((d) => !estTicket(d) || la.has(d.id)), ...tickets.map(depenseDuTicket).filter((d): d is Depense => !!d && !retouches.has(d.id))];
+}
+
+/* ---------- Entre nous : ce que chacun a avancé pour le foyer ---------- */
+
+// Une dépense du foyer payée par l'un des deux avec son argent : le compte commun la lui doit, tant qu'elle n'est pas rendue.
+export const avances = (depenses: Depense[], qui: Personne) => depenses.filter((d) => d.qui === qui && !d.rembourse).sort((a, b) => b.jour.localeCompare(a.jour) || b.cree - a.cree);
+export const duA = (depenses: Depense[]): Record<Personne, number> => ({ moi: somme(avances(depenses, "moi")), elle: somme(avances(depenses, "elle")) });
+
+/* ---------- Les échéances d'un jour, pour la journée et l'Agenda ---------- */
+
+export interface Echeance { cle: string; titre: string; c: number; retard?: boolean }
+// Ce qui tombe ce jour-là : les factures à payer (celles en retard aussi, si le jour est aujourd'hui) et les charges à l'année dont la date est notée.
+export function echeancesDu(jour: string, today: string, apayer: APayer[], postes: Poste[]): Echeance[] {
+  const mois = moisDe(jour);
+  const factures = resteAPayer(apayer).filter((l) => l.echeance === jour || (jour === today && l.echeance < today))
+    .map((l) => ({ cle: l.id, titre: l.titre, c: l.c, ...(l.echeance < jour ? { retard: true } : {}) }));
+  const annuelles = postes.filter((p) => p.sorte === "foyer" && p.rythme === "an" && p.echeance === jour.slice(5) && (valeurDe(p, mois) ?? 0) > 0)
+    .map((p) => ({ cle: p.id, titre: p.nom, c: valeurDe(p, mois)! }));
+  return [...factures, ...annuelles];
 }
 
 /* ---------- Les comptes : les vrais soldes, notés à la main ---------- */
@@ -270,7 +309,8 @@ export function nettoyerPoste(x: unknown): Poste | null {
 export function nettoyerDepense(x: unknown): Depense | null {
   const o = obj(x), id = txt(o.id, 80), jour = txt(o.jour, 10), c = centimes(o.c);
   if (!id || !JOUR_ISO.test(jour) || c === null || c === 0) return null;
-  return { id, jour, c, quoi: txt(o.quoi, 80).trim(), cat: txt(o.cat, 40) || "divers", qui: personne(o.qui) ? o.qui : "commun", cree: nb(o.cree) ?? Date.now() };
+  const rembourse = txt(o.rembourse, 10);
+  return { id, jour, c, quoi: txt(o.quoi, 80).trim(), cat: txt(o.cat, 40) || "divers", qui: personne(o.qui) ? o.qui : "commun", cree: nb(o.cree) ?? Date.now(), ...(personne(o.qui) && JOUR_ISO.test(rembourse) ? { rembourse } : {}) };
 }
 export function nettoyerCategorie(x: unknown): Categorie | null {
   const o = obj(x), nom = txt(o.nom, 30).trim(), id = txt(o.id, 40);

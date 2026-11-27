@@ -3,7 +3,7 @@ import { db } from "../../data/db";
 import { auJour, nouvelId, sansAccents } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
 import {
-  CATS_BASE, DEPART, changer, chf, cleCategorie, ecrire, moisDe, nettoyerAPayer, proposerVirements, valeurDe,
+  CATS_BASE, DEPART, avances, changer, chf, cleCategorie, ecrire, estTicket, somme, moisDe, nettoyerAPayer, proposerVirements, valeurDe,
   type APayer, type Categorie, type Changement, type Compte, type CompteSolde, type Depense, type Payeur, type Poste, type Rythme, type Solde, type Sorte,
 } from "./donnees";
 
@@ -104,6 +104,25 @@ export async function ajouterDepense(n: NouvelleDepense, now = new Date()): Prom
 export async function retirerDepense(d: Depense) {
   await db.budget_depenses.delete(d.id);
   toast(`${d.quoi || "Dépense"} : retiré`, annuler(() => db.budget_depenses.put(d)));
+}
+// Un ticket de caisse est compté pour le compte commun ; dire que c'est l'un des deux qui a payé garde une ligne à part pour ce ticket.
+export async function payeurDuTicket(d: Depense, qui: Payeur) {
+  if (!estTicket(d)) return;
+  const avant = await db.budget_depenses.get(d.id);
+  const { rembourse: _r, ...sans } = d;
+  await db.budget_depenses.put({ ...sans, qui });
+  toast(qui === "commun" ? `${d.quoi} : payé par le compte commun` : `${d.quoi} : noté dans Entre nous`, annuler(() => (avant ? db.budget_depenses.put(avant) : db.budget_depenses.delete(d.id))));
+}
+// Entre nous : le compte commun a rendu à quelqu'un tout ce qu'il avait avancé. Les lignes venues d'un ticket sont gardées avec leur date de remboursement.
+export async function rembourser(qui: Personne, toutes: Depense[], now = new Date()): Promise<number> {
+  const dues = avances(toutes, qui), jour = auJour(0, now);
+  if (!dues.length) return 0;
+  const avant = await db.budget_depenses.bulkGet(dues.map((d) => d.id));
+  await db.budget_depenses.bulkPut(dues.map((d) => ({ ...d, rembourse: jour })));
+  toast(`${chf(somme(dues))} CHF rendus`, annuler(() => db.transaction("rw", db.budget_depenses, async () => {
+    for (const [i, d] of dues.entries()) { if (avant[i]) await db.budget_depenses.put(avant[i]!); else await db.budget_depenses.delete(d.id); }
+  })));
+  return dues.length;
 }
 // Créer une catégorie : elle est gardée pour le foyer. Une catégorie qui existe déjà est simplement rendue.
 export async function ajouterCategorie(nom: string): Promise<Categorie | null> {
