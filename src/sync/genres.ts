@@ -2,6 +2,7 @@ import type { Table } from "dexie";
 import { db } from "../data/db";
 import { nettoyerJournal } from "../lib/echo/journal";
 import { nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation } from "../modules/maison/donnees";
+import { nettoyerAPayer, nettoyerCategorie, nettoyerDepense, nettoyerPoste, nettoyerSolde } from "../modules/budget/donnees";
 import { nettoyerSouvenir } from "../lib/echo/memoire";
 import { nettoyerArticle, nettoyerGouts, nettoyerHabitude, nettoyerBatch, nettoyerProduit, nettoyerRecette, nettoyerRepas, nettoyerTicket } from "../modules/cuisine/donnees";
 
@@ -23,6 +24,12 @@ export const GENRES: Record<string, Genre> = {
   reparation: { table: db.maison_reparations, cle: "id", nettoyer: nettoyerReparation },
   appareil: { table: db.maison_appareils, cle: "id", nettoyer: nettoyerAppareil },
   contact: { table: db.maison_contacts, cle: "id", nettoyer: nettoyerContact },
+  // Le Budget. Les postes de départ et les catégories ont une clé qui a un sens : les deux téléphones peuvent créer la même.
+  budget_poste: { table: db.budget_postes, cle: "id", nettoyer: nettoyerPoste, naturelle: true },
+  budget_depense: { table: db.budget_depenses, cle: "id", nettoyer: nettoyerDepense },
+  budget_categorie: { table: db.budget_categories, cle: "id", nettoyer: nettoyerCategorie, naturelle: true },
+  budget_solde: { table: db.budget_soldes, cle: "id", nettoyer: nettoyerSolde },
+  budget_apayer: { table: db.budget_apayer, cle: "id", nettoyer: nettoyerAPayer },
   journal: { table: db.echo_journal, cle: "id", nettoyer: nettoyerJournal },
   memoire: { table: db.echo_memoire, cle: "id", nettoyer: nettoyerSouvenir },
 };

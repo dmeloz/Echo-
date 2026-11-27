@@ -33,7 +33,7 @@ Règles :
 | Agenda (id planning) | construit : aujourd'hui et les six jours suivants, vue Jour et vue Semaine, idée pour alléger le jour le plus chargé. Il lit les tâches de la base (pas de table à lui). |
 | Cuisine | lots 1 (courses) et 2 (semaine proposée par Echo) construits, plus la photo du ticket de caisse : voir « Cuisine » plus bas. Batch du dimanche, stock décompté et livre de recettes construits (2026-11-27). |
 | Maison | lot 1 (corvées) construit : voir « Maison » plus bas. Entretien et papiers : lots suivants. |
-| Budget | pas encore construit |
+| Budget | lot 1 construit (2026-11-27) : voir « Budget » plus bas. Entre nous, liens Cuisine et Agenda, Echo : lots suivants. |
 
 ## Ajouter un module
 
@@ -143,3 +143,23 @@ Plan et maquette : voir le fil « Construire le module Maison ». Trois parties 
 - **Synchro** : genres `corvee` et `corvee_faite`. Avant la mise en ligne : migration `20261127220000_maison_corvees.sql`, puis redéployer la fonction `echo` (sa liste d'outils a grandi).
 - **Entretien** (lot 2, `Entretien.tsx`) : deuxième partie de la page (réglage `maisonPartie`). « À réparer » = `maison_reparations` (à faire, en cours, réparé ; une réparation finie quitte la liste et reste un an dans l'histoire de son appareil). « À entretenir » = des corvées marquées `entretien: true` (même jauge, même rond, même équilibre), rangées hors de la liste des corvées. « Appareils et contacts » = `maison_appareils` (pièce, date d'achat, garantie en mois, gestes habituels proposés par `gestesPour`, sans IA) et `maison_contacts` (une ligne écrite : « plombier Martin 079… »).
 - Outil d'Echo en plus : `noter_reparation` ; `voir_maison` rend aussi `aReparer`. Synchro : genres `reparation`, `appareil`, `contact` (migration `20261127230000_maison_entretien.sql`, puis redéployer `echo`).
+
+## Budget · lot 1, le budget partagé sans Echo (2026-11-27)
+
+Page à trois parties (les mêmes onglets que l'Agenda) : Mois, Charges, Comptes. Le bouton « Dépense » est dans l'en-tête.
+
+Deux règles tiennent le module (`donnees.ts`) :
+1. **Chaque montant est daté.** Un poste (`budget_postes`) garde une liste de valeurs « à partir de tel mois » (ou « seulement ce mois »). Changer une valeur ajoute une ligne ; les mois d'avant ne bougent pas.
+2. **Aucun total n'est saisi.** `bilan(postes, mois)` recalcule tout : ce qui reste à chacun (salaire − charges perso − virement), ce qui arrive au compte commun, les charges du foyer, le reste commun et son partage plaisir / épargne.
+
+- **Le mois de budget** commence le 25 et porte le nom du mois où il finit (« Décembre » = 25 novembre – 24 décembre). Montants en centimes entiers.
+- **Sortes de postes** : `revenu`, `perso` (payé par chacun), `virement` (vers le compte commun), `foyer` (compte `commun` ou `facture`), `part` (le pour cent du reste commun qui va au plaisir). Un poste `rythme: "an"` met un douzième de côté par mois ; `groupe` réunit plusieurs postes dans une bulle (« Véhicules »).
+- **Mois** : deux tuiles (ce qui reste à chacun, toucher = le détail de la personne), le reste du commun partagé, les enveloppes (une charge du foyer liée à une catégorie : Courses, Frais divers ; Plaisir = sa part du reste), les factures à payer, les dépenses du mois.
+- **Charges** : le total, puis une mosaïque de bulles dont la taille suit le poids. Toucher une bulle ouvre « Changer une valeur » : nouveau montant, à partir de quand, **ce que ça change** (calculé avant de valider par `effets`), l'historique, « Revenir à la valeur d'avant ».
+- **Virements** : posés à la main ; la feuille montre le calcul d'Echo (même total, réparti selon les salaires, `proposerVirements`) et « Prendre ce calcul ». Une correction à la main est une valeur comme une autre : elle devient la base.
+- **Comptes** : les vrais soldes de l'épargne et du compte facture, notés à la main (`budget_soldes`), et les provisions à l'année.
+- **Dépenses** (`budget_depenses`) : montant, quoi, catégorie, qui a payé. Trois catégories de base ; les nouvelles (`budget_categories`, clé = nom simplifié) sont gardées pour le foyer.
+- **Premier jour** : « Commencer » pose les lignes de départ sans montant (ids fixes, donc pas de doublon entre deux téléphones). Aucun chiffre du foyer n'est dans le code.
+- **Pour le module Maison (Papiers)** : `ajouterAPayer(ligne)` (le même id deux fois ne double rien et ne défait pas un paiement), `marquerPaye`, `estPaye(id)` dans `actions.ts`, table `budget_apayer`.
+- **Synchro** : genres `budget_poste`, `budget_depense`, `budget_categorie`, `budget_solde`, `budget_apayer`. La migration `20261128090000_budget.sql` doit être appliquée au projet « echo » avant la mise en ligne.
+- Pas encore construits (donc absents de l'écran) : Entre nous (qui a avancé quoi), tickets de Cuisine vers l'enveloppe Courses, lien avec l'Agenda, outils d'Echo et point du mois, relevé bancaire.

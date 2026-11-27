@@ -88,7 +88,7 @@ async function entrer(foyerId: string, place: Personne, userId: string) {
   const avant = (await db.reglages.get("proprio"))?.valeur as Personne | undefined;
   // Ce rangement n'est pas un changement à envoyer : vider puis réécrire une table (échange des places) ferait partir
   // des suppressions vers le foyer. Ce qui doit partir est noté juste après, d'après ce que le téléphone contient vraiment.
-  await db.transaction("rw", [db.taches, db.horaires, db.photos, db.reglages, db.cuisine_courses, db.cuisine_gouts, db.cuisine_tickets], async (tx) => {
+  await db.transaction("rw", [db.taches, db.horaires, db.photos, db.reglages, db.cuisine_courses, db.cuisine_gouts, db.cuisine_tickets, db.budget_postes, db.budget_depenses], async (tx) => {
     marquerDistante(tx);
     const ex = (await db.taches.filter((t) => !!t.ex).toArray()).map((t) => t.id);
     await db.taches.bulkDelete(ex);
@@ -109,6 +109,12 @@ async function entrer(foyerId: string, place: Personne, userId: string) {
       await db.cuisine_gouts.bulkPut(gouts.map((g) => ({ ...g, qui: inv(g.qui) })));
       const tickets = await db.cuisine_tickets.toArray();
       await db.cuisine_tickets.bulkPut(tickets.map((t) => ({ ...t, par: inv(t.par) })));
+      // Budget : le salaire, les charges perso et le virement de chacun suivent la personne (les lignes de départ ont la place dans leur id).
+      const postes = await db.budget_postes.toArray();
+      await db.budget_postes.clear();
+      await db.budget_postes.bulkPut(postes.map((p) => ({ ...p, id: p.id.replace(/-(moi|elle)$/, (_m, q: Personne) => "-" + inv(q)), ...(p.qui ? { qui: inv(p.qui) } : {}), valeurs: p.valeurs.map((v) => ({ ...v, ...(v.par ? { par: inv(v.par) } : {}) })) })));
+      const depenses = await db.budget_depenses.toArray();
+      await db.budget_depenses.bulkPut(depenses.map((d) => ({ ...d, qui: d.qui === "commun" ? d.qui : inv(d.qui) })));
     }
     await db.reglages.bulkPut([{ cle: "proprio", valeur: place }, { cle: "foyer", valeur: { id: foyerId, userId } }]);
   });
