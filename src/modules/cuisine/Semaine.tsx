@@ -124,6 +124,7 @@ export function Semaine({ now, noms, proprio }: ContexteModule) {
                     <p>{soirDe(b)}</p>
                     {r.gamelle && <p>{b.gamelle === proprio ? "Ta gamelle" : b.gamelle ? `Gamelle de ${noms[b.gamelle]}` : "Gamelle"} : {r.gamelle}</p>}
                     {r.congele && <p>Vient du congélateur : à sortir la veille.</p>}
+                    {r.duStock && r.duStock.length > 0 && <p className="du-stock">Avec ton stock : {r.duStock.join(", ").toLowerCase()}</p>}
                     {r.ingredients && r.ingredients.length > 0 && <p className="ingredients">{r.ingredients.map((i) => (i.qte ? `${i.nom} (${i.qte})` : i.nom)).join(", ")}</p>}
                     <div className="rangee">
                       {(b.soir > 0 || b.gamelle) && <button type="button" className="puce" disabled={!!pense} onClick={() => avecEcho(j, () => changerRepas(b, r, noms, jours))}>Changer</button>}

@@ -74,8 +74,8 @@ export async function rangerTicket(lu: LectureTicket, gardees: LigneTicket[], no
       const avant = l.jours && l.lieu === "frigo" ? plusJours(jour, l.jours) : undefined;
       const present = [...stock, ...neufs].find((p) => p.lieu === l.lieu && cleDe(p.nom) === cleDe(l.nom));
       if (!present) neufs.push({ id: nouvelId(), nom: l.nom, lieu: l.lieu, ...(avant ? { avant } : {}), cree: quand + i });
-      // Déjà là : c'est du neuf, l'ancienne date ne vaut plus (remplacée par l'estimation, ou retirée).
-      else if (!neufs.includes(present) && present.avant !== avant) { anciens.push({ ...present }); await db.cuisine_stock.update(present.id, { avant }); }
+      // Déjà là : c'est du neuf, il est de nouveau plein et l'ancienne date ne vaut plus (remplacée par l'estimation, ou retirée).
+      else if (!neufs.includes(present) && (present.avant !== avant || present.reste)) { anciens.push({ ...present }); await db.cuisine_stock.update(present.id, { avant, reste: undefined }); }
     }
     await db.cuisine_stock.bulkAdd(neufs);
     const noms = new Set(gardees.map((l) => l.course).filter(Boolean));

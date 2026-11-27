@@ -28,12 +28,15 @@ export interface Article { id: string; nom: string; qte: string; rayon: Rayon; p
 export interface Habitude { cle: string; nom: string; qte: string; rayon: Rayon; achats: number[]; refus: number; pause?: number }
 // Le repas du soir d'un jour. Quand Echo le propose : ses ingrédients, s'il vient du congélateur, la gamelle du midi.
 // propose = pas encore validé (la barre « Proposition d'Echo »).
-export interface Repas { jour: string; plat: string; ingredients?: Lu[]; congele?: boolean; gamelle?: string; propose?: boolean }
+export interface Repas { jour: string; plat: string; ingredients?: Lu[]; duStock?: string[]; congele?: boolean; gamelle?: string; propose?: boolean }
 export type Lieu = "frigo" | "congelateur" | "placard" | "maison";
 export const LIEUX: Array<{ id: Lieu; nom: string }> = [
   { id: "frigo", nom: "Frigo" }, { id: "congelateur", nom: "Congélateur" }, { id: "placard", nom: "Placard" }, { id: "maison", nom: "Maison" },
 ];
-export interface Produit { id: string; nom: string; lieu: Lieu; avant?: string; cree: number }
+// reste : ce qu'il reste du produit. Absent = plein ; « peu » = presque fini (il est alors remis aux courses).
+export type Reste = "moitie" | "peu";
+export const RESTES: Array<{ id: Reste | "plein"; nom: string }> = [{ id: "plein", nom: "Plein" }, { id: "moitie", nom: "À moitié" }, { id: "peu", nom: "Presque fini" }];
+export interface Produit { id: string; nom: string; lieu: Lieu; avant?: string; reste?: Reste; cree: number }
 export type Rechauffe = "" | "oui" | "non" | "pas";
 export interface Gouts { qui: Personne; aime: string[]; evite: string; rechauffe: Rechauffe; maj: number }
 
@@ -242,12 +245,14 @@ export function nettoyerRepas(x: unknown): Repas | null {
   if (!JOUR_ISO.test(jour) || !plat) return null;
   const ingredients = (Array.isArray(o.ingredients) ? o.ingredients : []).slice(0, 20)
     .map((i) => ({ nom: txt(obj(i).nom, 60).trim(), qte: txt(obj(i).qte, 20).trim() })).filter((i) => i.nom);
-  return { jour, plat, ...(ingredients.length ? { ingredients } : {}), ...(o.congele === true ? { congele: true } : {}), ...(gamelle ? { gamelle } : {}), ...(o.propose === true ? { propose: true } : {}) };
+  const duStock = (Array.isArray(o.duStock) ? o.duStock : []).slice(0, 12).map((n) => txt(n, 60).trim()).filter(Boolean);
+  return { jour, plat, ...(ingredients.length ? { ingredients } : {}), ...(duStock.length ? { duStock } : {}), ...(o.congele === true ? { congele: true } : {}), ...(gamelle ? { gamelle } : {}), ...(o.propose === true ? { propose: true } : {}) };
 }
 export function nettoyerProduit(x: unknown): Produit | null {
   const o = obj(x), id = txt(o.id, 80), nom = txt(o.nom, 60).trim(), avant = txt(o.avant, 10);
   if (!id || !nom || !LIEUX.some((l) => l.id === o.lieu)) return null;
-  return { id, nom, lieu: o.lieu as Lieu, ...(JOUR_ISO.test(avant) ? { avant } : {}), cree: nb(o.cree) ?? Date.now() };
+  const reste = (["moitie", "peu"] as const).find((r) => r === o.reste);
+  return { id, nom, lieu: o.lieu as Lieu, ...(JOUR_ISO.test(avant) ? { avant } : {}), ...(reste ? { reste } : {}), cree: nb(o.cree) ?? Date.now() };
 }
 export function nettoyerGouts(x: unknown): Gouts | null {
   const o = obj(x);

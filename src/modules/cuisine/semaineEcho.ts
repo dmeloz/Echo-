@@ -1,6 +1,6 @@
 import { toast } from "sonner";
 import { db } from "../../data/db";
-import { plusJours } from "../../lib/dates";
+import { auJour, plusJours } from "../../lib/dates";
 import { CODES, type Horaire } from "../../lib/horaires";
 import type { Noms, Personne } from "../../lib/types";
 import { entetesIA } from "../../sync/client";
@@ -27,7 +27,8 @@ export const versTravail = (horaires: Horaire[]): Travail[] =>
   horaires.filter((h) => h.code in CODES).map((h) => ({ qui: h.qui, jour: h.jour, plages: CODES[h.code].plages, fixe: h.code === "FIX" }));
 
 // Ce qu'on envoie à Echo : les jours à prévoir, les goûts, le stock, et ce qu'il ne faut pas reproposer.
-export async function preparerDemande(aPrevoir: Besoin[], noms: Noms, semaine: string[], eviter: string[] = []) {
+const ORDRE = ["frigo", "congelateur", "placard"];
+export async function preparerDemande(aPrevoir: Besoin[], noms: Noms, semaine: string[], eviter: string[] = [], now = new Date()) {
   const [gouts, stock, repas] = await Promise.all([db.cuisine_gouts.toArray(), db.cuisine_stock.toArray(), db.cuisine_repas.toArray()]);
   const demandes = new Set(aPrevoir.map((b) => b.jour));
   const valides = repas.filter((r) => !r.propose || !demandes.has(r.jour));
@@ -36,7 +37,13 @@ export async function preparerDemande(aPrevoir: Besoin[], noms: Noms, semaine: s
     jours: aPrevoir.map((b) => ({ jour: b.jour, soir: b.soir, gamelle: !!b.gamelle })),
     gamellePour: mangeur ? noms[mangeur] : "",
     gouts: gouts.map((g) => ({ prenom: noms[g.qui], aime: g.aime, evite: g.evite, rechauffe: g.rechauffe })),
-    stock: stock.slice(0, 40).map((p) => ({ nom: p.nom, avant: p.avant ?? "" })),
+    // Ce qu'il y a à manger à la maison, le frigo d'abord (ce qui presse en tête) : Echo part de là.
+    stock: stock.filter((p) => p.lieu !== "maison" && p.reste !== "peu")
+      .sort((a, b) => ORDRE.indexOf(a.lieu) - ORDRE.indexOf(b.lieu) || (a.avant ?? "9").localeCompare(b.avant ?? "9"))
+      .slice(0, 60).map((p) => ({ nom: p.nom.replace(/\s+/g, " ").trim(), avant: p.avant ?? "", lieu: p.lieu, moitie: p.reste === "moitie" })),
+    aujourdhui: auJour(0, now),
+    // On cuisine le dimanche d'avant la semaine ; si ce dimanche est passé, aujourd'hui.
+    cuisine: plusJours(semaine[0], -1) > auJour(0, now) ? plusJours(semaine[0], -1) : auJour(0, now),
     gardes: valides.filter((r) => semaine.includes(r.jour) && !demandes.has(r.jour)).map((r) => ({ jour: r.jour, plat: r.plat })),
     recents: valides.filter((r) => r.jour >= plusJours(semaine[0], -14) && r.jour < semaine[0]).map((r) => r.plat).slice(-20),
     eviter,
@@ -78,7 +85,7 @@ async function versCourses(repas: Repas[]): Promise<Article[]> {
     const par = ((await db.reglages.get("proprio"))?.valeur as Personne | undefined) ?? "moi";
     const habitudes = await db.cuisine_habitudes.toArray();
     const presents = new Set((await db.cuisine_courses.toArray()).map((a) => cleDe(a.nom)));
-    crees = manquants(repas, await db.cuisine_stock.toArray()).filter((m) => !presents.has(cleDe(m.nom)))
+    crees = manquants(repas, (await db.cuisine_stock.toArray()).filter((p) => p.reste !== "peu")).filter((m) => !presents.has(cleDe(m.nom)))
       .map((m, i) => ({ ...nouvelArticle(m, par, habitudes, i), pour: m.jours }));
     await db.cuisine_courses.bulkAdd(crees);
   });

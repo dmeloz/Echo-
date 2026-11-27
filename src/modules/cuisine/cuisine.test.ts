@@ -187,14 +187,23 @@ describe("la semaine proposée par Echo", () => {
   });
   it("prépare la demande : jours, goûts par prénom, stock, plats gardés et récents", async () => {
     await db.cuisine_gouts.put({ qui: "elle", aime: ["Riz"], evite: "champignons", rechauffe: "oui", maj: 1 });
-    await db.cuisine_stock.put({ id: "s", nom: "Courgettes", lieu: "frigo", avant: "2026-12-01", cree: 1 });
+    await db.cuisine_stock.bulkPut([
+      { id: "r", nom: "Riz", lieu: "placard", reste: "moitie", cree: 1 }, { id: "l", nom: "Lessive", lieu: "maison", cree: 1 },
+      { id: "b", nom: "Beurre", lieu: "frigo", reste: "peu", cree: 1 }, { id: "y", nom: "Yaourts", lieu: "frigo", cree: 1 },
+      { id: "s", nom: "Courgettes", lieu: "frigo", avant: "2026-12-01", cree: 1 },
+    ]);
     await db.cuisine_repas.bulkPut([{ jour: "2026-11-25", plat: "Lasagnes" }, { jour: "2026-11-30", plat: "Poulet rôti" }, { jour: "2026-12-01", plat: "Vieux plat", propose: true }]);
     const b = besoins(semaine, travail).slice(1, 3);
-    const d = await preparerDemande(b, noms, semaine, ["Chili"]);
+    const d = await preparerDemande(b, noms, semaine, ["Chili"], new Date("2026-11-27T10:00:00"));
     expect(d.jours).toEqual([{ jour: "2026-12-01", soir: 2, gamelle: true }, { jour: "2026-12-02", soir: 1, gamelle: true }]);
     expect(d.gamellePour).toBe("Sarah");
     expect(d.gouts).toEqual([{ prenom: "Sarah", aime: ["Riz"], evite: "champignons", rechauffe: "oui" }]);
-    expect(d.stock).toEqual([{ nom: "Courgettes", avant: "2026-12-01" }]);
+    // Le frigo d'abord (ce qui presse en tête), sans les produits de la maison ni ce qui est presque fini.
+    expect(d.stock).toEqual([
+      { nom: "Courgettes", avant: "2026-12-01", lieu: "frigo", moitie: false }, { nom: "Yaourts", avant: "", lieu: "frigo", moitie: false },
+      { nom: "Riz", avant: "", lieu: "placard", moitie: true },
+    ]);
+    expect([d.aujourdhui, d.cuisine]).toEqual(["2026-11-27", "2026-11-29"]);
     expect(d.gardes).toEqual([{ jour: "2026-11-30", plat: "Poulet rôti" }]);
     expect(d.recents).toEqual(["Lasagnes"]);
     expect(d.eviter).toEqual(["Chili"]);
