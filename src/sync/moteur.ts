@@ -7,6 +7,7 @@ import { nettoyerNoms, nettoyerTache } from "../lib/valider";
 import { supa } from "./client";
 import { autrePrenom } from "../lib/types";
 import { GENRES, TABLES_MODULES } from "./genres";
+import { annoncer, motDeLAutre } from "../lib/echo/discussions";
 import { cleHoraire, lireFile, marquerDistante, noter, retirer, surChangement } from "./file";
 
 // La synchro du foyer. Chaque téléphone garde toutes les données chez lui (Echo marche hors ligne)
@@ -236,6 +237,14 @@ export async function appliquer(lignes: Ligne[], premier: boolean, moi = foyer?.
 async function prevenir(nouvelles: Array<{ par: string; texte: string }>) {
   const membres = ((await db.reglages.get("membres"))?.valeur as Membre[] | undefined) ?? [];
   const prenom = (id: string) => membres.find((m) => m.userId === id)?.prenom ?? "L'autre";
+  // Echo le dit aussi dans sa discussion (réglage « Echo prend l'initiative ») : on le retrouve en ouvrant Echo, et Echo le sait.
+  const initiative = (await db.reglages.get("echoInitiative"))?.valeur !== false && (await db.reglages.get("assistantEcho"))?.valeur !== false;
+  if (initiative) {
+    for (const par of new Set(nouvelles.map((n) => n.par))) {
+      const mot = motDeLAutre(prenom(par), nouvelles.filter((n) => n.par === par).map((n) => n.texte));
+      if (mot) annoncer(mot);
+    }
+  }
   if (nouvelles.length > 3) { toast(`${prenom(nouvelles[0].par)} a fait ${nouvelles.length} changements`); return; }
   for (const n of nouvelles) toast(`${prenom(n.par)} ${n.texte}`, { duration: 5000 });
 }

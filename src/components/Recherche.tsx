@@ -49,7 +49,7 @@ export function ResultatsRecherche({ taches, q, noms, now, onOuvrir, onExemple }
   );
   return (
     <section className="resultats" aria-live="polite">
-      {!res.length ? <p className="phrase-recherche vide-recherche">Rien pour « {q.trim()} ». Écris-la en bas avec l'étoile si c'est une chose à faire.</p>
+      {!res.length ? <p className="phrase-recherche vide-recherche">Rien pour « {q.trim()} ».</p>
         : <>{groupe("À faire", ouvertes)}{groupe("Faites", faites)}</>}
     </section>
   );

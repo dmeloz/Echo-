@@ -1,4 +1,4 @@
-import { CalendarClock, CalendarDays, Sun } from "pulsoicon-react";
+import { CalendarClock, CalendarDays, Plus, Sun } from "pulsoicon-react";
 import { useState } from "react";
 import { CartePremier } from "../components/CartePremier";
 import { LigneTache } from "../components/LigneTache";
@@ -14,14 +14,14 @@ import { ligneAccueil } from "../lib/horaires";
 import type { Module } from "../modules/contrat";
 import { tachesDuJour } from "../lib/journee";
 
-interface Props { taches: Tache[]; noms: Noms; proprio: Personne; now: Date; modules: Module[]; onOuvrir: (t: Tache) => void; onAller: (id: string) => void }
+interface Props { taches: Tache[]; noms: Noms; proprio: Personne; now: Date; modules: Module[]; onOuvrir: (t: Tache) => void; onAller: (id: string) => void; onCreer: () => void }
 
 const VISIBLES = 3; // « Ensuite » : trois lignes au plus, le reste se déplie.
 
 // Accueil : une phrase, UNE chose mise en avant (en premier), la suite en calme, demain, puis les modules.
 type Filtre = "tout" | "moi" | "autre";
 
-export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAller }: Props) {
+export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAller, onCreer }: Props) {
   const today = auJour(0, now);
   const demain = auJour(1, now);
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -102,9 +102,11 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
         <section className="g vide">
           <span className="vide-icone" aria-hidden="true"><Sun size={26} strokeWidth={1.5} /></span>
           <h2>Rien de prévu, rien ne presse</h2>
-          <p>Écris une chose en bas, par exemple « courses samedi 10 h ».</p>
+          <p>Ajoute une première chose, ou dis-la à Echo avec l'étoile en bas.</p>
         </section>
       )}
+      {/* Ajouter sans passer par Echo : un bouton visible, sous la carte du moment. */}
+      <button type="button" className="lt-ajout" onClick={onCreer}><Plus size={18} strokeWidth={2.4} />Ajouter une tâche</button>
 
       {(resteTout.length > 0 || faites.length > 0) && (
         <section className="g journee" aria-labelledby="lab-journee">

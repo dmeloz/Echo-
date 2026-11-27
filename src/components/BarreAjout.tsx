@@ -7,8 +7,9 @@ import { heureFr, libelleJour } from "../lib/dates";
 import { NIVEAUX, niveauPropose } from "../lib/importance";
 import { appelerServeur, ErreurEcho } from "../lib/assistant";
 import { executer, lancerEcho, type Faite, type ResultatEcho } from "../lib/echo/boucle";
+import { aDireBonjour, initiativePermise, motDuMatin, noterBonjour } from "../lib/echo/initiative";
 import type { Action } from "../lib/echo/outils";
-import { anciennes, archiver, chargerFil, garderFil, MAX_ECHANGES, nouveauFil, oublierAncienne, rappelDe, REPRISE, titreDe, type Ancienne, type Echange, type EtatAction, type Fil } from "../lib/echo/discussions";
+import { anciennes, annoncer, archiver, avecMot, chargerFil, EVT_MOT, EVT_NON_LU, expire, garderFil, garderMotsEnAttente, motsEnAttente, parleRecemment, MAX_ECHANGES, nouveauFil, oublierAncienne, rappelDe, titreDe, type Ancienne, type Echange, type EtatAction, type Fil, type Mot } from "../lib/echo/discussions";
 import { REPETES, type Noms, type Personne } from "../lib/types";
 import { ajouter } from "../data/actions";
 import { nomDe, useReglage } from "../data/hooks";
@@ -20,7 +21,7 @@ interface Props {
   onTexte: (t: string) => void; onRanger: () => void; onFinEcoute: () => void; onPlusOptions: (pre: Compris | null) => void;
 }
 
-type EtatEcho = null | { etat: "pense"; phrase: string } | { etat: "propose"; r: ResultatEcho; phrase: string };
+type EtatEcho = null | { etat: "pense"; phrase: string; direct?: string } | { etat: "propose"; r: ResultatEcho; phrase: string };
 
 // La discussion avec Echo (src/lib/echo/discussions.ts) : gardée sur le téléphone, même si l'app se ferme.
 // Elle reste « en cours » 15 minutes après le dernier message ; ensuite elle part chez les anciennes, qu'on peut relire et reprendre.
@@ -30,7 +31,7 @@ let filGarde: Fil | null | undefined;
 let sansRappel = false;
 const filActuel = (qui?: string) => {
   if (filGarde === undefined) filGarde = chargerFil(Date.now(), qui);
-  if (filGarde && Date.now() - filGarde.quand >= REPRISE) { archiver(filGarde); garderFil(null); filGarde = null; }
+  if (filGarde && expire(filGarde)) { archiver(filGarde); garderFil(null); filGarde = null; }
   return filGarde;
 };
 const ligneDe = (a: Action) => [a.libelle, ...a.details].join(" · ");
@@ -51,8 +52,11 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const [tache, setTache] = useState(false); // « Plutôt une tâche » : la phrase n'est pas pour un module
   const [simple, setSimple] = useState(false); // Echo n'a pas répondu : on reste en mode simple pour cette phrase
   const [filEtat, setFilEtat] = useState<Fil | null>(() => filActuel(noms[proprio]));
-  const fil = filEtat && Date.now() - filEtat.quand < REPRISE ? filEtat : null; // passé 15 minutes, la discussion repart à neuf
-  const setFil = (f: Fil | null) => { filGarde = f; garderFil(f); setFilEtat(f); };
+  const fil = filEtat && !expire(filEtat) ? filEtat : null; // passé 15 minutes, la discussion repart à neuf (sauf un mot d'Echo pas encore lu)
+  const setFil = (f: Fil | null) => {
+    filGarde = f; garderFil(f); setFilEtat(f);
+    window.dispatchEvent(new CustomEvent(EVT_NON_LU, { detail: !!f?.nouveau })); // le point sur l'étoile Echo
+  };
   // Les anciennes discussions : la liste, ou l'une d'elles ouverte pour la relire.
   const [vueAnciennes, setVueAnciennes] = useState<null | "liste" | Ancienne>(null);
   // Relue seulement quand la discussion change ou qu'on ouvre la liste (pas à chaque lettre tapée).
@@ -97,17 +101,67 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
   const { actifs } = useModulesActifs();
   const versEcho = actif && (!!code || relie) && !simple && navigator.onLine;
   // Pendant une discussion avec Echo, tout lui est envoyé (« plus de lait » aussi : il a les courses).
-  const pour = v && !tache && !((echo || fil) && versEcho) ? actifs.map((m) => (m.etat === "construit" ? m.comprendre?.(v) ?? null : null)).find((x) => x) ?? null : null;
+  const pour = v && !tache && !((echo || parleRecemment(fil)) && versEcho) ? actifs.map((m) => (m.etat === "construit" ? m.comprendre?.(v) ?? null : null)).find((x) => x) ?? null : null;
   const parEcho = actif && (!!code || relie) && !simple && !pour;
   const tropLong = parEcho && v.length > MAX_PHRASE;
   // L'écran de discussion, comme dans l'app Claude : dès qu'Echo travaille, ou qu'une discussion est en cours.
   const ecran = ouverte && versEcho && !tache && (!!echo || !!fil?.echanges.length || !!vueAnciennes || (!v && !!fil));
   const defile = useRef<HTMLDivElement>(null);
   const nbEchanges = fil?.echanges.length ?? 0;
+  const ecrit = echo?.etat === "pense" ? echo.direct : undefined; // la réponse qui s'écrit
   useEffect(() => {
     const d = defile.current;
     if (d && !vueAnciennes) d.scrollTop = d.scrollHeight;
-  }, [nbEchanges, echo?.etat, vueAnciennes, ecran]);
+  }, [nbEchanges, echo?.etat, vueAnciennes, ecran, ecrit]);
+
+  // Echo prend l'initiative (src/lib/echo/initiative.ts) : son mot entre dans la discussion, quand il ne coupe rien
+  // (pas pendant qu'il réfléchit ou attend un oui : le mot attend son tour).
+  const [nbMots, setNbMots] = useState(() => motsEnAttente().length);
+  useEffect(() => {
+    const recevoir = (e: Event) => {
+      garderMotsEnAttente([...motsEnAttente(), (e as CustomEvent<Mot>).detail]);
+      setNbMots((n) => n + 1);
+      window.dispatchEvent(new CustomEvent(EVT_NON_LU, { detail: true }));
+    };
+    window.addEventListener(EVT_MOT, recevoir);
+    return () => window.removeEventListener(EVT_MOT, recevoir);
+  }, []);
+  useEffect(() => {
+    const l = motsEnAttente();
+    if (echo || !l.length) return;
+    let f = filActuel();
+    for (const m of l) f = avecMot(f, m);
+    garderMotsEnAttente([]);
+    setFil(f);
+  }, [echo, nbMots]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Le petit mot du matin : la première fois qu'on ouvre l'app entre 5 h et midi.
+  // Les réglages sont relus au moment même (pas leurs valeurs par défaut, le temps qu'ils se chargent).
+  const pourMatin = useRef({ code, relie, ctx: () => ({ noms, proprio, now: new Date() }) });
+  pourMatin.current = { code, relie, ctx: () => ({ noms, proprio, now: new Date() }) };
+  useEffect(() => {
+    let enCours = false;
+    const essayer = async () => {
+      if (enCours || document.visibilityState !== "visible" || !navigator.onLine || !aDireBonjour()) return;
+      enCours = true;
+      try {
+        const outils = await initiativePermise();
+        const { code: c, relie: r, ctx: x } = pourMatin.current;
+        if (!outils || !(c || r) || !aDireBonjour()) return;
+        noterBonjour();
+        const m = await motDuMatin(x(), appelerServeur(c), outils);
+        if (m) annoncer(m);
+      } catch { /* pas de mot ce matin */ } finally { enCours = false; }
+    };
+    // Un peu après l'ouverture : le temps que le foyer et les réglages se chargent.
+    const t = window.setTimeout(essayer, 3000);
+    const visible = () => { essayer(); };
+    document.addEventListener("visibilitychange", visible);
+    return () => { clearTimeout(t); document.removeEventListener("visibilitychange", visible); };
+  }, []);
+  // Ouvert sous les yeux : c'est lu (la discussion reprend ses 15 minutes à partir de maintenant).
+  useEffect(() => {
+    if (ecran && !vueAnciennes && fil?.nouveau) setFil({ ...fil, nouveau: false, quand: Date.now() });
+  }, [ecran, vueAnciennes, fil?.nouveau]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // On peut préparer la phrase suivante pendant qu'Echo réfléchit ; on l'envoie quand il a répondu.
   const setTexte = (t: string) => { onTexte(t); setSimple(false); setTache(false); };
@@ -185,13 +239,19 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
     const avant = filActuel();
     // Une nouvelle discussion peu après la précédente : Echo en reçoit un court rappel (« et pour demain soir ? »),
     // sauf si on vient de toucher « Nouvelle » pour changer de sujet.
-    const rappel = avant?.echanges.length || sansRappel ? "" : rappelDe(anciennes()[0]);
+    // La discussion reprend telle quelle si on y parlait il y a moins de 15 minutes. Sinon (elle ne tenait qu'à des mots d'Echo,
+    // ou on l'ouvre longtemps après), Echo repart d'une conversation neuve avec un rappel de ce qui est à l'écran.
+    const vivante = parleRecemment(avant);
+    const aEcran = !!avant?.echanges.some((e) => e.moi);
+    const rappel = vivante || sansRappel ? "" : aEcran && avant ? rappelDe(avant, Date.now(), 700, true) : rappelDe(anciennes()[0]);
     sansRappel = false;
     const dejaFaites: Faite[] = [];
     try {
       const r = await lancerEcho(phrase, ctx(), {
         appeler: appelerServeur(code), outils: outilsEcho(actifs), seul, noter: executer, faites: dejaFaites,
-        discussion: avant?.suite, note: [rappel, avant?.note].filter(Boolean).join(" "),
+        discussion: vivante ? avant?.suite : undefined, note: [rappel, avant?.note].filter(Boolean).join(" "),
+        // La réponse s'écrit sous les yeux, comme dans l'app Claude.
+        enDirect: (t) => { if (num === demande.current) setEcho({ etat: "pense", phrase, direct: t }); },
       });
       if (num !== demande.current) {
         if (r.faites.length) { proposerAnnuler(r.faites, "Echo a fait des choses pendant ce temps"); noterFaites(r.faites); }
@@ -204,7 +264,7 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
         actions: [...r.faites.map((f) => ({ texte: f.ligne, etat: "fait" as const })), ...r.aConfirmer.map((a) => ({ texte: ligneDe(a), etat: "propose" as const }))],
       };
       const base = filActuel() ?? avant ?? nouveauFil();
-      setFil({ ...base, suite: r.suite ?? [], echanges: [...base.echanges, echange].slice(-MAX_ECHANGES), quand: Date.now(), note: undefined });
+      setFil({ ...base, suite: r.suite ?? [], echanges: [...base.echanges, echange].slice(-MAX_ECHANGES), quand: Date.now(), parle: Date.now(), note: undefined });
       setEcho(r.aConfirmer.length ? { etat: "propose", r, phrase } : null);
     } catch (e) {
       // Echo a fait des petites choses avant de s'arrêter : on le dit, avec Annuler, et on ne repasse pas en mode simple (doublons).
@@ -277,10 +337,12 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
               {fil?.echanges.map((x, i) => <Bulles key={i} x={x} />)}
               {echo?.etat === "pense" && <>
                 <p className="bulle-moi">{echo.phrase}</p>
-                <div className="echo-pense" role="status">
-                  <span className="echo-points" aria-hidden="true"><i /><i /><i /></span>
-                  <span>Echo réfléchit…</span>
-                </div>
+                {echo.direct ? <p className="echo-dit">{echo.direct}</p> : (
+                  <div className="echo-pense" role="status">
+                    <span className="echo-points" aria-hidden="true"><i /><i /><i /></span>
+                    <span>Echo réfléchit…</span>
+                  </div>
+                )}
               </>}
             </>}
           </div>
@@ -360,7 +422,7 @@ const quandDe = (ms: number) => {
 function Bulles({ x }: { x: Echange }) {
   return (
     <>
-      <p className="bulle-moi">{x.moi}</p>
+      {x.moi && <p className="bulle-moi">{x.moi}</p>}
       {x.echo && <p className="echo-dit">{x.echo}</p>}
       {x.actions?.map((a, i) => (
         <div key={i} className={`echo-action ${a.etat}`}>
