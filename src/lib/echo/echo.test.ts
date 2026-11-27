@@ -53,12 +53,13 @@ describe("le choix du modèle", () => {
   it("Sonnet pour toute la discussion ; budget presque fini : Haiku ; un repli garde l'en-tête", () => {
     const m = (p: string, sansPlan = false) => demandeTour("Aujourd'hui : x", [{ role: "user", content: p }], undefined, { sansPlan });
     expect(m("plus de lait").model).toBe(MODELE_PLAN);
-    expect(m("demain je dois aller à Landi et chez Fileman")).toMatchObject({ model: MODELE_PLAN, fallbacks: "default", betas: ["server-side-fallback-2026-07-01"] });
+    expect(m("demain je dois aller à Landi et chez Fileman")).toMatchObject({ model: MODELE_PLAN, fallbacks: "default", betas: ["thinking-binding-controls-2026-08-01", "server-side-fallback-2026-07-01"] });
     expect(m("plus de lait", true).model).toBe(MODELE_ECHO);
     expect("fallbacks" in m("plus de lait", true)).toBe(false);
     const rep = [{ type: "text", text: "Voici ton programme." }];
     const repli = [{ role: "user", content: "salut" }, { role: "assistant", content: [{ type: "fallback" }, ...rep] }, { role: "user", content: "merci" }];
-    expect(demandeTour("Aujourd'hui : x", repli, undefined, { sansPlan: true })).toMatchObject({ model: MODELE_ECHO, betas: ["server-side-fallback-2026-07-01"] });
+    expect(demandeTour("Aujourd'hui : x", repli, undefined, { sansPlan: true })).toMatchObject({ model: MODELE_ECHO, betas: ["thinking-binding-controls-2026-08-01", "server-side-fallback-2026-07-01"] });
+    expect(m("plus de lait", true)).toMatchObject({ betas: ["thinking-binding-controls-2026-08-01"], thinking: { type: "adaptive", block_binding: { prefix_mismatch_behavior: "drop_block" } } });
   });
   it("le coût suit le vrai modèle, même avec un nom daté", () => {
     const u = { input_tokens: 1000, output_tokens: 1000, cache_read_input_tokens: 10000 };
@@ -73,7 +74,7 @@ describe("la boucle d'Echo", () => {
     const s = scenario([texte("Bonjour Dany !")]);
     const r = await lancerEcho("salut", ctx, { appeler: s.appeler, outils: OUTILS_BASE, seul: false });
     expect(r).toMatchObject({ reponse: "Bonjour Dany !", aConfirmer: [], faites: [] });
-    expect(s.recus[0]).toEqual([{ role: "user", content: "salut" }]);
+    expect(s.recus[0]).toEqual([{ role: "user", content: "[Note de l'app : aujourd'hui : jeudi 2026-11-26, il est 10:00.]\nsalut" }]);
   });
 
   it("regarder puis déplacer : la lecture répond tout de suite, le déplacement attend le oui", async () => {
@@ -195,10 +196,12 @@ describe("la boucle d'Echo", () => {
     const r1 = await lancerEcho("cale le garage", ctx, { appeler: s.appeler, outils: TOUS, seul: false });
     await lancerEcho("non plutôt dimanche", ctx, { appeler: s.appeler, outils: TOUS, seul: false, discussion: r1.suite!, note: "rien n'a été fait." });
     expect(s.recus[1]).toEqual([
-      { role: "user", content: "cale le garage" },
+      { role: "user", content: "[Note de l'app : aujourd'hui : jeudi 2026-11-26, il est 10:00.]\ncale le garage" },
       { role: "assistant", content: [{ type: "text", text: "Tu veux le garage samedi ?" }] },
-      { role: "user", content: "[Note de l'app : rien n'a été fait.]\nnon plutôt dimanche" },
+      { role: "user", content: "[Note de l'app : aujourd'hui : jeudi 2026-11-26, il est 10:00.]\n[Note de l'app : rien n'a été fait.]\nnon plutôt dimanche" },
     ]);
+    // Le début de la discussion ne change pas d'une phrase à l'autre (la réflexion d'Echo y reste liée).
+    expect(s.recus[1][0]).toEqual(s.recus[0][0]);
   });
 
   it("une discussion trop longue repart à neuf avec un rappel", async () => {
