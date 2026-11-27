@@ -7,10 +7,13 @@ vi.stubGlobal("navigator", {});
 import { db } from "../../data/db";
 import { plusJours } from "../dates";
 import type { Tache } from "../types";
-import { OUTILS_ECHO, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_TOURS, OUTILS_ECHO, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
 import { executer, lancerEcho, type Appeler, type Bloc, type Message, type Tour } from "./boucle";
 import { OUTILS_BASE, type ContexteEcho } from "./outils";
 import { nettoyerJournal } from "./journal";
+import { MODULES, outilsEcho } from "../../modules/registre";
+
+const TOUS = outilsEcho(MODULES);
 
 // Jeudi 26 novembre 2026, 10 h. Dany écrit (place « moi »).
 const now = new Date(2026, 10, 26, 10, 0);
@@ -32,10 +35,10 @@ beforeEach(async () => {
 
 describe("la liste fermée des outils", () => {
   it("chaque outil de la liste est exécuté par l'app, et inversement", () => {
-    expect(OUTILS_ECHO.map((o) => o.name).sort()).toEqual(Object.keys(OUTILS_BASE).sort());
+    expect(OUTILS_ECHO.map((o) => o.name).sort()).toEqual(Object.keys(TOUS).sort());
   });
   it("un outil « lire » n'a pas d'action, un outil qui change prépare une action", () => {
-    for (const o of OUTILS_ECHO) expect(!!OUTILS_BASE[o.name].lire).toBe(o.genre === "lire");
+    for (const o of OUTILS_ECHO) expect(!!TOUS[o.name].lire).toBe(o.genre === "lire");
   });
   it("Claude ne reçoit pas le genre, et les schémas sont stricts (tous les champs requis)", () => {
     for (const o of outilsPourClaude()) {
@@ -50,7 +53,7 @@ describe("la boucle d'Echo", () => {
   it("une phrase sans outil : la réponse revient telle quelle, rien à confirmer", async () => {
     const s = scenario([texte("Bonjour Dany !")]);
     const r = await lancerEcho("salut", ctx, { appeler: s.appeler, outils: OUTILS_BASE, seul: false });
-    expect(r).toEqual({ reponse: "Bonjour Dany !", aConfirmer: [], faites: [] });
+    expect(r).toMatchObject({ reponse: "Bonjour Dany !", aConfirmer: [], faites: [] });
     expect(s.recus[0]).toEqual([{ role: "user", content: "salut" }]);
   });
 
@@ -159,12 +162,51 @@ describe("la boucle d'Echo", () => {
     expect(r.aConfirmer[0].details.join(" ")).toContain("samedi");
   });
 
-  it("au plus 6 tours, même si Echo continue de demander des outils", async () => {
+  it("au plus 8 tours par phrase, même si Echo continue de demander des outils", async () => {
     const tours = Array.from({ length: 10 }, (_, i): Tour => ({ content: [outil("x" + i, "chercher_taches", { texte: "rien" })], stop_reason: "tool_use" }));
     const s = scenario(tours);
     const r = await lancerEcho("cherche", ctx, { appeler: s.appeler, outils: OUTILS_BASE, seul: false });
-    expect(s.recus).toHaveLength(6);
+    expect(s.recus).toHaveLength(MAX_TOURS);
     expect(r.reponse).toMatch(/arrêter/);
+    expect(r.suite).toBeNull(); // arrêtée en route : la phrase suivante repart de zéro
+  });
+
+  it("une discussion : Echo reçoit ce qui a été dit, et la note de l'app sur la proposition d'avant", async () => {
+    const s = scenario([texte("Tu veux le garage samedi ?"), texte("D'accord, dimanche alors.")]);
+    const r1 = await lancerEcho("cale le garage", ctx, { appeler: s.appeler, outils: TOUS, seul: false });
+    await lancerEcho("non plutôt dimanche", ctx, { appeler: s.appeler, outils: TOUS, seul: false, discussion: r1.suite!, note: "rien n'a été fait." });
+    expect(s.recus[1]).toEqual([
+      { role: "user", content: "cale le garage" },
+      { role: "assistant", content: [{ type: "text", text: "Tu veux le garage samedi ?" }] },
+      { role: "user", content: "[Note de l'app : rien n'a été fait.]\nnon plutôt dimanche" },
+    ]);
+  });
+
+  it("une discussion trop longue repart à neuf avec un rappel", async () => {
+    const longue: Message[] = [];
+    for (let i = 0; i < 30; i++) longue.push({ role: "user", content: "phrase " + i }, { role: "assistant", content: [{ type: "text", text: "réponse " + i }] });
+    const s = scenario([texte("ok")]);
+    await lancerEcho("et maintenant ?", ctx, { appeler: s.appeler, outils: TOUS, seul: false, discussion: longue });
+    expect(s.recus[0]).toHaveLength(1);
+    expect(s.recus[0][0].content).toMatch(/réponse 29[\s\S]*et maintenant/);
+  });
+
+  it("courses : Echo voit la liste et ajoute sans doubler", async () => {
+    await db.cuisine_courses.clear();
+    const a = await TOUS.ajouter_courses.preparer!({ articles: [{ nom: "Lait", qte: "2" }, { nom: "Pain", qte: "" }] }, ctx);
+    if (typeof a === "string") throw new Error(a);
+    await a.faire();
+    const b = await TOUS.ajouter_courses.preparer!({ articles: [{ nom: "lait", qte: "" }] }, ctx);
+    if (typeof b === "string") throw new Error(b);
+    await b.faire();
+    const vu = await TOUS.voir_courses.lire!({}, ctx) as { articles: Array<{ nom: string }> };
+    expect(vu.articles.map((x) => x.nom).sort()).toEqual(["Lait", "Pain"]);
+  });
+
+  it("ce qu'Echo ne sait pas faire est noté pour plus tard", async () => {
+    await TOUS.signaler_manque.lire!({ besoin: "Envoyer un SMS à Sarah" }, ctx);
+    const r = await db.reglages.get("echoManques");
+    expect((r!.valeur as Array<{ besoin: string }>)[0].besoin).toBe("Envoyer un SMS à Sarah");
   });
 
   it("voir_jours ne montre pas plus de 14 jours", async () => {

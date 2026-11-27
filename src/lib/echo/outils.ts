@@ -193,7 +193,18 @@ export const OUTILS_BASE: Record<string, Executant> = {
   modifier_tache: { preparer: modifierTache },
   cocher_tache: { preparer: cocherTache },
   supprimer_tache: { preparer: supprimerTache },
+  // Ce qu'Echo aimerait savoir faire : gardé sur ce téléphone, montré dans Réglages → Echo (les 30 derniers).
+  signaler_manque: {
+    lire: async (e) => {
+      const besoin = court(e.besoin, 200);
+      if (!besoin) return { erreur: "Dis en une phrase ce qu'il faudrait savoir faire." };
+      const avant = ((await db.reglages.get("echoManques"))?.valeur as Manque[] | undefined) ?? [];
+      await db.reglages.put({ cle: "echoManques", valeur: [{ quand: Date.now(), besoin }, ...avant].slice(0, 30) });
+      return { note: "C'est noté dans Réglages → Echo." };
+    },
+  },
 };
+export interface Manque { quand: number; besoin: string }
 
 // Le genre final d'une action : celui de la liste, ou plus strict si l'app l'a durci (jamais plus souple).
 export function genreFinal(a: Action): Action["genre"] {

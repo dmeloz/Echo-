@@ -1,6 +1,6 @@
 import { db } from "../../data/db";
 import { auJour, nouvelId, z } from "../dates";
-import { MAX_RESULTAT, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
 import { genreFinal, type Action, type ContexteEcho, type Executant } from "./outils";
 
 // La boucle d'Echo. La phrase part au serveur (qui garde la clé et parle à Claude). Claude répond par du texte,
@@ -23,6 +23,18 @@ export interface ResultatEcho {
   reponse: string;
   aConfirmer: Action[];
   faites: Faite[]; // déjà faites (petites choses sans demander)
+  // La discussion à reprendre pour la phrase suivante (null : elle s'est arrêtée en route, on repartira de zéro).
+  suite: Message[] | null;
+}
+
+// Une discussion trop longue repart à neuf, avec un court rappel de la dernière réponse d'Echo.
+const TAILLE_MAX = 150_000;
+function reprendre(avant: Message[], phrase: string): Message[] {
+  const place = avant.length + 1 + 2 * MAX_TOURS <= MAX_MESSAGES && JSON.stringify(avant).length < TAILLE_MAX;
+  if (!avant.length || place) return [...avant, { role: "user", content: phrase }];
+  const dernier = [...avant].reverse().find((m) => m.role === "assistant");
+  const rappel = dernier ? texteDe(dernier.content as Bloc[]).slice(0, 600) : "";
+  return [{ role: "user", content: `${rappel ? `[Note de l'app : la discussion a été raccourcie. Ta dernière réponse : « ${rappel} »]\n` : ""}${phrase}`.slice(0, MAX_PHRASE) }];
 }
 
 // Ce qu'Echo sait de la situation : la date, l'heure, qui écrit. Une fois par phrase (la conversation reste en cache).
@@ -47,8 +59,12 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
   noter?: (a: Action, phrase: string, ctx: ContexteEcho) => Promise<Faite>;
   // Où ranger ce qui est fait sans demander : l'appelant le garde même si un tour suivant échoue (pour proposer Annuler).
   faites?: Faite[];
+  // La discussion jusque-là (Echo se souvient de ce qui a été dit), et la note de l'app sur la proposition précédente.
+  discussion?: Message[];
+  note?: string;
 }): Promise<ResultatEcho> {
-  const messages: Message[] = [{ role: "user", content: phrase }];
+  const texte = (o.note ? `[Note de l'app : ${o.note}]\n` : "") + phrase;
+  const messages: Message[] = reprendre(o.discussion ?? [], texte.slice(0, MAX_PHRASE));
   const sit = situation(ctx);
   const aConfirmer: Action[] = [];
   const faites: Faite[] = o.faites ?? [];
@@ -61,7 +77,7 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
     // La réponse est le texte du dernier tour seulement (« Je regarde. » d'un tour précédent n'est pas une réponse).
     dernierTexte = texteDe(blocs);
     const demandes = blocs.filter(estOutil);
-    if (r.stop_reason !== "tool_use" || !demandes.length) return { reponse: dernierTexte, aConfirmer, faites };
+    if (r.stop_reason !== "tool_use" || !demandes.length) return { reponse: dernierTexte, aConfirmer, faites, suite: messages };
 
     // Tous les résultats d'un tour partent ensemble, dans un seul message.
     const resultats: ResultatOutil[] = [];
@@ -96,7 +112,7 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
     messages.push({ role: "user", content: resultats });
   }
   // Le serveur force une réponse au dernier tour ; si elle manque, on le dit simplement.
-  return { reponse: dernierTexte || "J'ai dû m'arrêter là. Voici ce que j'ai préparé.", aConfirmer, faites };
+  return { reponse: dernierTexte || "J'ai dû m'arrêter là. Voici ce que j'ai préparé.", aConfirmer, faites, suite: null };
 }
 
 // Faire une action et la noter au journal. Annuler défait l'action et marque la ligne comme annulée.

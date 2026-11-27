@@ -261,6 +261,8 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 @media (prefers-reduced-motion: reduce) { .echo-points i { animation: none; opacity: .7; } }
 .apercu.echo-propose { max-height: 52vh; overflow-y: auto; }
 .echo-dit { margin: 0; font-size: 14.5px; color: var(--encre); }
+.echo-avant { font-size: 13px; color: rgb(18 40 58 / .6); border-bottom: 1px solid rgb(18 40 58 / .08); margin-bottom: 8px; padding-bottom: 6px; }
+.echo-avant p { margin: 0 0 6px; }
 .apercu.echo-propose .ligne-ap + .ligne-ap { border-top: 1px solid rgb(18 40 58 / .08); padding-top: 8px; }
 .apercu .pied-ap .echo-ok { margin-left: auto; padding: 8px 16px; min-height: 40px; }
 

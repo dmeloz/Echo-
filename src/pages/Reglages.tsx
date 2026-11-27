@@ -13,6 +13,7 @@ import { MODULES, basculerModule } from "../modules/registre";
 import { exporter, importer } from "../data/sauvegarde";
 import { RAPPELS_DEFAUT, reglerRappels, type Rappels } from "../data/rappels";
 import { VERSION, chercher, installer, useMiseAJour } from "../data/miseAJour";
+import type { Manque } from "../lib/echo/outils";
 
 type Theme = "foyer" | "echo" | "notifications" | "agenda" | "modules" | "app";
 // Un module construit peut avoir sa propre sous-page : sa ligne arrive dans le sommaire, à son nom.
@@ -308,7 +309,27 @@ function SectionEcho() {
       <p className="aide-champ">Pas besoin du code si ce téléphone est relié au foyer. Sinon, c'est le même code que pour la lecture de la fiche d'horaires. Il reste sur ce téléphone.</p>
     </section>
     <JournalEcho />
+    <ManquesEcho />
   </>);
+}
+
+// Ce qu'on a demandé à Echo et qu'il ne sait pas encore faire (outil signaler_manque) : pour savoir quel outil lui ajouter.
+function ManquesEcho() {
+  const brut = useReglage<unknown>("echoManques", []);
+  const manques = Array.isArray(brut) ? (brut as Manque[]) : [];
+  if (!manques.length) return null;
+  return (
+    <section className="g reglages">
+      <span className="lab">Ce qu'Echo aimerait savoir faire</span>
+      <ul className="corbeille">
+        {manques.slice(0, 15).map((m, i) => (
+          <li key={i}><span><b>{m.besoin}</b><small>{new Date(m.quand).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</small></span></li>
+        ))}
+      </ul>
+      <p className="aide-champ">Dis-le à Claude pour qu'il ajoute ces outils à Echo.</p>
+      <button type="button" className="bouton-texte" onClick={() => poserReglage("echoManques", [])}>Vider la liste</button>
+    </section>
+  );
 }
 
 // Le journal d'Echo : ce qu'il a fait, pour qui, et quand (partagé au foyer). Les 30 dernières lignes.

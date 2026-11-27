@@ -8,7 +8,7 @@
 import Anthropic from "npm:@anthropic-ai/sdk@1.12.0";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { garder } from "../_shared/garde.ts";
-import { MAX_MESSAGES, MAX_RESULTAT, OUTILS_ECHO, demandeTour } from "../_shared/echo-outils.ts";
+import { MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, OUTILS_ECHO, demandeTour } from "../_shared/echo-outils.ts";
 
 const ORIGINES = ["https://dmeloz.github.io", "http://localhost:5173", "http://localhost:4173"];
 const MAX_TEXTE = 1000;
@@ -177,16 +177,15 @@ const coutMicro = (u: Anthropic.Usage) =>
   Math.ceil(((u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)) * 0.1 + (u.output_tokens ?? 0) * 0.5);
 
 const MAX_SITUATION = 600; // la date, l'heure, les prénoms : rien de plus
-const MAX_PHRASE = 1000;
-const MAX_CONVERSATION = 120_000; // caractères de la conversation envoyée (les résultats d'outils comptent)
+const MAX_CONVERSATION = 200_000; // caractères de la conversation envoyée (les résultats d'outils comptent)
 
 function base() {
   return createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
 }
 
-// La conversation vient de l'app : on vérifie qu'elle a bien la forme d'une boucle d'Echo, et rien d'autre.
-// 1er message : la phrase (du texte). Ensuite : les réponses de Claude (texte, réflexion, outils de la liste)
-// et les résultats d'outils. Ce n'est donc pas un accès libre à Claude avec la clé du foyer.
+// La conversation vient de l'app : on vérifie qu'elle a bien la forme d'une discussion avec Echo, et rien d'autre.
+// La personne : des phrases (texte court) ou des résultats d'outils. Claude : texte, réflexion, outils de la liste.
+// Ce n'est donc pas un accès libre à Claude avec la clé du foyer.
 const NOMS_OUTILS = new Set(OUTILS_ECHO.map((o) => o.name));
 const BLOCS_CLAUDE = new Set(["text", "thinking", "redacted_thinking", "tool_use"]);
 // deno-lint-ignore no-explicit-any
@@ -194,14 +193,15 @@ const blocClaudeValide = (b: any) => b && BLOCS_CLAUDE.has(b.type) && (b.type !=
 // deno-lint-ignore no-explicit-any
 const resultatValide = (b: any) => b && b.type === "tool_result" && typeof b.tool_use_id === "string" && typeof b.content === "string" && b.content.length <= MAX_RESULTAT;
 // deno-lint-ignore no-explicit-any
+const phraseValide = (c: any) => typeof c === "string" && !!c.trim() && c.length <= MAX_PHRASE;
+// deno-lint-ignore no-explicit-any
 function conversationValide(m: any): m is Anthropic.MessageParam[] {
   if (!Array.isArray(m) || m.length < 1 || m.length > MAX_MESSAGES || m.length % 2 === 0) return false;
   if (JSON.stringify(m).length > MAX_CONVERSATION) return false;
-  const [phrase, ...suite] = m;
-  if (phrase?.role !== "user" || typeof phrase.content !== "string" || !phrase.content.trim() || phrase.content.length > MAX_PHRASE) return false;
-  return suite.every((x, i) => i % 2 === 0
+  if (m[0]?.role !== "user" || !phraseValide(m[0].content)) return false;
+  return m.every((x, i) => i % 2
     ? x?.role === "assistant" && Array.isArray(x.content) && x.content.length > 0 && x.content.every(blocClaudeValide)
-    : x?.role === "user" && Array.isArray(x.content) && x.content.length > 0 && x.content.every(resultatValide));
+    : x?.role === "user" && (phraseValide(x.content) || (Array.isArray(x.content) && x.content.length > 0 && x.content.every(resultatValide))));
 }
 
 async function tourAgent(d: DemandeAgent, source: "membre" | "code", origine: string | null) {
