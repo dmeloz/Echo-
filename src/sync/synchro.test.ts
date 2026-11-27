@@ -12,7 +12,7 @@ import { ajouter, cocher, supprimer } from "../data/actions";
 import { auJour } from "../lib/dates";
 import { lireFile } from "./file";
 import type { Tache } from "../lib/types";
-import { appliquer } from "./moteur";
+import { appliquer, relireSiNouveauxGenres } from "./moteur";
 
 const tache = (id: string, x = {}): Tache => ({ id, titre: "Pain", qui: "elle", jour: auJour(), heure: "", niveau: null, repete: "", note: "", fait: null, faitLe: null, cree: 1, ...x });
 
@@ -64,5 +64,15 @@ describe("tout effacer", () => {
     stock.clear();
     await toutEffacer();
     expect(Object.keys(lireFile())).toContain("tache:d");
+  });
+  it("une version qui sait lire de nouveaux genres relit tout le foyer, une seule fois", () => {
+    stock.set("echo-curseur", "2026-11-27T20:00:00Z");
+    expect(relireSiNouveauxGenres(["course", "corvee"])).toBe(true); // première fois : on relit
+    expect(stock.has("echo-curseur")).toBe(false);
+    stock.set("echo-curseur", "2026-11-27T21:00:00Z");
+    expect(relireSiNouveauxGenres(["corvee", "course"])).toBe(false); // les mêmes genres : le curseur reste
+    expect(stock.get("echo-curseur")).toBe("2026-11-27T21:00:00Z");
+    expect(relireSiNouveauxGenres(["corvee", "course", "budget_poste"])).toBe(true); // un module de plus
+    expect(stock.has("echo-curseur")).toBe(false);
   });
 });
