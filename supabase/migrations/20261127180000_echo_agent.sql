@@ -32,4 +32,4 @@ grant execute on function public.noter_depense_echo(text, bigint) to service_rol
 -- 2. Le journal d'Echo part au foyer comme les autres données (table « elements », genre « journal »).
 alter table public.elements drop constraint elements_genre_check;
 alter table public.elements add constraint elements_genre_check
-  check (genre in ('tache', 'horaire', 'course', 'habitude', 'repas', 'stock', 'gout', 'journal'));
+  check (genre in ('tache', 'horaire', 'course', 'habitude', 'repas', 'stock', 'gout', 'ticket', 'journal'));

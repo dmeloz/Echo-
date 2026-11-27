@@ -87,7 +87,7 @@ async function entrer(foyerId: string, place: Personne, userId: string) {
   const avant = (await db.reglages.get("proprio"))?.valeur as Personne | undefined;
   // Ce rangement n'est pas un changement à envoyer : vider puis réécrire une table (échange des places) ferait partir
   // des suppressions vers le foyer. Ce qui doit partir est noté juste après, d'après ce que le téléphone contient vraiment.
-  await db.transaction("rw", [db.taches, db.horaires, db.photos, db.reglages, db.cuisine_courses, db.cuisine_gouts], async (tx) => {
+  await db.transaction("rw", [db.taches, db.horaires, db.photos, db.reglages, db.cuisine_courses, db.cuisine_gouts, db.cuisine_tickets], async (tx) => {
     marquerDistante(tx);
     const ex = (await db.taches.filter((t) => !!t.ex).toArray()).map((t) => t.id);
     await db.taches.bulkDelete(ex);
@@ -106,6 +106,8 @@ async function entrer(foyerId: string, place: Personne, userId: string) {
       const gouts = await db.cuisine_gouts.toArray();
       await db.cuisine_gouts.clear();
       await db.cuisine_gouts.bulkPut(gouts.map((g) => ({ ...g, qui: inv(g.qui) })));
+      const tickets = await db.cuisine_tickets.toArray();
+      await db.cuisine_tickets.bulkPut(tickets.map((t) => ({ ...t, par: inv(t.par) })));
     }
     await db.reglages.bulkPut([{ cle: "proprio", valeur: place }, { cle: "foyer", valeur: { id: foyerId, userId } }]);
   });

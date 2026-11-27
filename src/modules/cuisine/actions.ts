@@ -2,7 +2,7 @@ import { toast } from "sonner";
 import { nouvelId } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
 import { db } from "../../data/db";
-import { apresAchat, apresRefus, cleDe, habituelsDus, nouvelArticle, type Article, type Gouts, type Habitude, type Lieu, type Lu, type Rayon } from "./donnees";
+import { apresAchat, apresRefus, cleDe, habituelsDus, lireArticles, lireQuantite, nouvelArticle, type Article, type Gouts, type Habitude, type Lieu, type Repas, type Reste, type Lu, type Rayon } from "./donnees";
 
 // Les gestes du module Cuisine sur ses propres tables. Tout ce qui retire montre « Annuler ».
 
@@ -103,18 +103,86 @@ export const oublierHabitude = (cle: string) => db.cuisine_habitudes.delete(cle)
 
 /* ---------- Semaine, stock, goûts (formes simples du lot 1) ---------- */
 
-export const poserRepas = (jour: string, plat: string) => (plat.trim() ? db.cuisine_repas.put({ jour, plat: plat.trim().slice(0, 80) }) : db.cuisine_repas.delete(jour));
+// Les articles qu'Echo avait mis aux courses pour le repas d'un jour repartent avec lui (sauf ceux déjà pris,
+// ou qui servent aussi à un autre repas). Renvoie de quoi les remettre.
+export async function retirerCoursesDe(jour: string) {
+  const touches = (await db.cuisine_courses.toArray()).filter((a) => a.pour?.includes(jour));
+  for (const a of touches) {
+    const pour = a.pour!.filter((j) => j !== jour);
+    if (!pour.length && !a.fait) await db.cuisine_courses.delete(a.id);
+    else await db.cuisine_courses.update(a.id, { pour: pour.length ? pour : undefined });
+  }
+  return touches;
+}
+
+// Écrire soi-même le repas d'un jour (ou le retirer). Un plat écrit à la main n'est plus une proposition d'Echo
+// et n'a plus ses ingrédients : ceux qu'il avait mis aux courses repartent. Annuler remet tout.
+export async function poserRepas(jour: string, plat: string) {
+  const p = plat.trim().slice(0, 80);
+  let avant: Repas | undefined, courses: Article[] = [];
+  await db.transaction("rw", db.cuisine_repas, db.cuisine_courses, async () => {
+    avant = await db.cuisine_repas.get(jour);
+    if (!p && !avant) return;
+    courses = await retirerCoursesDe(jour);
+    if (p) await db.cuisine_repas.put({ jour, plat: p }); else await db.cuisine_repas.delete(jour);
+  });
+  const ancien = avant;
+  if (!ancien || (p && !courses.length)) return;
+  toast(p ? "Repas changé, courses mises à jour" : `${ancien.plat} retiré`, { action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_repas, db.cuisine_courses, async () => {
+    await db.cuisine_repas.put(ancien);
+    await db.cuisine_courses.bulkPut(courses);
+  }) } });
+}
 
 export async function ajouterProduit(nom: string, lieu: Lieu, avant = "") {
-  const n = nom.trim().slice(0, 60);
-  if (!n) return;
-  await db.cuisine_stock.add({ id: nouvelId(), nom: n.charAt(0).toUpperCase() + n.slice(1), lieu, ...(avant ? { avant } : {}), cree: Date.now() });
+  // Plusieurs d'un coup (« sel, poivre »). « 6 crèmes » : le nombre devant devient le compteur du produit.
+  const lus = lireArticles(nom).filter((l) => l.nom.trim()), quand = Date.now();
+  await db.cuisine_stock.bulkAdd(lus.map((lu, i) => {
+    const n = lu.nom.trim().slice(0, 60);
+    return { id: nouvelId(), nom: n.charAt(0).toUpperCase() + n.slice(1), lieu, ...(avant ? { avant } : {}), ...lireQuantite(lu.qte), cree: quand + i };
+  }));
 }
 export async function retirerProduit(id: string) {
   const p = await db.cuisine_stock.get(id);
   if (!p) return;
   await db.cuisine_stock.delete(id);
   toast(`${p.nom} retiré du stock`, { action: { label: "Annuler", onClick: () => db.cuisine_stock.put(p) } });
+}
+
+// Dire ce qu'il reste d'un produit. « Presque fini » le remet aux courses ; « fini » le sort du stock et le remet aux courses.
+// Annuler remet le produit comme il était et retire l'article que ce geste avait ajouté.
+export async function noterReste(id: string, reste: Reste | "plein" | "fini") {
+  const p = await db.cuisine_stock.get(id);
+  if (!p || (reste !== "fini" && (p.reste ?? "plein") === reste)) return;
+  let ajoutes: Article[] = [];
+  if (reste === "fini") await db.cuisine_stock.delete(id);
+  else await db.cuisine_stock.update(id, { reste: reste === "plein" ? undefined : reste });
+  if (reste === "fini" || reste === "peu") ajoutes = await ajouterArticles([{ nom: p.nom, qte: "" }], true);
+  if (reste !== "fini" && reste !== "peu") return;
+  const debut = reste === "fini" ? `${p.nom} : fini` : `${p.nom} : presque fini`;
+  toast(ajoutes.length ? `${debut}, ajouté aux courses` : `${debut}, déjà dans les courses`, { action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_stock, db.cuisine_courses, async () => {
+    await db.cuisine_stock.put(p);
+    await db.cuisine_courses.bulkDelete(ajoutes.map((a) => a.id));
+  }) } });
+}
+
+// Compter les unités : une de moins, une de plus. À la dernière, le produit est remis aux courses ; à zéro, il est fini.
+export async function compterProduit(id: string, delta: number) {
+  // Lire et écrire d'un seul geste : deux touchers rapides enlèvent bien deux unités.
+  const [p, n] = await db.transaction("rw", db.cuisine_stock, async () => {
+    const p = await db.cuisine_stock.get(id);
+    const n = p ? Math.min(99, (p.nb ?? 1) + delta) : 0;
+    if (p && n > 0) await db.cuisine_stock.update(id, { nb: n, reste: undefined });
+    return [p, n] as const;
+  });
+  if (!p) return;
+  if (n <= 0) return noterReste(id, "fini");
+  if (n !== 1 || delta >= 0) return;
+  const ajoutes = await ajouterArticles([{ nom: p.nom, qte: "" }], true);
+  toast(ajoutes.length ? `${p.nom} : plus qu'un, ajouté aux courses` : `${p.nom} : plus qu'un, déjà dans les courses`, { action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_stock, db.cuisine_courses, async () => {
+    await db.cuisine_stock.put(p);
+    await db.cuisine_courses.bulkDelete(ajoutes.map((a) => a.id));
+  }) } });
 }
 
 export const enregistrerGouts = (g: Omit<Gouts, "maj">) => db.cuisine_gouts.put({ ...g, maj: Date.now() });

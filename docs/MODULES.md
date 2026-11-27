@@ -31,7 +31,7 @@ Règles :
 | Module | État |
 | --- | --- |
 | Agenda (id planning) | construit : aujourd'hui et les six jours suivants, vue Jour et vue Semaine, idée pour alléger le jour le plus chargé. Il lit les tâches de la base (pas de table à lui). |
-| Cuisine | lot 1 construit (courses) : voir « Cuisine » plus bas. Les repas proposés par Echo, le batch cooking et le stock par ticket viennent ensuite. |
+| Cuisine | lots 1 (courses) et 2 (semaine proposée par Echo) construits, plus la photo du ticket de caisse : voir « Cuisine » plus bas. Le batch cooking vient ensuite. |
 | Maison, Budget | pas encore construits |
 
 ## Ajouter un module
@@ -70,6 +70,32 @@ Page à trois parties : Semaine, Courses, Stock (elle s'ouvre sur Courses le ven
 - **Goûts** : questionnaire en popup à la première ouverture, par personne (`cuisine_gouts`), modifiable dans Réglages → Cuisine. Pas de porc pour le foyer.
 - **Semaine** et **Stock** : formes simples, à la main, en attendant les lots suivants.
 - **Synchro** : les tables `cuisine_*` partent au foyer par `src/sync/genres.ts` (genres `course`, `habitude`, `repas`, `stock`, `gout` de la table `elements`). La migration `20261127090000_cuisine.sql` doit être appliquée au projet « echo » avant la mise en ligne.
+- Pas encore construits (donc absents de l'écran) : code-barres, plusieurs magasins, batch cooking, livre de recettes.
+
+## Cuisine · lot 2, la semaine proposée par Echo (2026-11-27)
+
+- **Semaine** : « Cette semaine » ou « La prochaine » (ouverte du vendredi au dimanche). Un jour = une ligne ; toucher un jour montre les portions du soir, la gamelle, les ingrédients, et « Changer », « Écrire », « Retirer ».
+- **« Prévoir ma semaine »** : l'app calcule les besoins (`besoins` dans `donnees.ts`) à partir des horaires : 2 portions le soir, 1 quand quelqu'un travaille après 20 h, et une gamelle le midi pour la personne aux horaires fixes. Elle envoie à la fonction serveur `cuisine` les jours à prévoir (lundi à vendredi, pas encore passés, sans repas), les goûts, le stock, les plats récents. Samedi et dimanche restent libres.
+- La fonction `cuisine` (`supabase/functions/cuisine/`, Claude Haiku 5.5, mêmes droits et compteur que `echo`) renvoie un plat par jour, ses ingrédients, s'il vient du congélateur (jeudi, vendredi) et la gamelle. Jamais de porc : c'est dans la consigne et vérifié à la sortie.
+- Les repas reçus sont une **proposition** (`propose: true`, barre « Proposition d'Echo ») jusqu'à **Valider**. Valider ajoute aux courses les ingrédients qui ne sont pas au stock (`manquants`), avec « Annuler ». « Changer » redemande un seul jour.
+- Secret nécessaire : `ANTHROPIC_API_KEY` (le même que pour `echo`). Sans lui, l'app le dit et on peut toujours écrire les repas à la main.
+
+## Cuisine · la photo du ticket de caisse (2026-11-27)
+
+- Où : bouton « Prendre le ticket en photo » en haut du Stock, et lien « Cocher avec le ticket de caisse » sous les courses.
+- Chemin : la photo est réduite sur le téléphone (`lib/lecture.ts`), part vers la fonction Supabase `lire-ticket` avec les articles encore à prendre, et n'est gardée nulle part. La fonction rend le magasin, le jour, le total et une ligne par produit : nom en clair, quantité, prix, endroit (frigo, congélateur, placard, maison ou « pas au stock »), jours de conservation estimés pour le frais, et l'article de la liste qui correspond.
+- Rien n'est écrit avant « Ranger » : l'écran « Ton ticket » permet de décocher une ligne fausse et de changer l'endroit d'un toucher.
+- « Ranger » (`ticket.ts`) : ajoute au stock (un produit déjà au même endroit n'est pas doublé, sa date est rafraîchie), coche les articles de la liste, garde le ticket dans `cuisine_tickets` (genre `ticket`, synchronisé : magasin, jour, total, prix par ligne, pour le budget plus tard). Le message propose « Annuler », qui remet tout.
+- La réponse du serveur est nettoyée deux fois (fonction, puis `nettoyerLecture`) : tailles bornées, lieux connus, un article de la liste coché une seule fois et seulement s'il a été envoyé.
+- Mise en service : migration `20261127150000_cuisine_ticket.sql` (genre `ticket`), fonction `lire-ticket` à déployer, secret `ANTHROPIC_API_KEY` posé.
+
+## Cuisine · ce qu'il reste d'un produit, et Echo qui part du stock (2026-11-27)
+
+- Dans un endroit du Stock, toucher un produit ouvre « Il en reste » : Plein, À moitié, Presque fini, Fini. Une petite jauge à trois traits le montre sur la ligne.
+- « Presque fini » remet le produit aux courses ; « Fini » le sort du stock et le remet aux courses (`noterReste` dans `actions.ts`, avec « Annuler »). « Retirer sans racheter » l'enlève seulement.
+- Un produit presque fini ne compte plus comme « au stock » pour la semaine d'Echo. Racheté par un ticket, il redevient plein.
+- La semaine d'Echo part du stock : l'app envoie ce qui se mange (frigo d'abord, ce qui presse en tête, puis congélateur et placard), la date du jour et le jour où l'on cuisine. La fonction `cuisine` construit les plats autour de ces produits et dit pour chaque plat ce qu'il prend au stock (`duStock`, affiché « Avec ton stock : … »).
+- Un produit qui se compte a un compteur (`nb`, et `qte` = la taille d'une unité) : « 6 x 25 cl » lu sur le ticket, « 6 crèmes » écrit à la main, ou « J'en ai plusieurs ». Moins un à chaque fois (`compterProduit`) : au dernier il est remis aux courses, à zéro il sort du stock. Un rachat s'ajoute à ce qu'il reste.
 - Pas encore construits (donc absents de l'écran) : code-barres, photo du ticket, plusieurs magasins, repas proposés par Echo, batch cooking.
 
 ## Echo qui agit (lot 1 du moteur, 2026-11-27)
