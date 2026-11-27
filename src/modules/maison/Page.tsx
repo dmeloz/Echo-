@@ -10,7 +10,7 @@ import type { ContexteModule } from "../contrat";
 import { ajouterCorvees, ajouterModeles, rangerFaits, rangerReparations } from "./actions";
 import { LigneCorvee } from "./Corvee";
 import { Entretien } from "./Entretien";
-import { DEPART, aFaire, depuis, equilibre, jourDu, lireCorvee, minutesDe, parts, pour, type Corvee, type Modele } from "./donnees";
+import { DEPART, aFaire, depuis, equilibre, jourDu, lireCorvee, minutesDe, parts, pour, pourMoi, type Corvee, type Modele } from "./donnees";
 
 // Le premier jour : on touche ce qui existe chez soi, au lieu d'écrire une liste.
 function Depart({ onFini }: { onFini: () => void }) {
@@ -64,14 +64,16 @@ export function PageMaison(ctx: ContexteModule) {
   const e = equilibre(faits, now.getTime());
   const l_autre = autre(proprio);
   const dues = corvees.filter((c) => aFaire(c, now)).sort((a, b) => jourDu(a).localeCompare(jourDu(b)) || a.nom.localeCompare(b.nom));
-  const de = (p: Personne) => dues.filter((c) => pour(c, e) === p);
-  const miennes = de(proprio), siennes = de(l_autre);
+  // « À faire » : ce qui est libre et ce qui est à moi. À part : ce qui est donné à l'autre.
+  const miennes = dues.filter((c) => pourMoi(c, proprio)), siennes = dues.filter((c) => pour(c) === l_autre);
   const autres = corvees.filter((c) => !aFaire(c, now)).sort((a, b) => jourDu(a).localeCompare(jourDu(b)) || a.nom.localeCompare(b.nom));
   const min = miennes.reduce((s, c) => s + minutesDe(c.taille), 0);
   const p = parts(e);
 
   const ligne = (c: Corvee, sous: string) => <LigneCorvee key={c.id} c={c} sous={sous} ouvert={ouvert === c.id} onOuvrir={setOuvert} noms={noms} proprio={proprio} now={now} />;
-  const sousDue = (c: Corvee) => [c.piece, depuis(c, now)].filter(Boolean).join(" · ");
+  // L'app retient qui l'a faite : « il y a 8 jours par Sarah ». Une corvée donnée à moi le dit.
+  const qui = (p?: Personne) => (p ? (p === proprio ? "toi" : noms[p]) : "");
+  const sousDue = (c: Corvee) => [pour(c) === proprio ? "pour toi" : c.piece, [depuis(c, now), c.fait && c.par ? `par ${qui(c.par)}` : ""].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
   const ajouter = () => { const lu = lireCorvee(texte); if (!lu) return; ajouterCorvees([lu]); setTexte(""); };
 
   return (
@@ -84,11 +86,11 @@ export function PageMaison(ctx: ContexteModule) {
         </section>
       ) : (
         <p className="phrase">
-          {miennes.length ? <><b>{miennes.length > 1 ? `${miennes.length} choses pour toi` : "1 chose pour toi"}</b> aujourd'hui, {min} minutes en tout.</> : <><b>Rien pour toi</b> aujourd'hui.</>}
+          {miennes.length ? <><b>{miennes.length > 1 ? `${miennes.length} choses à faire` : "1 chose à faire"}</b> aujourd'hui, {min} minutes en tout.</> : <><b>Rien à faire</b> aujourd'hui.</>}
           {siennes.length > 0 && ` ${noms[l_autre]} en a ${siennes.length}.`}
         </p>
       )}
-      {miennes.length > 0 && <section className="g liste-stock corvees"><span className="lab">Pour toi</span><ul>{miennes.map((c) => ligne(c, sousDue(c)))}</ul></section>}
+      {miennes.length > 0 && <section className="g liste-stock corvees"><span className="lab">À faire</span><ul>{miennes.map((c) => ligne(c, sousDue(c)))}</ul></section>}
       {siennes.length > 0 && <section className="g liste-stock corvees"><span className="lab">Pour {noms[l_autre]}</span><ul>{siennes.map((c) => ligne(c, sousDue(c)))}</ul></section>}
       {autres.length > 0 && (
         <section className="g liste-stock corvees">

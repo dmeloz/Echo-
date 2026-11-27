@@ -2,7 +2,7 @@ import { vibrer } from "../../lib/gestes";
 import { autre } from "../../lib/types";
 import type { ContexteModule } from "../contrat";
 import { changerCorvee, cocherCorvee, reporterCorvee, retirerCorvee } from "./actions";
-import { RYTHMES, RYTHMES_ENTRETIEN, TAILLES, aFaire, besoin, deborde, nomRythme, type Corvee, type QuiCorvee } from "./donnees";
+import { RYTHMES, RYTHMES_ENTRETIEN, TAILLES, aFaire, besoin, deborde, nomRythme, pour, type Corvee, type QuiCorvee } from "./donnees";
 
 // La ligne d'une corvée (ou d'un geste d'entretien) : le rond, le nom, son état, et ses réglages quand on la touche.
 
@@ -19,9 +19,9 @@ function Detail({ c, noms, proprio, now, onFermer }: Pick<ContexteModule, "noms"
   const l_autre = autre(proprio);
   const base = c.entretien ? RYTHMES_ENTRETIEN : RYTHMES;
   const rythmes = base.some((r) => r.jours === c.tous) ? base : [...base, { jours: c.tous, nom: nomRythme(c.tous) }].sort((a, b) => a.jours - b.jours);
-  const quis: Array<[QuiCorvee, string]> = [[proprio, noms[proprio]], [l_autre, noms[l_autre]], ["tour", "Chacun son tour"], ["echo", "Echo choisit"]];
-  const aide = c.qui === "tour" ? (c.par ? `Chacun son tour : après ${c.par === proprio ? "toi" : noms[c.par]}, c'est à ${c.par === proprio ? noms[l_autre] : "toi"}.` : "Chacun son tour : celui qui la fait passe la main à l'autre.")
-    : c.qui === "echo" ? "Echo la donne à celui qui en a le moins fait ces 4 dernières semaines." : "";
+  const quis: Array<[QuiCorvee, string]> = [["libre", "Libre"], [proprio, noms[proprio]], [l_autre, noms[l_autre]]];
+  const qui = pour(c) ?? "libre";
+  const aide = qui === "libre" ? (c.par ? `Libre : celui qui la fait la coche. La dernière fois, c'était ${c.par === proprio ? "toi" : noms[c.par]}.` : "Libre : celui qui la fait la coche, l'app retient qui.") : "";
   return (
     <div className="stock-plus corvee-plus">
       <span className="lab">Ça revient</span>
@@ -34,7 +34,7 @@ function Detail({ c, noms, proprio, now, onFermer }: Pick<ContexteModule, "noms"
       </div>
       <span className="lab">Qui s'en occupe</span>
       <div className="stock-restes" role="group" aria-label={`Qui s'occupe de ${c.nom}`}>
-        {quis.map(([q, nom]) => <button key={q} type="button" className="puce" aria-pressed={c.qui === q} onClick={() => { vibrer(); changerCorvee(c.id, { qui: q }); }}>{nom}</button>)}
+        {quis.map(([q, nom]) => <button key={q} type="button" className="puce" aria-pressed={qui === q} onClick={() => { vibrer(); changerCorvee(c.id, { qui: q }); }}>{nom}</button>)}
       </div>
       {aide && <p className="aide-champ">{aide}</p>}
       <div className="rangee corvee-gestes">

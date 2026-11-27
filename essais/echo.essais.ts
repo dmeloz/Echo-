@@ -152,7 +152,7 @@ describe.skipIf(!cle)("phrases d'essai d'Echo (vrai modèle)", () => {
     it(nom, async () => {
       if (c.taches) await db.taches.bulkAdd(c.taches);
       if (c.horaires) await db.horaires.bulkAdd(c.horaires);
-      if (c.corvees) await db.maison_corvees.bulkAdd(c.corvees.map((nom, i) => ({ id: "cv" + i, nom, piece: "", tous: 7, taille: 2 as const, qui: "tour" as const, fait: null, cree: 0 })));
+      if (c.corvees) await db.maison_corvees.bulkAdd(c.corvees.map((nom, i) => ({ id: "cv" + i, nom, piece: "", tous: 7, taille: 2 as const, qui: "libre" as const, fait: null, cree: 0 })));
       const r = await lancerEcho(c.phrase, ctx, { appeler, outils: OUTILS_BASE, seul: false });
       c.verifier(r, r.aConfirmer);
       // Rien ne doit avoir changé sans le oui de la personne.
