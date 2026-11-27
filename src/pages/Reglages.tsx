@@ -368,7 +368,7 @@ function MemoireEcho() {
         </ul>
       )}
       <form className="champ" onSubmit={(e) => { e.preventDefault(); ajouter(); }}>
-        <input value={texte} maxLength={MAX_SOUVENIR} disabled={occupe} placeholder="Ajouter : Sarah n'aime pas les champignons" onChange={(e) => setTexte(e.target.value)} />
+        <input className="saisie" aria-label="Ajouter un souvenir pour Echo" enterKeyHint="done" value={texte} maxLength={MAX_SOUVENIR} disabled={occupe} placeholder="Ajouter : Sarah n'aime pas les champignons" onChange={(e) => setTexte(e.target.value)} />
       </form>
     </section>
   );

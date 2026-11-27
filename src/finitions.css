@@ -12,6 +12,26 @@
 .duo { position: relative; }
 .duo::after { content: ""; position: absolute; inset: -4px; }
 
+/* 1 bis. Passage de mesure sur les écrans remplis (27 nov.) : ce qui restait sous 44 px. */
+.matin-bouton, .budget-mois > button:not(.bouton-texte) { width: 44px; height: 44px; }
+.capsule .bascule { position: relative; }
+.capsule .bascule::after { content: ""; position: absolute; inset: -2px; }
+.puce:has(input) { min-height: 44px; }
+.pilule-entete { position: relative; }
+.pilule-entete::after, .ray::after, .vac-qui button::after, .glisse > .corps::after { content: ""; position: absolute; inset: -2px 0; }
+.ray, .vac-qui button, .glisse > .corps { position: relative; }
+.focus-titre { position: relative; }
+.focus-titre::after { content: ""; position: absolute; inset: -9px 0; }
+.suite summary { padding: 11px 0; }
+.ajout input { min-height: 44px; }
+/* Le bouton « Annuler » d'un message : la forme reste petite, la zone prend toute la hauteur du message. */
+.message [data-button] { position: relative; }
+.message [data-button]::after { content: ""; position: absolute; inset: -10px -8px; }
+/* « Plus d'options » ne se coupe plus en deux lignes dans l'aperçu de la barre. */
+.apercu .pied-ap .bouton-texte { flex: none; white-space: nowrap; }
+/* Au magasin : le rayon choisi suit les autres pastilles (bleu pâle, plus de marine plein). */
+.ray[aria-selected="true"], .ray[aria-pressed="true"] { background: var(--bleu-pale); border-color: var(--bleu); color: #1d4ed8; box-shadow: inset 0 0 0 .5px var(--bleu); }
+
 /* 2. Un seul bouton retour dans toute l'app : une pastille de verre, en haut à gauche de la sous-page. */
 .retour, .retour-agenda { position: relative; align-self: flex-start; display: inline-flex; align-items: center; gap: 4px; margin: 0; min-height: 40px; padding: 0 14px 0 8px;
   border: 1px solid rgb(255 255 255 / .9); border-radius: 999px; background: rgb(255 255 255 / .72); box-shadow: 0 4px 14px var(--ombre);
@@ -51,3 +71,6 @@ p { text-wrap: pretty; }
   .halo-capsule { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--fond) 90%, transparent); }
   .retour, .retour-agenda { background: #fff; border-color: rgb(18 40 58 / .14); }
 }
+
+/* 7. La barre d'écriture et son aperçu : assez opaques pour qu'on ne lise pas la page à travers. */
+.ajout, .apercu { background: rgb(255 255 255 / .93); -webkit-backdrop-filter: blur(18px) saturate(1.4); backdrop-filter: blur(18px) saturate(1.4); }
