@@ -23,7 +23,7 @@ export function Livre({ now, onQuitter }: ContexteModule & { onQuitter: () => vo
 
   return (
     <div className="reglage-page">
-      <button type="button" className="retour" onClick={onQuitter}><ChevronLeft size={20} strokeWidth={2.2} />Semaine</button>
+      <button type="button" className="retour" onClick={onQuitter}><ChevronLeft size={20} strokeWidth={2.2} />Cuisine</button>
       <h2 className="reglage-titre">Livre de recettes</h2>
       {toutes && aimees.length === 0 && (
         <section className="g vide">

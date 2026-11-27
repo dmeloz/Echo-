@@ -1092,3 +1092,6 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 /* Le questionnaire des goûts vit dans la page (sous la capsule) : la capsule s'efface tant qu'il est ouvert, pour ne pas cacher « Enregistrer ». */
 :root:has(.gouts) .capsule { opacity: 0; scale: .8; pointer-events: none; }
 :root:has(.gouts) .astuce { visibility: hidden; }
+/* « À manger vite » dans Ce soir : un lien vers le Stock, écrit comme les autres lignes de la carte. */
+.ce-soir .vite-lien { display: flex; align-items: flex-start; gap: var(--e3); min-height: 44px; padding: 0; border: 0; background: none; text-align: left; font-size: 15px; line-height: 1.35; color: var(--turquoise-texte); font-weight: 600; }
+.ce-soir .vite-lien svg { flex: none; margin-top: 2px; }
