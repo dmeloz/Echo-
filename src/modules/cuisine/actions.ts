@@ -155,6 +155,12 @@ export async function noterReste(id: string, reste: Reste | "plein" | "fini") {
   const p = await db.cuisine_stock.get(id);
   if (!p || (reste !== "fini" && (p.reste ?? "plein") === reste)) return;
   let ajoutes: Article[] = [];
+  if (p.repas) { // une boîte du batch : on ne rachète pas un plat cuisiné
+    if (reste !== "fini") return;
+    await db.cuisine_stock.delete(id);
+    toast(`${p.nom} : fini`, { action: { label: "Annuler", onClick: () => db.cuisine_stock.put(p) } });
+    return;
+  }
   if (reste === "fini") await db.cuisine_stock.delete(id);
   else await db.cuisine_stock.update(id, { reste: reste === "plein" ? undefined : reste });
   if (reste === "fini" || reste === "peu") ajoutes = await ajouterArticles([{ nom: p.nom, qte: "" }], true);
@@ -177,7 +183,7 @@ export async function compterProduit(id: string, delta: number) {
   });
   if (!p) return;
   if (n <= 0) return noterReste(id, "fini");
-  if (n !== 1 || delta >= 0) return;
+  if (n !== 1 || delta >= 0 || p.repas) return;
   const ajoutes = await ajouterArticles([{ nom: p.nom, qte: "" }], true);
   toast(ajoutes.length ? `${p.nom} : plus qu'un, ajouté aux courses` : `${p.nom} : plus qu'un, déjà dans les courses`, { action: { label: "Annuler", onClick: () => db.transaction("rw", db.cuisine_stock, db.cuisine_courses, async () => {
     await db.cuisine_stock.put(p);
@@ -205,14 +211,15 @@ export async function finirBatch(semaine: string, boites: Boite[], usages: Array
   await db.transaction("rw", db.cuisine_stock, db.cuisine_batch, async () => {
     remplacees = (await db.cuisine_stock.bulkGet(ids)).filter((p): p is Produit => !!p);
     await db.cuisine_stock.bulkPut(boites.map((b, i): Produit => ({ id: ids[i], nom: b.plat.slice(0, 60), lieu: b.lieu, ...(b.portions >= 2 ? { nb: b.portions } : {}), repas: b.jour, cree: now + i })));
-    for (const { id, usage } of usages) {
+    batchAvant = await db.cuisine_batch.get(semaine);
+    // Déjà rangé (deux touchers, ou l'autre téléphone) : les boîtes sont reposées, le stock n'est pas décompté deux fois.
+    for (const { id, usage } of batchAvant?.fini ? [] : usages) {
       const p = await db.cuisine_stock.get(id);
       if (!p || usage === "rien") continue;
       avant.push(p);
       if (usage === "fini") { if (p.nb && p.nb > 1) await db.cuisine_stock.update(id, { nb: p.nb - 1 }); else await db.cuisine_stock.delete(id); }
       else if (!p.nb && !p.reste) await db.cuisine_stock.update(id, { reste: "moitie" });
     }
-    batchAvant = await db.cuisine_batch.get(semaine);
     const base: Batch = batchAvant ?? { semaine, etapes: [], duree: 0, cree: now };
     await db.cuisine_batch.put({ ...base, fini: now });
   });
@@ -235,19 +242,28 @@ export async function rangerBoites(hier: string) {
 /* ---------- Le livre de recettes ---------- */
 
 // Le pouce après un repas : en haut, le plat entre dans le livre ; en bas, Echo ne le propose plus.
+// Le même pouce pour le même repas défait ce vote (et seulement lui) ; pour un repas plus récent, c'est une fois de plus.
 export async function noterRepas(r: Repas, avis: 1 | -1) {
   const cle = cleDe(r.plat);
   if (!cle) return;
   const avant = await db.cuisine_recettes.get(cle);
   const remettre = () => (avant ? db.cuisine_recettes.put(avant) : db.cuisine_recettes.delete(cle));
-  // Le même pouce pour le même repas l'enlève ; pour un autre jour, c'est une fois de plus.
   if (avant?.avis === avis && avant.dernier === r.jour) {
+    if (avis === 1 && avant.fois > 1) {
+      const { precedent, ...reste } = avant;
+      await db.cuisine_recettes.put({ ...reste, fois: avant.fois - 1, dernier: precedent ?? "", maj: Date.now() });
+      toast(`${r.plat} : avis retiré`, { action: { label: "Annuler", onClick: remettre } });
+      return;
+    }
     await db.cuisine_recettes.delete(cle);
     toast(avis === 1 ? `${r.plat} retiré du livre` : `Echo pourra reproposer ${r.plat}`, { action: { label: "Annuler", onClick: remettre } });
     return;
   }
-  const recette: Recette = { cle, plat: r.plat, ...(r.ingredients?.length ? { ingredients: r.ingredients } : avant?.ingredients ? { ingredients: avant.ingredients } : {}), ...(r.congele ? { congele: true } : {}),
-    avis, fois: (avant?.fois ?? 0) + (avant?.dernier === r.jour ? 0 : 1) || 1, dernier: r.jour, maj: Date.now() };
+  if (avant?.avis === avis && r.jour < avant.dernier) { toast(avis === 1 ? `${avant.plat} est déjà dans le livre` : `Echo ne propose déjà plus ${avant.plat}`); return; }
+  const ingredients = r.ingredients?.length ? r.ingredients : avant?.ingredients;
+  const precedent = avant && avant.dernier && avant.dernier !== r.jour ? avant.dernier : avant?.precedent;
+  const recette: Recette = { cle, plat: avant?.plat ?? r.plat, ...(ingredients ? { ingredients } : {}), ...(r.congele || avant?.congele ? { congele: true } : {}),
+    avis, fois: avant ? avant.fois + (avant.dernier === r.jour ? 0 : 1) : 1, dernier: r.jour, ...(precedent ? { precedent } : {}), maj: Date.now() };
   await db.cuisine_recettes.put(recette);
   toast(avis === 1 ? `${r.plat} : dans le livre de recettes` : `${r.plat} : Echo ne le proposera plus`, { action: { label: "Annuler", onClick: remettre } });
 }

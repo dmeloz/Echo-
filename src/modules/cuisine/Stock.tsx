@@ -76,13 +76,13 @@ export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: Lectu
                       </div>
                     ) : (
                       <div className="stock-restes" role="group" aria-label={`Ce qu'il reste de ${p.nom}`}>
-                        {RESTES.map((r) => <button key={r.id} type="button" className="puce" aria-pressed={(p.reste ?? "plein") === r.id} onClick={() => { vibrer(); noterReste(p.id, r.id); }}>{r.nom}</button>)}
+                        {!p.repas && RESTES.map((r) => <button key={r.id} type="button" className="puce" aria-pressed={(p.reste ?? "plein") === r.id} onClick={() => { vibrer(); noterReste(p.id, r.id); }}>{r.nom}</button>)}
                         <button type="button" className="puce" onClick={() => { vibrer(12); setOuvert(null); noterReste(p.id, "fini"); }}>Fini</button>
                       </div>
                     )}
-                    <p className="aide-champ">{p.nb ? "Au dernier, Echo le remet dans les courses." : "Presque fini ou fini : Echo le remet dans les courses."}</p>
-                    {!p.nb && <button type="button" className="bouton-texte" onClick={() => compterProduit(p.id, 1)}>J'en ai plusieurs</button>}
-                    <button type="button" className="bouton-texte danger" onClick={() => { setOuvert(null); retirerProduit(p.id); }}>Retirer sans racheter</button>
+                    <p className="aide-champ">{p.repas ? "Une boîte du batch : elle sort du stock toute seule après son repas." : p.nb ? "Au dernier, Echo le remet dans les courses." : "Presque fini ou fini : Echo le remet dans les courses."}</p>
+                    {!p.nb && !p.repas && <button type="button" className="bouton-texte" onClick={() => compterProduit(p.id, 1)}>J'en ai plusieurs</button>}
+                    {!p.repas && <button type="button" className="bouton-texte danger" onClick={() => { setOuvert(null); retirerProduit(p.id); }}>Retirer sans racheter</button>}
                   </div>
                 )}
               </li>

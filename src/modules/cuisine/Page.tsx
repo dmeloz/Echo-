@@ -27,6 +27,8 @@ export function PageCuisine(ctx: ContexteModule) {
   const fermerTicket = useCallback(() => setTicket(null), []);
   const [batch, setBatch] = useState<string | null>(null); // le lundi de la semaine dont on cuisine le batch
   const [livre, setLivre] = useState(false);
+  // Du vendredi au dimanche, on prépare la semaine qui vient : la Semaine s'ouvre dessus (et s'en souvient au retour du batch).
+  const [prochaine, setProchaine] = useState(() => [5, 6, 0].includes(now.getDay()));
   const fermerBatch = useCallback(() => setBatch(null), []);
   const fermerLivre = useCallback(() => setLivre(false), []);
   const courses = useLiveQuery(() => db.cuisine_courses.toArray(), [], undefined);
@@ -50,7 +52,7 @@ export function PageCuisine(ctx: ContexteModule) {
         ))}
       </div>
       {partie === "courses" && <Courses {...ctx} courses={courses} onMagasin={() => setMagasin(true)} onTicket={setTicket} />}
-      {partie === "semaine" && (livre ? <Livre {...ctx} onQuitter={fermerLivre} /> : <Semaine {...ctx} onBatch={setBatch} onLivre={() => setLivre(true)} />)}
+      {partie === "semaine" && (livre ? <Livre {...ctx} onQuitter={fermerLivre} /> : <Semaine {...ctx} prochaine={prochaine} setProchaine={setProchaine} onBatch={setBatch} onLivre={() => setLivre(true)} />)}
       {partie === "stock" && <Stock {...ctx} onTicket={setTicket} />}
       {aDemander && <PopupGouts {...ctx} onFini={() => poserReglage("cuisineGoutsVu", true)} />}
     </>

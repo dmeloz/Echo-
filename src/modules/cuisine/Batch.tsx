@@ -9,7 +9,7 @@ import { useEcranAllume, vibrer } from "../../lib/gestes";
 import type { ContexteModule } from "../contrat";
 import { cocherEtape, finirBatch } from "./actions";
 import { Coche } from "./Courses";
-import { besoins, boites, duree, usageProbable, utilises, type Produit, type Usage } from "./donnees";
+import { besoins, boites, duree, usageProbable, utilises, type Servi, type Usage } from "./donnees";
 import { ErreurSemaine, preparerBatch, repasDuBatch, versTravail } from "./semaineEcho";
 
 const jourLong = (j: string) => new Date(j + "T12:00:00").toLocaleDateString("fr-FR", { weekday: "long" });
@@ -27,6 +27,7 @@ export function PageBatch({ semaine, now, onQuitter }: ContexteModule & { semain
   }), [semaine]);
   const horaires = useHoraires();
   const [pense, setPense] = useState(false);
+  const [range, setRange] = useState(false); // « Batch terminé » est parti : pas deux fois
   const [choix, setChoix] = useState<Record<string, Usage>>({});
   useEcranAllume();
   useEffect(() => {
@@ -38,10 +39,10 @@ export function PageBatch({ semaine, now, onQuitter }: ContexteModule & { semain
   const { batch } = d, fini = !!batch?.fini;
   // Une fois rangé, on montre la semaine entière ; avant, seulement ce qui reste à manger.
   const repas = fini ? d.repas.filter((r) => !r.propose) : repasDuBatch(d.repas, today);
-  const tous = besoins(jours, versTravail(horaires));
+  const tous = besoins([...jours, plusJours(semaine, 7)], versTravail(horaires)); // le lundi suivant compte pour la gamelle
   const aRemplir = boites(repas, tous);
   const servis = fini ? [] : utilises(repas, d.stock);
-  const usageDe = (p: Produit) => choix[p.id] ?? usageProbable(p);
+  const usageDe = (s: Servi) => choix[s.produit.id] ?? usageProbable(s);
   const faites = batch?.etapes.filter((e) => e.fait).length ?? 0, total = batch?.etapes.length ?? 0;
 
   const planifier = async () => {
@@ -52,9 +53,11 @@ export function PageBatch({ semaine, now, onQuitter }: ContexteModule & { semain
     finally { setPense(false); }
   };
   const terminer = async () => {
+    if (range || pense) return;
+    setRange(true);
     vibrer(12);
-    await finirBatch(semaine, aRemplir, servis.map((p) => ({ id: p.id, usage: usageDe(p) })));
-    onQuitter();
+    try { await finirBatch(semaine, aRemplir, servis.map((s) => ({ id: s.produit.id, usage: usageDe(s) }))); onQuitter(); }
+    catch { setRange(false); toast("Pas enregistré. Libère un peu de place sur le téléphone, puis réessaie."); }
   };
 
   return (
@@ -111,22 +114,22 @@ export function PageBatch({ semaine, now, onQuitter }: ContexteModule & { semain
         <>
           <span className="lab magasin-lab">Ce qui a servi</span>
           <section className="g servis">
-            {servis.map((p) => (
+            {servis.map((s) => { const p = s.produit; return (
               <div key={p.id} role="group" aria-label={p.nom}>
                 <b>{p.nom}{p.nb ? <i> ×{p.nb}</i> : null}</b>
                 <div className="stock-restes">
                   {USAGES.filter((u) => !p.nb || u.id !== "reste").map((u) => (
-                    <button key={u.id} type="button" className="puce" aria-pressed={usageDe(p) === u.id} onClick={() => { vibrer(); setChoix((c) => ({ ...c, [p.id]: u.id })); }}>{p.nb && u.id === "fini" ? "Un de moins" : u.nom}</button>
+                    <button key={u.id} type="button" className="puce" aria-pressed={usageDe(s) === u.id} onClick={() => { vibrer(); setChoix((c) => ({ ...c, [p.id]: u.id })); }}>{p.nb && u.id === "fini" ? "Un de moins" : u.nom}</button>
                   ))}
                 </div>
               </div>
-            ))}
+            ); })}
             <p className="aide-champ">Echo met le stock à jour quand tu ranges les boîtes.</p>
           </section>
         </>
       )}
 
-      {!fini && aRemplir.length > 0 && <div className="rangee centre"><button type="button" className={`bouton${total && faites < total ? " second" : ""}`} onClick={terminer}>Batch terminé, ranger les boîtes</button></div>}
+      {!fini && aRemplir.length > 0 && <div className="rangee centre"><button type="button" className={`bouton${total && faites < total ? " second" : ""}`} disabled={range || pense} onClick={terminer}>Batch terminé, ranger les boîtes</button></div>}
       {!fini && total > 0 && !pense && <button type="button" className="bouton-texte centre" onClick={planifier}>Refaire le plan</button>}
       {fini && <p className="note-donnees">Les boîtes sont au stock. Chacune en sort toute seule après son repas.</p>}
     </div>

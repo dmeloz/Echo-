@@ -324,6 +324,7 @@ export interface Batch { semaine: string; etapes: Etape[]; duree: number; astuce
 export interface Boite { jour: string; plat: string; portions: number; lieu: "frigo" | "congelateur" }
 
 // Les boîtes à remplir : une par repas cuisiné, avec les portions du soir, plus une si le lendemain quelqu'un emporte une gamelle.
+// tous = les besoins de la semaine ET du lundi suivant (pour la gamelle après le dimanche).
 export function boites(repas: Repas[], tous: Besoin[]): Boite[] {
   return repas.filter((r) => !r.propose).sort((a, b) => a.jour.localeCompare(b.jour)).flatMap((r) => {
     const i = tous.findIndex((b) => b.jour === r.jour);
@@ -334,16 +335,21 @@ export function boites(repas: Repas[], tous: Besoin[]): Boite[] {
 }
 // Les produits du stock que ces repas utilisent (pour les décompter après le batch). Le nom du produit ou de l'ingrédient
 // peut être plus long que l'autre (« crème » et « crème entière ») ; les boîtes déjà rangées ne comptent pas.
-export function utilises(repas: Repas[], stock: Produit[]): Produit[] {
+// sur = le produit porte le nom de l'ingrédient (« crème entière » pour « crème »). Dans l'autre sens (« lait » pour
+// « lait de coco »), c'est peut-être un autre produit : on le montre, mais sans rien décompter d'office.
+export interface Servi { produit: Produit; sur: boolean }
+export function utilises(repas: Repas[], stock: Produit[]): Servi[] {
   const cles = repas.flatMap((r) => [...(r.ingredients ?? []).map((i) => i.nom), ...(r.duStock ?? [])]).map((n) => ` ${cleDe(n)} `).filter((c) => c.trim());
-  return stock.filter((p) => {
+  return stock.flatMap((p): Servi[] => {
     const c = ` ${cleDe(p.nom)} `;
-    return !p.repas && p.lieu !== "maison" && c.trim() && cles.some((k) => k.includes(c) || c.includes(k));
+    if (p.repas || p.lieu === "maison" || !c.trim()) return [];
+    if (cles.some((k) => c.includes(k))) return [{ produit: p, sur: true }];
+    return cles.some((k) => k.includes(c)) ? [{ produit: p, sur: false }] : [];
   });
 }
 // Ce qu'on dit d'un produit utilisé : fini (il sort du stock, ou une unité de moins), il en reste, pas touché.
 export type Usage = "fini" | "reste" | "rien";
-export const usageProbable = (p: Produit): Usage => (p.lieu === "frigo" || p.nb ? "fini" : "reste");
+export const usageProbable = ({ produit: p, sur }: Servi): Usage => (!sur ? "rien" : p.lieu === "frigo" || p.nb ? "fini" : "reste");
 export const duree = (min: number) => (min >= 60 ? `${Math.floor(min / 60)} h${min % 60 ? ` ${String(min % 60).padStart(2, "0")}` : ""}` : `${min} min`);
 
 export function nettoyerBatch(x: unknown): Batch | null {
@@ -360,12 +366,12 @@ export function nettoyerBatch(x: unknown): Batch | null {
 
 /* ---------- Le livre de recettes ---------- */
 
-// Un plat noté après le repas (clé : son nom simplifié). avis 1 = on a aimé (il entre dans le livre), -1 = Echo ne le repropose plus.
-export interface Recette { cle: string; plat: string; ingredients?: Lu[]; congele?: boolean; avis: 1 | -1; fois: number; dernier: string; maj: number }
+// Un plat noté après le repas (clé : son nom simplifié). dernier = le jour du dernier avis, precedent = celui d'avant (pour défaire). avis 1 = on a aimé (il entre dans le livre), -1 = Echo ne le repropose plus.
+export interface Recette { cle: string; plat: string; ingredients?: Lu[]; congele?: boolean; avis: 1 | -1; fois: number; dernier: string; precedent?: string; maj: number }
 export function nettoyerRecette(x: unknown): Recette | null {
-  const o = obj(x), plat = txt(o.plat, 80).trim(), cle = txt(o.cle, 80), dernier = txt(o.dernier, 10), f = nb(o.fois);
+  const o = obj(x), plat = txt(o.plat, 80).trim(), cle = txt(o.cle, 80), dernier = txt(o.dernier, 10), precedent = txt(o.precedent, 10), f = nb(o.fois);
   if (!plat || !cle || cle !== cleDe(plat) || (o.avis !== 1 && o.avis !== -1)) return null;
   const ingredients = (Array.isArray(o.ingredients) ? o.ingredients : []).slice(0, 20)
     .map((i) => ({ nom: txt(obj(i).nom, 60).trim(), qte: txt(obj(i).qte, 20).trim() })).filter((i) => i.nom);
-  return { cle, plat, ...(ingredients.length ? { ingredients } : {}), ...(o.congele === true ? { congele: true } : {}), avis: o.avis, fois: f !== null && f >= 1 ? Math.round(f) : 1, dernier: JOUR_ISO.test(dernier) ? dernier : "", maj: nb(o.maj) ?? 0 };
+  return { cle, plat, ...(ingredients.length ? { ingredients } : {}), ...(o.congele === true ? { congele: true } : {}), avis: o.avis, fois: f !== null && f >= 1 ? Math.round(f) : 1, dernier: JOUR_ISO.test(dernier) ? dernier : "", ...(JOUR_ISO.test(precedent) ? { precedent } : {}), maj: nb(o.maj) ?? 0 };
 }

@@ -162,17 +162,23 @@ export async function preparerBatch(semaine: string, repas: Repas[], tous: Besoi
   const lu = await appeler({ mode: "batch", repas: plats });
   const batch = nettoyerBatch({ semaine, etapes: lu.etapes, duree: lu.duree, astuce: lu.astuce, cree: Date.now() });
   if (!batch?.etapes.length) throw new ErreurSemaine(MESSAGES.lecture);
-  await db.cuisine_batch.put(batch);
+  // La réponse peut mettre une minute : si le batch a été rangé entre-temps, il reste rangé.
+  await db.transaction("rw", db.cuisine_batch, async () => {
+    const fini = (await db.cuisine_batch.get(semaine))?.fini;
+    await db.cuisine_batch.put({ ...batch, ...(fini ? { fini } : {}) });
+  });
   return batch;
 }
 
 /* ---------- Le livre de recettes ---------- */
 
-// « Prévoir » une recette du livre : elle prend le premier soir libre (d'aujourd'hui à dans deux semaines), et ce qu'il manque part aux courses.
+// « Prévoir » une recette du livre : elle prend le premier soir libre où quelqu'un mange à la maison (d'aujourd'hui, avant 19 h,
+// à dans deux semaines), et ce qu'il manque part aux courses.
 export async function prevoirRecette(x: Recette, now = new Date()) {
-  const today = auJour(0, now), pris = new Set((await db.cuisine_repas.where("jour").between(today, plusJours(today, 13), true, true).toArray()).map((r) => r.jour));
-  const jour = Array.from({ length: 14 }, (_, i) => plusJours(today, i)).find((j) => !pris.has(j));
-  if (!jour) { toast("Les deux semaines qui viennent sont déjà pleines."); return; }
+  const today = auJour(0, now), jours = Array.from({ length: 14 }, (_, i) => plusJours(today, i));
+  const pris = new Set((await db.cuisine_repas.where("jour").between(today, jours[13], true, true).toArray()).map((r) => r.jour));
+  const jour = besoins(jours, versTravail(await db.horaires.toArray())).find((b) => !pris.has(b.jour) && b.soir > 0 && (b.jour !== today || now.getHours() < 19))?.jour;
+  if (!jour) { toast("Pas de soir libre dans les deux semaines qui viennent."); return; }
   const repas: Repas = { jour, plat: x.plat, ...(x.ingredients ? { ingredients: x.ingredients } : {}), ...(x.congele ? { congele: true } : {}) };
   await db.cuisine_repas.put(repas);
   const crees = await versCourses([repas]);

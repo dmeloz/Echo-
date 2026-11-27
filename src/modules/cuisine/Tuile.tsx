@@ -10,8 +10,8 @@ export function TuileCuisine({ now, aller }: ContexteModule) {
   const d = useLiveQuery(async () => ({
     reste: (await db.cuisine_courses.toArray()).filter((a) => !a.fait).length,
     soir: await db.cuisine_repas.get(today).then((r) => (r && !r.propose ? r.plat : "")),
-    // Le plat de demain vient du congélateur : à sortir ce soir (sauf s'il n'y est pas, ou plus).
-    sortir: await db.cuisine_repas.get(auJour(1, now)).then((r) => (r && !r.propose && r.congele ? r.plat : "")),
+    // La boîte de demain est au congélateur : à sortir ce soir.
+    sortir: await db.cuisine_stock.get(`boite-${auJour(1, now)}`).then((b) => (b?.lieu === "congelateur" ? b.nom : "")),
   }), [today], { reste: 0, soir: "", sortir: "" });
   const courses = d.reste ? `Courses : ${d.reste} article${d.reste > 1 ? "s" : ""}` : "";
   const jourDeCourses = [5, 6].includes(now.getDay());

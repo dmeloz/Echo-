@@ -8,7 +8,7 @@ const garde = new Map<string, string>();
 vi.stubGlobal("localStorage", { getItem: (k: string) => garde.get(k) ?? null, setItem: (k: string, v: string) => garde.set(k, v), removeItem: (k: string) => garde.delete(k) });
 
 import { db } from "../../data/db";
-import { cocherEtape, finirBatch, noterRepas, oublierRecette, rangerBoites } from "./actions";
+import { cocherEtape, compterProduit, finirBatch, noterRepas, noterReste, oublierRecette, rangerBoites } from "./actions";
 import { besoins, boites, duree, nettoyerBatch, nettoyerRecette, usageProbable, utilises, type Produit, type Repas } from "./donnees";
 import { preparerDemande, prevoirRecette, repasDuBatch, versTravail } from "./semaineEcho";
 
@@ -29,9 +29,9 @@ beforeEach(async () => {
 describe("le batch du dimanche", () => {
   // Sarah a des horaires fixes (gamelle le midi) ; Dany travaille le soir du mardi.
   const travail = versTravail([
-    { qui: "elle", jour: "2026-12-01", code: "FIX" }, { qui: "elle", jour: "2026-12-02", code: "FIX" }, { qui: "moi", jour: "2026-12-01", code: "C6" },
+    { qui: "elle", jour: "2026-12-01", code: "FIX" }, { qui: "elle", jour: "2026-12-02", code: "FIX" }, { qui: "moi", jour: "2026-12-01", code: "C6" }, { qui: "elle", jour: "2026-12-07", code: "FIX" },
   ] as never);
-  const tous = besoins(semaine, travail);
+  const tous = besoins([...semaine, "2026-12-07"], travail);
 
   it("compte les boîtes : les portions du soir, plus une quand le lendemain il y a une gamelle", () => {
     expect(boites(repas, tous)).toEqual([
@@ -39,6 +39,8 @@ describe("le batch du dimanche", () => {
       { jour: "2026-12-01", plat: "Gratin", portions: 2, lieu: "frigo" },
       { jour: "2026-12-03", plat: "Curry", portions: 2, lieu: "congelateur" },
     ]);
+    // Le repas du dimanche compte la gamelle du lundi suivant.
+    expect(boites([{ jour: "2026-12-06", plat: "Rôti" }], tous)[0].portions).toBe(3);
     expect(repasDuBatch(repas, "2026-12-01").map((r) => r.plat)).toEqual(["Gratin", "Curry"]);
     expect([duree(45), duree(60), duree(130)]).toEqual(["45 min", "1 h", "2 h 10"]);
   });
@@ -47,10 +49,12 @@ describe("le batch du dimanche", () => {
     const stock: Produit[] = [
       { id: "a", nom: "Crème entière", lieu: "frigo", nb: 6, cree: 1 }, { id: "b", nom: "Courgettes", lieu: "frigo", cree: 2 }, { id: "c", nom: "Riz", lieu: "placard", cree: 3 },
       { id: "d", nom: "Lessive", lieu: "maison", cree: 4 }, { id: "e", nom: "Yaourts", lieu: "frigo", cree: 5 }, { id: "boite-x", nom: "Chili", lieu: "frigo", repas: "2026-11-23", cree: 6 },
+      { id: "f", nom: "Bœuf", lieu: "frigo", cree: 7 },
     ];
     const servis = utilises(repas, stock);
-    expect(servis.map((p) => p.id)).toEqual(["a", "b", "c"]);
-    expect(servis.map(usageProbable)).toEqual(["fini", "fini", "reste"]);
+    expect(servis.map((s) => s.produit.id)).toEqual(["a", "b", "c", "f"]);
+    // « Bœuf » pour « bœuf haché » : peut-être un autre produit, rien n'est décompté d'office.
+    expect(servis.map(usageProbable)).toEqual(["fini", "fini", "reste", "rien"]);
   });
 
   it("« Batch terminé » range les boîtes, décompte le stock, et Annuler remet tout", async () => {
@@ -69,11 +73,17 @@ describe("le batch du dimanche", () => {
     expect((await db.cuisine_stock.get("c"))!.reste).toBe("moitie");
     expect(await db.cuisine_stock.get("d")).toBeDefined();
     expect((await db.cuisine_batch.get(semaine[0]))!.fini).toBe(1000);
-    // Ranger une deuxième fois ne double pas les boîtes.
-    await finirBatch(semaine[0], aRanger, [], 2000);
+    // Ranger une deuxième fois ne double pas les boîtes et ne décompte pas le stock une deuxième fois.
+    await finirBatch(semaine[0], aRanger, [{ id: "a", usage: "fini" }], 2000);
     expect((await db.cuisine_stock.toArray()).filter((p) => p.repas).length).toBe(3);
+    expect((await db.cuisine_stock.get("a"))!.nb).toBe(5);
     await annuler();
     expect((await db.cuisine_stock.get("boite-2026-11-30"))!.cree).toBe(1000);
+    // Manger une portion d'une boîte ne met pas le plat aux courses.
+    await compterProduit("boite-2026-12-01", -1);
+    await noterReste("boite-2026-12-03", "fini");
+    expect(await db.cuisine_courses.count()).toBe(0);
+    expect(await db.cuisine_stock.get("boite-2026-12-03")).toBeUndefined();
     toast.mockClear();
     await db.cuisine_stock.clear(); await db.cuisine_batch.clear();
     await db.cuisine_stock.bulkPut([{ id: "a", nom: "Crème", lieu: "frigo", nb: 6, cree: 1 }, { id: "b", nom: "Courgettes", lieu: "frigo", cree: 2 }]);
@@ -110,7 +120,13 @@ describe("le livre de recettes", () => {
     expect(await db.cuisine_recettes.count()).toBe(0);
     await annuler();
     await noterRepas({ jour: "2026-12-07", plat: "chili" }, 1);
-    expect(await db.cuisine_recettes.get("chili")).toMatchObject({ fois: 2, dernier: "2026-12-07", ingredients: chili.ingredients });
+    expect(await db.cuisine_recettes.get("chili")).toMatchObject({ plat: "Chili", fois: 2, dernier: "2026-12-07", precedent: "2026-11-30", ingredients: chili.ingredients });
+    // Un vieux repas du même plat ne change rien ; défaire le vote du jour rend le livre comme avant.
+    await noterRepas(chili, 1);
+    expect((await db.cuisine_recettes.get("chili"))!.fois).toBe(2);
+    await noterRepas({ jour: "2026-12-07", plat: "chili" }, 1);
+    expect(await db.cuisine_recettes.get("chili")).toMatchObject({ fois: 1, dernier: "2026-11-30" });
+    await noterRepas({ jour: "2026-12-07", plat: "chili" }, 1);
     await noterRepas({ jour: "2026-12-07", plat: "chili" }, -1);
     expect(await db.cuisine_recettes.get("chili")).toMatchObject({ avis: -1, fois: 2 });
     await oublierRecette("chili");
@@ -135,7 +151,13 @@ describe("le livre de recettes", () => {
     const now = new Date("2026-11-27T10:00:00");
     await db.cuisine_repas.put({ jour: "2026-11-27", plat: "Poulet" });
     await db.cuisine_stock.put({ id: "r", nom: "Riz", lieu: "placard", cree: 1 });
+    // Samedi soir, les deux travaillent : la recette va au dimanche.
+    await db.horaires.bulkPut([{ qui: "moi", jour: "2026-11-28", code: "C6" }, { qui: "elle", jour: "2026-11-28", code: "C6" }] as never);
     await prevoirRecette({ cle: "chili", plat: "Chili", ingredients: chili.ingredients, avis: 1, fois: 1, dernier: "2026-11-20", maj: 1 }, now);
+    await annuler();
+    await db.horaires.clear();
+    await prevoirRecette({ cle: "chili", plat: "Chili", ingredients: chili.ingredients, avis: 1, fois: 1, dernier: "2026-11-20", maj: 1 }, now);
+    expect(toast.mock.calls.at(-2)![0]).toContain("dimanche");
     expect(await db.cuisine_repas.get("2026-11-28")).toEqual({ jour: "2026-11-28", plat: "Chili", ingredients: chili.ingredients });
     expect((await db.cuisine_courses.toArray()).map((a) => [a.nom, a.pour])).toEqual([["Bœuf haché", ["2026-11-28"]]]);
     await annuler();

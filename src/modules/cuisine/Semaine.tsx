@@ -15,11 +15,9 @@ const court = (j: string, o: Intl.DateTimeFormatOptions) => new Date(j + "T12:00
 
 // La semaine du lundi au dimanche, un jour = une ligne. « Prévoir ma semaine » : Echo propose les repas du soir
 // selon les horaires, les goûts et le stock ; on change un plat ou on valide, et ce qu'il manque part aux courses.
-export function Semaine({ now, noms, proprio, onBatch, onLivre }: ContexteModule & { onBatch: (semaine: string) => void; onLivre: () => void }) {
+export function Semaine({ now, noms, proprio, prochaine, setProchaine, onBatch, onLivre }: ContexteModule & { prochaine: boolean; setProchaine: (p: boolean) => void; onBatch: (semaine: string) => void; onLivre: () => void }) {
   const today = auJour(0, now);
   const lundi = plusJours(today, -((now.getDay() + 6) % 7));
-  // Du vendredi au dimanche, on prépare la semaine qui vient : la page s'ouvre dessus.
-  const [prochaine, setProchaine] = useState(() => [5, 6, 0].includes(now.getDay()));
   const debut = plusJours(lundi, prochaine ? 7 : 0);
   const jours = Array.from({ length: 7 }, (_, i) => plusJours(debut, i));
   // undefined tant que la base n'a pas répondu POUR CETTE semaine : pas d'écran « rien de prévu » avant de savoir.
@@ -29,7 +27,8 @@ export function Semaine({ now, noms, proprio, onBatch, onLivre }: ContexteModule
   const horaires = useHoraires();
   const batch = useLiveQuery(() => db.cuisine_batch.get(debut), [debut]);
   const livre = useLiveQuery(() => db.cuisine_recettes.toArray(), [], []);
-  const avisDe = (plat: string) => livre.find((x) => x.cle === cleDe(plat))?.avis;
+  // Le pouce est enfoncé seulement pour le repas qu'il a noté (le même plat, un autre jour, se note à nouveau).
+  const avisDe = (r: Repas) => { const x = livre.find((l) => l.cle === cleDe(r.plat)); return x?.dernier === r.jour ? x.avis : undefined; };
   const [ouvert, setOuvert] = useState<string | null>(null);
   const [ecrit, setEcrit] = useState<string | null>(null);
   const [pense, setPense] = useState<"semaine" | string | null>(null); // Echo travaille : sur la semaine, ou sur un jour
@@ -138,8 +137,8 @@ export function Semaine({ now, noms, proprio, onBatch, onLivre }: ContexteModule
                     {!r.propose && j <= today && (
                       <div className="avis" role="group" aria-label={`Ton avis sur ${r.plat}`}>
                         <span>C'était bon ?</span>
-                        <button type="button" className="rond-champ" aria-label="Oui, à refaire" aria-pressed={avisDe(r.plat) === 1} onClick={() => { vibrer(); noterRepas(r, 1); }}><ThumbsUp size={18} strokeWidth={2.2} animated={false} /></button>
-                        <button type="button" className="rond-champ" aria-label="Non, ne plus proposer" aria-pressed={avisDe(r.plat) === -1} onClick={() => { vibrer(); noterRepas(r, -1); }}><ThumbsDown size={18} strokeWidth={2.2} animated={false} /></button>
+                        <button type="button" className="rond-champ" aria-label="Oui, à refaire" aria-pressed={avisDe(r) === 1} onClick={() => { vibrer(); noterRepas(r, 1); }}><ThumbsUp size={18} strokeWidth={2.2} animated={false} /></button>
+                        <button type="button" className="rond-champ" aria-label="Non, ne plus proposer" aria-pressed={avisDe(r) === -1} onClick={() => { vibrer(); noterRepas(r, -1); }}><ThumbsDown size={18} strokeWidth={2.2} animated={false} /></button>
                       </div>
                     )}
                     <div className="rangee">
