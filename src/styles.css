@@ -994,3 +994,48 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .habituels b { display: block; font-size: 15px; }
 .habituels small { display: block; font-size: var(--t-petit); color: var(--discret); }
 @media (prefers-reduced-motion: reduce) { .gouts, .art-plus, .coche-trait path { animation: none; } .carrousel { scroll-behavior: auto; } }
+
+/* Agenda · vue Mois : une grille calme, le code de travail et un point par chose. */
+.vue-mois { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.mois-grille { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.mg-jour .code-mini { padding: 2px 3px; max-width: 100%; overflow: hidden; text-overflow: clip; }
+.mg-nom { text-align: center; font-size: 13px; font-weight: 700; color: var(--discret); }
+.mg-jour { position: relative; min-width: 0; overflow: hidden; min-height: 56px; border: 0; border-radius: 12px; background: rgb(255 255 255 / .6); display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 12px; font-variant-numeric: tabular-nums; }
+.mg-jour b { font-size: 15px; }
+.mg-jour.passe { opacity: .5; }
+.mg-jour.auj { background: var(--bleu); color: #fff; }
+.mg-jour.auj .points i { background: #fff; }
+.points i.evt { background: var(--encre); }
+
+/* Glisser pour changer l'heure : le bloc suit le doigt par crans, la nouvelle heure s'affiche dessous. */
+.ligne-temps ul.glisse-heure { position: relative; z-index: 2; transition: transform .12s var(--ressort, ease); }
+.glisse-heure .bloc-p { box-shadow: 0 10px 24px var(--ombre); scale: 1.02; }
+.heure-glisse { position: absolute; right: 8px; top: -10px; padding: 2px 8px; border-radius: 999px; background: var(--encre); color: #fff; font-size: 13px; font-weight: 700; list-style: none; }
+.ligne-temps ul { touch-action: pan-y; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+
+/* L'écran de discussion avec Echo, comme l'app Claude : au-dessus de la barre, jusqu'en haut de l'écran. */
+.echo-ecran { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px);
+  height: calc(100dvh - var(--clavier) - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 58px - 17px - 8px - 14px);
+  display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px; border-radius: 26px;
+  background: #f8fbfd; box-shadow: 0 10px 26px var(--ombre), 0 0 0 100vmax rgb(242 246 248 / .78); }
+.clavier-ouvert .echo-ecran { height: calc(100dvh - var(--clavier) - env(safe-area-inset-top, 0px) - 58px - 8px - 8px - 14px); }
+.echo-tete { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; padding: 0 2px; }
+.echo-tete > b { font-size: 17px; color: var(--bleu); }
+.echo-tete-actions { display: flex; align-items: center; gap: 4px; }
+.echo-fermer { width: 36px; height: 36px; border-radius: 50%; border: 0; background: rgb(18 40 58 / .07); color: var(--encre); display: grid; place-items: center; }
+.echo-fil { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 8px; padding: 2px; }
+.bulle-moi { margin: 6px 0 0; align-self: flex-end; max-width: 85%; background: var(--bleu-pale); color: var(--encre); padding: 8px 12px; border-radius: 18px 18px 4px 18px; font-size: 14.5px; white-space: pre-line; overflow-wrap: anywhere; }
+.echo-fil .echo-dit { align-self: flex-start; max-width: 100%; line-height: 1.45; overflow-wrap: anywhere; }
+.echo-action { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13.5px; padding: 6px 10px; border-radius: 12px; background: rgb(18 40 58 / .04); }
+.echo-action .tag { flex: none; background: rgb(18 40 58 / .07); border-radius: 999px; padding: 2px 8px; font-size: 13px; font-weight: 600; }
+.echo-action .tag.imp { background: var(--bleu-pale); color: var(--bleu); }
+.echo-action.non, .echo-action.annule { opacity: .55; }
+.echo-fil .echo-pense { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--discret); }
+.echo-vide { margin: auto 0 0; color: var(--discret); font-size: 14px; }
+.echo-choix { padding-top: 8px; border-top: 1px solid rgb(18 40 58 / .08); }
+.echo-choix .echo-ok { margin-left: auto; padding: 8px 16px; min-height: 40px; }
+.echo-anciennes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.echo-anciennes button { width: 100%; text-align: left; border: 0; background: rgb(18 40 58 / .04); border-radius: 14px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; color: var(--encre); }
+.echo-anciennes span { font-size: 13px; color: var(--discret); }
+.echo-reprendre { display: flex; justify-content: space-between; align-items: center; padding-top: 8px; }
+.barre-bas .ajout { position: relative; z-index: 1; } /* la barre reste au-dessus du voile de la discussion */
