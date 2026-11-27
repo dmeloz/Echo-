@@ -21,7 +21,7 @@ export function ResumeMatin({ taches, noms, proprio, now, modules = [] }: Props)
   const [ouvert, setOuvert] = useState(false);
   const [lecture, setLecture] = useState(false);
   const fermer = useRef<HTMLButtonElement>(null);
-  const [dits, setDits] = useState<DitModule[]>([]);
+  const [dits, setDits] = useState<DitModule[] | null>(null); // null : pas encore lu
   const today = auJour(0, now);
   const lu = luLe === today;
   // Après 18 h, le soleil devient une lune : le résumé raconte demain (on prépare la journée la veille au soir).
@@ -40,13 +40,17 @@ export function ResumeMatin({ taches, noms, proprio, now, modules = [] }: Props)
   }, [ouvert]);
 
   // Ce que les modules allumés ont à dire (champ « matin » du contrat) : 2 phrases au plus chacun, lues à l'ouverture.
-  const quiParle = modules.filter((m) => m.matin).map((m) => m.id).join(",");
+  const parlent = modules.filter((m) => m.matin && m.etat === "construit");
+  const quiParle = parlent.map((m) => m.id).join(",");
   useEffect(() => {
     if (!ouvert) return;
     let vivant = true;
-    Promise.all(modules.filter((m) => m.matin).map(async (m): Promise<DitModule> => {
-      const phrases = await m.matin!({ jour: jourResume, demain: soir }).catch(() => []);
-      return { id: m.id, libelle: m.libelle, phrases: phrases.filter((p) => typeof p === "string" && p.trim()).slice(0, 2) };
+    setDits(null);
+    // Un module qui se trompe se tait : il ne fait pas taire les autres.
+    Promise.all(parlent.map(async (m): Promise<DitModule> => {
+      let phrases: unknown = [];
+      try { phrases = await m.matin!({ jour: jourResume, demain: soir }); } catch { /* rien à dire */ }
+      return { id: m.id, libelle: m.libelle, phrases: (Array.isArray(phrases) ? phrases : []).filter((p): p is string => typeof p === "string" && !!p.trim()).slice(0, 2) };
     })).then((d) => { if (vivant) setDits(d.filter((x) => x.phrases.length)); });
     return () => { vivant = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,6 +59,9 @@ export function ResumeMatin({ taches, noms, proprio, now, modules = [] }: Props)
   if (!actif) return null;
   const demainMatin = new Date(now); demainMatin.setDate(now.getDate() + 1); demainMatin.setHours(6, 0, 0, 0);
   const r = construireResume(taches, noms, proprio, soir ? demainMatin : now, travail, soir);
+  const modulesDits = dits ?? [];
+  // « Rien de prévu. Profite. » serait faux si un module a quelque chose à dire juste en dessous.
+  const sansProfite = (t: string) => (modulesDits.length ? t.replace(/Rien de prévu (aujourd'hui|demain)\. Profite\./, "Pas de tâche $1.") : t);
 
   function terminer() {
     if (parle()) speechSynthesis.cancel();
@@ -65,7 +72,7 @@ export function ResumeMatin({ taches, noms, proprio, now, modules = [] }: Props)
   const ecouter = () => {
     if (!parle()) return;
     if (speechSynthesis.speaking) { speechSynthesis.cancel(); setLecture(false); return; }
-    const u = new SpeechSynthesisUtterance([r.texteLu, ...dits.map((d) => `${d.libelle} : ${d.phrases.join(" ")}`)].join(" "));
+    const u = new SpeechSynthesisUtterance([sansProfite(r.texteLu), ...modulesDits.map((d) => `${d.libelle} : ${d.phrases.join(" ")}`)].join(" "));
     u.lang = "fr-FR";
     u.onend = () => setLecture(false);
     setLecture(true);
@@ -89,7 +96,7 @@ export function ResumeMatin({ taches, noms, proprio, now, modules = [] }: Props)
           <div className="resume-corps">
             <span className="resume-date">{date}</span>
             <h2 id="resume-titre">{soir ? `Demain, ${noms[proprio]}` : `Bonjour ${noms[proprio]}`}</h2>
-            <p className="resume-phrase">{r.phrase}</p>
+            <p className="resume-phrase">{sansProfite(r.phrase)}</p>
             {r.sections.map((s, i) => {
               const Icone = ICONES[s.id];
               return (
@@ -103,7 +110,7 @@ export function ResumeMatin({ taches, noms, proprio, now, modules = [] }: Props)
                 </section>
               );
             })}
-            {dits.map((d, i) => (
+            {modulesDits.map((d, i) => (
               <section key={d.id} className="resume-bloc" style={{ animationDelay: `${120 + (r.sections.length + i) * 70}ms` }}>
                 <span className="resume-icone" aria-hidden="true"><LayoutGrid size={18} strokeWidth={1.8} /></span>
                 <div>
@@ -112,7 +119,7 @@ export function ResumeMatin({ taches, noms, proprio, now, modules = [] }: Props)
                 </div>
               </section>
             ))}
-            {!r.sections.length && !dits.length && <p className="resume-vide">{soir ? "Rien d'écrit pour demain. Note une chose avec l'étoile si elle te vient ce soir." : "Rien d'écrit pour aujourd'hui. Note une chose en bas de l'accueil quand elle te vient."}</p>}
+            {!r.sections.length && dits !== null && !dits.length && <p className="resume-vide">{soir ? "Rien d'écrit pour demain. Note une chose avec l'étoile si elle te vient ce soir." : "Rien d'écrit pour aujourd'hui. Note une chose en bas de l'accueil quand elle te vient."}</p>}
           </div>
           <div className="resume-pied">
             {parle() && <button className="bouton second" onClick={ecouter} aria-pressed={lecture}><Volume2 size={18} strokeWidth={2} /> {lecture ? "Arrêter" : "Écouter"}</button>}

@@ -287,7 +287,7 @@ export const papiersDu = (papiers: Papier[], jour: string, aujourdhui: string, a
 // Le soir (demain), ce qui reste d'avant n'est pas dit « en retard » : il est simplement encore là.
 export function matinPapiers(papiers: Papier[], jour: string, demain = false): string[] {
   const ouverts = papiers.filter((p) => aFairePapier(p) && p.echeance! <= jour).sort((a, b) => a.echeance!.localeCompare(b.echeance!));
-  const quoi = (p: Papier) => QUOIS.find((q) => q.id === p.quoi)!.nom.toLowerCase();
+  const quoi = (p: Papier) => QUOIS.find((q) => q.id === p.quoi)?.nom.toLowerCase() ?? "à régler";
   const dire = (liste: Papier[], seul: string, plusieurs: string) =>
     liste.length === 1 ? `${liste[0].titre} : ${quoi(liste[0])}${seul}${liste[0].quoi === "payer" && liste[0].montant ? ` (${texteMontant(liste[0].montant)})` : ""}.`
       : `${liste.length} papiers ${plusieurs} : ${liste.slice(0, 3).map((p) => p.titre).join(", ")}${liste.length > 3 ? "…" : ""}.`;

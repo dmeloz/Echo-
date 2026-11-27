@@ -88,8 +88,9 @@ Deno.serve(async (req) => {
         if (code === 404 || code === 410) await base.from("abonnements").delete().eq("id", l.id);
         else {
           console.warn("[rappels]", code, (err as Error).message);
-          // L'envoi a raté : on oublie la clé, le passage suivant réessaie (tant que le rappel est dans sa fenêtre).
-          await base.from("rappels_envoyes").delete().eq("cle", e.cle);
+          // Le service d'envoi était en panne (5xx) : rien n'est parti, on oublie la clé et le passage suivant réessaie.
+          // Pour le reste (pas de réponse, refus), on ne réessaie pas : le rappel a pu partir, ou ne partira jamais.
+          if (code && code >= 500) await base.from("rappels_envoyes").delete().eq("cle", e.cle);
         }
       }
     }
