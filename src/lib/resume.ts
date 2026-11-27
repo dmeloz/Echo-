@@ -4,7 +4,7 @@ import { niveau } from "./importance";
 import { autre, type Noms, type Personne, type Tache } from "./types";
 
 // Le résumé du matin : ce que la journée réserve, dit en phrases courtes.
-// Fait à partir des vraies tâches du téléphone (rien d'inventé : pas de météo tant qu'on n'a pas de source).
+// Fait à partir des vraies tâches du téléphone (rien d'inventé). Le temps qu'il fait vient de src/lib/meteo.ts, quand on l'a.
 
 export interface LigneResume { heure?: string; texte: string }
 export interface SectionResume { id: "agenda" | "important" | "autre" | "semaine"; titre: string; phrase?: string; lignes: LigneResume[]; dit: string }
@@ -16,7 +16,7 @@ const hh = (h: string) => heureFr(h).replace(/^0/, "");
 
 // travail : le code de travail du jour pour celui qui tient le téléphone (s'il l'a posé dans Mes horaires).
 // demain : le résumé du soir. Il raconte la journée de demain (now = demain matin) et parle de « demain ».
-export function construireResume(taches: Tache[], noms: Noms, proprio: Personne, now = new Date(), travail?: Code, demain = false): Resume {
+export function construireResume(taches: Tache[], noms: Noms, proprio: Personne, now = new Date(), travail?: Code, demain = false, temps = ""): Resume {
   const quand = demain ? "demain" : "aujourd'hui";
   const today = auJour(0, now);
   const lautre = autre(proprio);
@@ -74,6 +74,8 @@ export function construireResume(taches: Tache[], noms: Noms, proprio: Personne,
   if (travail === "VAC") phrase = (demain ? "Demain, tu es en vacances. " : "Tu es en vacances. ") + phrase;
   else if (plages.length) phrase = `${demain ? "Demain, tu travailles" : "Tu travailles"} ${plages.map(([a, b]) => `de ${hh(a)} à ${hh(b)}`).join(" puis ")}. ` + phrase;
   else if (travail && CODES[travail].travail) phrase = `${demain ? "Demain" : "Aujourd'hui"} : ${CODES[travail].libelle.toLowerCase()}. ` + phrase;
+  // Le temps dehors, en tête (« Dehors : 3°, neige ce matin. »), seulement si on l'a.
+  if (temps) phrase = `Dehors${demain ? " demain" : ""} : ${temps}. ${phrase}`;
   const salut = `${demain ? "Bonsoir" : "Bonjour"} ${noms[proprio]}.`;
   return { phrase, sections, texteLu: [salut, phrase, ...sections.map((s) => s.dit)].join(" ") };
 }
