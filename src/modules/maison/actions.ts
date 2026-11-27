@@ -2,6 +2,7 @@ import { toast } from "sonner";
 import { db } from "../../data/db";
 import { auJour, nouvelId, sansAccents } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
+import { depayerAuBudget, payerAuBudget, suivrePapier } from "./lienBudget";
 import { apresFait, devinerDossier, minutesDe, type Appareil, type Papier, type Contact, type Corvee, type EtatReparation, type Fait, type Modele, type QuiCorvee, type Reparation, type Taille } from "./donnees";
 
 // Les gestes du module Maison sur ses propres tables. Tout ce qui change montre « Annuler ».
@@ -139,15 +140,31 @@ export async function ajouterPapier(n: NouveauPapier, silencieux = false): Promi
   const p: Papier = { id: nouvelId(), titre: titre[0].toUpperCase() + titre.slice(1), dossier: n.dossier ?? devinerDossier(titre), emetteur: propre(n.emetteur ?? "", 60), note: propre(n.note ?? "", 300),
     quoi: n.quoi ?? "", ...(n.echeance ? { echeance: n.echeance } : {}), ...(n.montant ? { montant: n.montant } : {}), repete: n.repete ?? "", photos: [], cree: Date.now() };
   await db.maison_papiers.add(p);
-  if (!silencieux) toast(`${p.titre} : rangé`, annuler(() => db.maison_papiers.delete(p.id)));
+  await suivrePapier(null, p);
+  if (!silencieux) toast(`${p.titre} : rangé`, annuler(() => retirerPapierSansBruit(p)));
   return p;
 }
-export const changerPapier = (id: string, x: Partial<Omit<Papier, "id" | "cree">>) => db.maison_papiers.update(id, x);
+// Retirer sans message (pour Annuler un ajout, et pour Echo) : la ligne du Budget part avec, si elle n'est pas payée.
+export async function retirerPapierSansBruit(p: Pick<Papier, "id">) {
+  const la = await db.maison_papiers.get(p.id);
+  await db.maison_papiers.delete(p.id);
+  await suivrePapier(la, null);
+}
+// Changer un papier : s'il y a (ou s'il y avait) un montant à payer, la ligne du Budget suit.
+export async function changerPapier(id: string, x: Partial<Omit<Papier, "id" | "cree">>) {
+  const avant = await db.maison_papiers.get(id);
+  await db.maison_papiers.update(id, x);
+  await suivrePapier(avant, await db.maison_papiers.get(id));
+}
 // C'est fait (payé, renouvelé…) : une chose qui revient repart à la prochaine échéance. Avec Annuler.
 export async function papierFait(p: Papier, now = new Date()) {
   const apres = apresFait(p, now);
   await db.maison_papiers.update(p.id, { echeance: apres.echeance, fait: apres.fait, jour: apres.jour });
-  toast(`${p.titre} : fait`, annuler(() => db.maison_papiers.update(p.id, { echeance: p.echeance, fait: p.fait, jour: p.jour })));
+  await payerAuBudget(p, apres, auJour(0, now));
+  toast(`${p.titre} : fait`, annuler(async () => {
+    await depayerAuBudget(p, apres);
+    await db.maison_papiers.update(p.id, { echeance: p.echeance, fait: p.fait, jour: p.jour });
+  }));
 }
 // Les photos d'un papier : on repart toujours de la liste du moment (une autre photo a pu arriver entre-temps), 12 au plus.
 const photosPapier = (id: string, f: (noms: string[]) => string[]) => db.transaction("rw", db.maison_papiers, async () => {
@@ -160,7 +177,8 @@ export const retirerPhotoPapier = (id: string, nom: string) => photosPapier(id, 
 // Message balayé ou app fermée avant : le ménage de photosPapiers (envoyerEnAttente) les retire plus tard.
 export async function retirerPapier(p: Papier, oublier: (noms: string[]) => Promise<void>) {
   await db.maison_papiers.delete(p.id);
+  await suivrePapier(p, null);
   let annule = false, fini = false;
   const finir = () => { if (annule || fini) return; fini = true; oublier(p.photos).catch(() => {}); };
-  toast(`${p.titre} : retiré`, { ...annuler(() => { annule = true; return db.maison_papiers.put(p); }), onAutoClose: finir, onDismiss: finir });
+  toast(`${p.titre} : retiré`, { ...annuler(() => { annule = true; return db.maison_papiers.put(p).then(() => suivrePapier(null, p)); }), onAutoClose: finir, onDismiss: finir });
 }
