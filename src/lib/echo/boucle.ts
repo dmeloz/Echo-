@@ -2,6 +2,7 @@ import { db } from "../../data/db";
 import { auJour, nouvelId, z } from "../dates";
 import { MAX_CONVERSATION, MAX_MESSAGES, MAX_PHRASE, MAX_RESULTAT, MAX_SITUATION, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
 import { genreFinal, type Action, type ContexteEcho, type Executant } from "./outils";
+import { garderRetours, oublierRetours, suivre } from "./retour";
 import { lireMemoire, memoirePourEcho, type Souvenir } from "./memoire";
 
 // La boucle d'Echo. La phrase part au serveur (qui garde la clé et parle à Claude). Claude répond par du texte,
@@ -145,12 +146,14 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
 
 // Faire une action et la noter au journal. Annuler défait l'action et marque la ligne comme annulée.
 export async function executer(a: Action, phrase: string, ctx: ContexteEcho): Promise<Faite> {
-  const defaire = await a.faire();
+  // Les lignes touchées sont notées : l'action pourra s'annuler plus tard depuis le journal (retour.ts).
+  const { resultat: defaire, retours } = await suivre(() => a.faire());
   const id = nouvelId();
   const ligne = [a.libelle, ...a.details].join(" · ");
   await db.echo_journal.add({ id, quand: Date.now(), par: ctx.noms[ctx.proprio], demande: phrase.slice(0, 1000), action: ligne.slice(0, 200), outil: a.outil });
+  await garderRetours(id, retours).catch(() => {});
   return {
     action: a, ligne,
-    annuler: async () => { await defaire(); await db.echo_journal.update(id, { annule: Date.now() }); },
+    annuler: async () => { await defaire(); await db.echo_journal.update(id, { annule: Date.now() }); await oublierRetours(id).catch(() => {}); },
   };
 }
