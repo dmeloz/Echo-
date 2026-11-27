@@ -10,7 +10,7 @@ vi.stubGlobal("localStorage", { getItem: (k: string) => stock.get(k) ?? null, se
 import { db } from "../../data/db";
 import { lireFile } from "../../sync/file";
 import { appliquer } from "../../sync/moteur";
-import { ajouterAppareil, ajouterContact, ajouterCorvees, ajouterPapier, ajouterPhotosPapier, retirerPhotoPapier, ajouterReparation, papierFait, retirerPapier, cocherCorvee, etatReparation, faireCorvee, rangerFaits, rangerReparations, reporterCorvee, retirerCorvee } from "./actions";
+import { ajouterAppareil, ajouterContact, ajouterCorvees, ajouterPapier, ajouterPhotosPapier, changerPapier, retirerPapierSansBruit, retirerPhotoPapier, ajouterReparation, papierFait, retirerPapier, cocherCorvee, etatReparation, faireCorvee, rangerFaits, rangerReparations, reporterCorvee, retirerCorvee } from "./actions";
 import { aPayer, apresFait, bientot, devinerDossier, lireMontant, lirePapier, nettoyerPapier, quandPapier, texteMontant, type Papier, aFaire, besoin, deborde, ditFait, equilibre, gestesPour, jourDu, lireContact, lireCorvee, nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation, nomRythme, parts, pour, pourMoi, texteGarantie, trouverCorvees, type Corvee } from "./donnees";
 import { maison } from "./index";
 import { OUTILS_MAISON } from "./outilsEcho";
@@ -23,7 +23,7 @@ const ctx = { noms: { moi: "Dany", elle: "Sarah" }, proprio: "moi" as const, now
 const annuler = () => (toast.mock.calls.at(-1)![1] as { action: { onClick: () => Promise<unknown> } }).action.onClick();
 
 beforeEach(async () => {
-  await Promise.all([db.maison_corvees.clear(), db.maison_faits.clear(), db.maison_reparations.clear(), db.maison_appareils.clear(), db.maison_contacts.clear(), db.maison_papiers.clear(), db.photos.clear(), db.reglages.clear()]);
+  await Promise.all([db.maison_corvees.clear(), db.maison_faits.clear(), db.maison_reparations.clear(), db.maison_appareils.clear(), db.maison_contacts.clear(), db.maison_papiers.clear(), db.budget_apayer.clear(), db.photos.clear(), db.reglages.clear()]);
   stock.clear(); toast.mockClear();
 });
 
@@ -367,9 +367,95 @@ describe("les papiers", () => {
     await envoyerEnAttente(t);
     expect((await db.photos.toArray()).map((x) => x.id).sort()).toEqual(["bbbb2222.jpg", "cccc3333.jpg", "photo-tache"]);
   });
+  it("une facture rangée part au Budget, suit ses changements, et se paie des deux côtés", async () => {
+    const { marquerPaye } = await import("../budget/actions");
+    const { budgetSuivi, suivreBudget } = await import("./lienBudget");
+    suivreBudget();
+    const reagi = async () => { await new Promise((r) => setTimeout(r, 30)); await budgetSuivi(); };
+    const lignes = async () => (await db.budget_apayer.toArray()).map((l) => `${l.id} ${l.c} ${l.paye}`).sort();
+    // Facture unique : ajoutée, changée, payée dans Maison, puis Annuler.
+    const f = (await ajouterPapier({ titre: "Facture Swisscom", quoi: "payer", echeance: "2026-12-15", montant: 8990 }, true))!;
+    expect(await lignes()).toEqual([`papier:${f.id} 8990 false`]);
+    await changerPapier(f.id, { montant: 9990 });
+    expect(await lignes()).toEqual([`papier:${f.id} 9990 false`]);
+    await papierFait((await db.maison_papiers.get(f.id))!, NOW);
+    expect(await lignes()).toEqual([`papier:${f.id} 9990 2026-11-27`]);
+    await annuler(); await reagi();
+    expect(await lignes()).toEqual([`papier:${f.id} 9990 false`]);
+    expect((await db.maison_papiers.get(f.id))!.fait).toBeUndefined();
+    // Payée puis rouverte avec une nouvelle date : la ligne redevient à payer, le papier ne se recoche pas.
+    await papierFait((await db.maison_papiers.get(f.id))!, NOW);
+    await changerPapier(f.id, { echeance: "2027-01-15", fait: undefined }); await reagi();
+    expect(await lignes()).toEqual([`papier:${f.id} 9990 false`]);
+    expect((await db.maison_papiers.get(f.id))!.fait).toBeUndefined();
+    // Plus rien à payer : la ligne part.
+    await changerPapier(f.id, { quoi: "" });
+    expect(await lignes()).toEqual([]);
+    await retirerPapierSansBruit(f);
+    // Loyer chaque mois : payé dans le Budget, le papier repart au mois suivant et la ligne suivante s'ouvre.
+    const loyer = (await ajouterPapier({ titre: "Loyer", quoi: "payer", echeance: "2026-12-01", montant: 185000, repete: "mois" }, true))!;
+    expect(await lignes()).toEqual([`papier:${loyer.id}:2026-12-01 185000 false`]);
+    await marquerPaye(`papier:${loyer.id}:2026-12-01`, "2026-11-28"); await reagi();
+    expect((await db.maison_papiers.get(loyer.id))!.echeance).toBe("2027-01-01");
+    expect(await lignes()).toEqual([`papier:${loyer.id}:2026-12-01 185000 2026-11-28`, `papier:${loyer.id}:2027-01-01 185000 false`]);
+    // Annulé dans le Budget : le papier revient à décembre.
+    await marquerPaye(`papier:${loyer.id}:2026-12-01`, false); await reagi();
+    expect((await db.maison_papiers.get(loyer.id))!.echeance).toBe("2026-12-01");
+    expect(await lignes()).toEqual([`papier:${loyer.id}:2026-12-01 185000 false`]);
+    // Payé dans Maison : la ligne de décembre reste payée (trace), celle de janvier est ouverte ; retirer le papier ne retire que l'ouverte.
+    await papierFait((await db.maison_papiers.get(loyer.id))!, NOW); await reagi();
+    expect(await lignes()).toEqual([`papier:${loyer.id}:2026-12-01 185000 2026-11-27`, `papier:${loyer.id}:2027-01-01 185000 false`]);
+    await retirerPapier((await db.maison_papiers.get(loyer.id))!, async () => {});
+    expect(await lignes()).toEqual([`papier:${loyer.id}:2026-12-01 185000 2026-11-27`]);
+  });
+  it("le lien avec le Budget ne se trompe pas quand on rouvre, qu'on change vite ou qu'on dit « ça revient »", async () => {
+    const { marquerPaye } = await import("../budget/actions");
+    const { budgetSuivi, suivreBudget } = await import("./lienBudget");
+    suivreBudget();
+    const reagi = async () => { await new Promise((r) => setTimeout(r, 30)); await budgetSuivi(); };
+    const lignes = async () => (await db.budget_apayer.toArray()).map((l) => `${l.id} ${l.paye}`).sort();
+    const lu = async (id: string) => (await db.maison_papiers.get(id))!;
+    // Payée, puis « à renouveler » : la ligne part, et le papier n'est pas coché tout seul.
+    const f = (await ajouterPapier({ titre: "Prime ménage", quoi: "payer", echeance: "2026-12-15", montant: 30000 }, true))!;
+    await papierFait(f, NOW);
+    await changerPapier(f.id, { quoi: "renouveler", fait: undefined }); await reagi();
+    expect(await lignes()).toEqual([]);
+    expect((await lu(f.id)).fait).toBeUndefined();
+    // Payée, date effacée puis remise : la ligne revient à payer, le papier aussi.
+    await changerPapier(f.id, { quoi: "payer" });
+    await papierFait(await lu(f.id), NOW);
+    await changerPapier(f.id, { echeance: undefined, fait: undefined });
+    await changerPapier(f.id, { echeance: "2027-01-15" }); await reagi();
+    expect(await lignes()).toEqual([`papier:${f.id} false`]);
+    expect((await lu(f.id)).fait).toBeUndefined();
+    // Payée dans le Budget, puis rouverte dans Maison avec une autre date : la date choisie reste.
+    await marquerPaye(`papier:${f.id}`, "2026-11-28"); await reagi();
+    expect((await lu(f.id)).fait).toBe("2026-11-28");
+    await changerPapier(f.id, { echeance: "2027-02-15", fait: undefined }); await reagi();
+    expect(await lu(f.id)).toMatchObject({ echeance: "2027-02-15" });
+    expect((await lu(f.id)).fait).toBeUndefined();
+    // Payée, puis « chaque mois » : une seule ligne, celle du mois suivant, et le papier repart.
+    await papierFait(await lu(f.id), NOW);
+    await changerPapier(f.id, { repete: "mois" }); await reagi();
+    expect(await lu(f.id)).toMatchObject({ echeance: "2027-03-15", repete: "mois" });
+    expect(await lignes()).toEqual([`papier:${f.id}:2027-03-15 false`]);
+    // Deux changements de date coup sur coup, sans attendre : pas de ligne fantôme.
+    const a = changerPapier(f.id, { echeance: "2027-04-01", jour: undefined }), b = changerPapier(f.id, { echeance: "2027-04-02", jour: undefined });
+    await Promise.all([a, b]); await reagi();
+    expect(await lignes()).toEqual([`papier:${f.id}:2027-04-02 false`]);
+  });
+  it("les factures rangées avant le lien partent au Budget une seule fois", async () => {
+    vi.resetModules();
+    const { db: base } = await import("../../data/db");
+    await base.maison_papiers.add({ id: "vieux", titre: "Facture SIG", dossier: "logement", emetteur: "", note: "", quoi: "payer", echeance: "2026-12-10", montant: 12000, repete: "", photos: [], cree: 1 });
+    const { budgetSuivi, suivreBudget } = await import("./lienBudget");
+    suivreBudget(); await budgetSuivi();
+    expect((await base.budget_apayer.toArray()).map((l) => l.id)).toEqual(["papier:vieux"]);
+    expect((await base.reglages.get("maisonBudgetRelie"))?.valeur).toBe(true);
+  });
   it("donne au Budget la ligne à payer convenue", () => {
-    expect(aPayer(papier({ emetteur: "Swisscom", repete: "mois" }))).toEqual({ id: "papier:p1", titre: "Facture Swisscom", emetteur: "Swisscom", montant: 8990, echeance: "2026-12-15", repete: "mois", dossier: "abonnements", papier: "p1", paye: false });
-    expect(aPayer(papier({ fait: "2026-11-27" }))).toMatchObject({ paye: "2026-11-27" });
+    expect(aPayer(papier({ emetteur: "Swisscom", repete: "mois" }))).toEqual({ id: "papier:p1:2026-12-15", titre: "Facture Swisscom", emetteur: "Swisscom", montant: 8990, echeance: "2026-12-15", repete: "mois", dossier: "abonnements", papier: "p1", paye: false });
+    expect(aPayer(papier({ fait: "2026-11-27" }))).toMatchObject({ id: "papier:p1", paye: "2026-11-27" });
     expect(aPayer(papier({ quoi: "renouveler" }))).toBeNull();
     expect(aPayer(papier({ montant: undefined }))).toBeNull();
   });
