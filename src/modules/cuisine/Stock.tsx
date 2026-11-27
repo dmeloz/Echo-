@@ -19,10 +19,9 @@ function Jauge({ reste }: { reste?: Reste }) {
 
 // Le stock : ce qu'il faut manger vite, puis quatre endroits. On le remplit avec la photo du ticket de caisse, ou à la main.
 // (Le code-barres arrive plus tard.)
-export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: LectureTicket) => void }) {
+export function Stock({ now, lieu, setLieu, onTicket }: ContexteModule & { lieu: Lieu | null; setLieu: (l: Lieu | null) => void; onTicket: (lu: LectureTicket) => void }) {
   const produits = useLiveQuery(() => db.cuisine_stock.toArray(), [], [] as Produit[]);
   const dernier = useLiveQuery(async () => (await db.cuisine_tickets.toArray()).sort((a, b) => b.cree - a.cree)[0], [], undefined);
-  const [lieu, setLieu] = useState<Lieu | null>(null);
   const [ouvert, setOuvert] = useState<string | null>(null);
   const today = auJour(0, now), limite = auJour(3, now);
   const vite = produits.filter((p) => p.avant && p.avant <= limite).sort((a, b) => a.avant!.localeCompare(b.avant!));
@@ -34,7 +33,7 @@ export function Stock({ now, onTicket }: ContexteModule & { onTicket: (lu: Lectu
     const retour = () => setLieu(null);
     addEventListener("echo-retour", retour);
     return () => removeEventListener("echo-retour", retour);
-  }, [lieu]);
+  }, [lieu, setLieu]);
 
   if (lieu) {
     const ici = produits.filter((p) => p.lieu === lieu).sort((a, b) => (a.repas ?? a.avant ?? "9").localeCompare(b.repas ?? b.avant ?? "9") || a.nom.localeCompare(b.nom));

@@ -909,6 +909,16 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .stock-plus .aide-champ { margin: 0; }
 /* Les jours passés s'effacent un peu : l'œil va à ce qui vient. */
 .jour-repas.passe, .jour-bloc.passe:not(.ouvert) > .jour-repas { opacity: .55; }
+/* L'entrée de Cuisine : la carte « Ce soir », puis une ligne par partie. */
+.ce-soir { display: flex; flex-direction: column; gap: var(--e3); }
+.ce-soir .lab { color: var(--accent); }
+.ce-soir h2 { margin: 0; font-size: var(--t-carte); font-weight: 800; letter-spacing: -.02em; line-height: 1.2; text-wrap: balance; }
+.ce-soir p { margin: 0; display: flex; align-items: flex-start; gap: var(--e3); font-size: 15px; line-height: 1.35; color: color-mix(in oklab, var(--encre) 82%, transparent); }
+.ce-soir p svg { flex: none; margin-top: 2px; color: var(--discret); }
+.ce-soir p.vite, .ce-soir p.vite svg { color: var(--turquoise-texte); font-weight: 600; }
+.ce-soir-vide { align-self: flex-start; min-height: 44px; padding: 0; border: 0; background: none; font-size: 17px; font-weight: 700; color: var(--accent); text-align: left; }
+.parties { display: flex; flex-direction: column; gap: var(--e4); }
+.partie-tete { display: flex; flex-direction: column; gap: var(--e2); }
 /* Une ligne qui ouvre une page (batch, livre de recettes). */
 .ligne-lien { display: flex; align-items: center; gap: var(--e5); width: 100%; min-height: 64px; padding: 10px 14px; text-align: left; color: var(--encre); }
 .ligne-lien > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
