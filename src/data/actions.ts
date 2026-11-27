@@ -7,6 +7,7 @@ import type { Code, Horaire } from "../lib/horaires";
 import { prochainJour } from "../lib/valider";
 import { NOMS_DEFAUT, db } from "./db";
 import { TABLES_MODULES } from "../sync/genres";
+import { DUREE_JOURNAL } from "../lib/echo/journal";
 
 export function exemples(): Tache[] {
   const t = auJour(), h = new Date().getHours();
@@ -154,6 +155,9 @@ export const viderVieilleCorbeille = (now = Date.now()) => db.transaction("rw", 
   await db.corbeille.bulkDelete(ids);
   await db.photos.where("tacheId").anyOf(ids).delete();
 });
+
+// Au démarrage : le journal d'Echo ne garde que 90 jours.
+export const viderVieuxJournal = (now = Date.now()) => db.echo_journal.where("quand").below(now - DUREE_JOURNAL).delete();
 
 // Changer l'ordre à la main : la tâche se pose avant « avantId » (ou tout en bas), avec Annuler.
 export async function ranger(liste: Tache[], id: string, avantId: string | null, now = new Date()) {

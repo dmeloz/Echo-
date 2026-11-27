@@ -1,6 +1,6 @@
 import { db } from "../../data/db";
 import { auJour, nouvelId, z } from "../dates";
-import { MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_RESULTAT, MAX_TOURS } from "../../../supabase/functions/_shared/echo-outils";
 import { genreFinal, type Action, type ContexteEcho, type Executant } from "./outils";
 
 // La boucle d'Echo. La phrase part au serveur (qui garde la clé et parle à Claude). Claude répond par du texte,
@@ -45,18 +45,21 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
   appeler: Appeler; outils: Record<string, Executant>; seul: boolean;
   // Une action faite sans demander : notée au journal tout de suite.
   noter?: (a: Action, phrase: string, ctx: ContexteEcho) => Promise<Faite>;
+  // Où ranger ce qui est fait sans demander : l'appelant le garde même si un tour suivant échoue (pour proposer Annuler).
+  faites?: Faite[];
 }): Promise<ResultatEcho> {
   const messages: Message[] = [{ role: "user", content: phrase }];
   const sit = situation(ctx);
   const aConfirmer: Action[] = [];
-  const faites: Faite[] = [];
+  const faites: Faite[] = o.faites ?? [];
   let dernierTexte = "";
 
   for (let tour = 0; tour < MAX_TOURS; tour++) {
     const r = await o.appeler({ mode: "agent", situation: sit, messages });
     const blocs = Array.isArray(r.content) ? r.content : [];
     messages.push({ role: "assistant", content: blocs });
-    dernierTexte = texteDe(blocs) || dernierTexte;
+    // La réponse est le texte du dernier tour seulement (« Je regarde. » d'un tour précédent n'est pas une réponse).
+    dernierTexte = texteDe(blocs);
     const demandes = blocs.filter(estOutil);
     if (r.stop_reason !== "tool_use" || !demandes.length) return { reponse: dernierTexte, aConfirmer, faites };
 
@@ -64,8 +67,12 @@ export async function lancerEcho(phrase: string, ctx: ContexteEcho, o: {
     const resultats: ResultatOutil[] = [];
     for (const d of demandes) {
       const ex = o.outils[d.name];
-      const res = (content: unknown, erreur = false): ResultatOutil =>
-        ({ type: "tool_result", tool_use_id: d.id, content: typeof content === "string" ? content : JSON.stringify(content), ...(erreur ? { is_error: true } : {}) });
+      const res = (content: unknown, erreur = false): ResultatOutil => {
+        const c = typeof content === "string" ? content : JSON.stringify(content);
+        // Le serveur refuse un résultat trop long : on le dit à Echo, qui peut demander moins de jours.
+        if (c.length > MAX_RESULTAT) return { type: "tool_result", tool_use_id: d.id, content: "Trop long : demande moins de jours à la fois.", is_error: true };
+        return { type: "tool_result", tool_use_id: d.id, content: c, ...(erreur ? { is_error: true } : {}) };
+      };
       try {
         if (ex?.lire) { resultats.push(res(await ex.lire(d.input, ctx))); continue; }
         if (!ex?.preparer) { resultats.push(res("Outil inconnu.", true)); continue; }

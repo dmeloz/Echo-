@@ -128,6 +128,24 @@ describe("la boucle d'Echo", () => {
     expect(r.aConfirmer[0]).toMatchObject({ outil: "cocher_tache", genre: "gros" });
   });
 
+  it("ajouter pour l'autre, ou lui donner une tâche, est toujours demandé", async () => {
+    await db.taches.add(tache({ titre: "Courses" }));
+    const ajout = await OUTILS_BASE.ajouter_tache.preparer!({ titre: "Pharmacie", jour: "2026-11-27", heure: "", qui: "elle", repete: "", important: false, evenement: false, fin: "", etapes: [] }, ctx);
+    const don = await OUTILS_BASE.modifier_tache.preparer!({ id: "t1", titre: "", jour: "", heure: "", qui: "elle", important: "" }, ctx);
+    expect(ajout).toMatchObject({ genre: "gros" });
+    expect(don).toMatchObject({ genre: "gros" });
+  });
+
+  it("cochée entre-temps par l'autre : Annuler ne défait pas son geste", async () => {
+    await db.taches.add(tache({ titre: "Pharmacie" }));
+    const a = await OUTILS_BASE.cocher_tache.preparer!({ id: "t1" }, ctx);
+    if (typeof a === "string") throw new Error(a);
+    await db.taches.update("t1", { fait: 5, faitLe: "2026-11-26", faitPar: "elle" });
+    const annuler = await a.faire();
+    await annuler();
+    expect((await db.taches.get("t1"))!.fait).toBe(5);
+  });
+
   it("deux actions sur la même tâche : la dernière remplace la première", async () => {
     await db.taches.add(tache({}));
     const m = (jour: string) => outil(jour, "modifier_tache", { id: "t1", titre: "", jour, heure: "", qui: "", important: "" });

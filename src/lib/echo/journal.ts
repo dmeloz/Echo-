@@ -23,5 +23,5 @@ export function nettoyerJournal(x: unknown): LigneJournal | null {
   return { id, quand, par: txt(o.par, 40), demande: txt(o.demande, 1000), action, outil: txt(o.outil, 40), ...(annule ? { annule } : {}) };
 }
 
-// Le journal garde 90 jours.
+// Le journal garde 90 jours : au démarrage, les lignes plus vieilles s'en vont (et partent aussi du foyer).
 export const DUREE_JOURNAL = 90 * 86400_000;

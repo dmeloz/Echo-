@@ -21,7 +21,9 @@ export interface OutilEcho {
 // Au plus 6 allers-retours par demande : au-delà, Echo doit répondre avec ce qu'il a.
 export const MAX_TOURS = 6;
 // Ce qui ne doit pas grossir sans fin : la taille d'une conversation envoyée au serveur.
-export const MAX_MESSAGES = 2 * MAX_TOURS + 2;
+export const MAX_MESSAGES = 2 * MAX_TOURS + 1;
+// La taille d'un résultat d'outil renvoyé à Claude (en caractères). Au-delà, le serveur refuse la demande.
+export const MAX_RESULTAT = 20_000;
 
 const JOUR = { type: "string", description: "AAAA-MM-JJ" };
 const HEURE = { type: "string", description: "HH:MM sur 24 h, ou \"\" si aucune heure" };

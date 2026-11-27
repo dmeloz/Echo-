@@ -65,7 +65,14 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
 
   const confirmer = (r: ResultatEcho, phrase: string) => enregistrer(async () => {
     const faites: Faite[] = [];
-    for (const a of r.aConfirmer) faites.push(await executer(a, phrase, ctx()));
+    try {
+      for (const a of r.aConfirmer) faites.push(await executer(a, phrase, ctx()));
+    } catch (e) {
+      // Rien de fait : la phrase revient (enregistrer). Une partie faite : on ne la refait pas, on propose de l'annuler.
+      if (!faites.length) throw e;
+      proposerAnnuler(faites, `${faites.length} sur ${r.aConfirmer.length} fait${faites.length > 1 ? "s" : ""}, la suite n'a pas marché`);
+      return;
+    }
     proposerAnnuler(faites, faites.length > 1 ? `${faites.length} choses faites` : "C'est fait");
   }, texte);
 
@@ -73,13 +80,20 @@ export function BarreAjout({ noms, proprio, ouverte, ecoute, texte, saisie, onTe
     const num = ++demande.current;
     const phrase = v;
     setEcho({ etat: "pense" });
+    const dejaFaites: Faite[] = [];
     try {
-      const r = await lancerEcho(phrase, ctx(), { appeler: appelerServeur(code), outils: outilsEcho(actifs), seul, noter: executer });
+      const r = await lancerEcho(phrase, ctx(), { appeler: appelerServeur(code), outils: outilsEcho(actifs), seul, noter: executer, faites: dejaFaites });
       if (num !== demande.current) { if (r.faites.length) proposerAnnuler(r.faites, "Echo a fait des choses pendant ce temps"); return; }
       if (r.faites.length) proposerAnnuler(r.faites, r.faites.length > 1 ? `Echo a fait ${r.faites.length} choses` : "Echo l'a fait");
       if (!r.aConfirmer.length && !r.reponse) { setEcho(null); setTexte(""); onRanger(); return; }
       setEcho({ etat: "propose", r, phrase });
     } catch (e) {
+      // Echo a fait des petites choses avant de s'arrêter : on le dit, avec Annuler, et on ne repasse pas en mode simple (doublons).
+      if (dejaFaites.length) {
+        proposerAnnuler(dejaFaites, `Echo s'est arrêté en route après ${dejaFaites.length} chose${dejaFaites.length > 1 ? "s" : ""} faite${dejaFaites.length > 1 ? "s" : ""}`);
+        if (num === demande.current) { setEcho(null); setTexte(""); onRanger(); }
+        return;
+      }
       if (num !== demande.current) return;
       setEcho(null); setSimple(true);
       toast(`${e instanceof ErreurEcho ? e.message : "Echo ne répond pas."} Je reprends la version simple : touche ✓ pour ajouter.`, { duration: 6000 });

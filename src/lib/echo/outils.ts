@@ -90,7 +90,7 @@ function ajouterTache(e: Record<string, unknown>, ctx: ContexteEcho): Action | s
   if (etapes.length) b.etapes = etapes.map((texte, i) => ({ id: nouvelId() + i, texte, fait: false }));
   if (evt) { b.evt = true; if (fin) b.fin = fin; }
   return {
-    outil: "ajouter_tache", genre: "petit", libelle: `${evt ? "Rendez-vous" : "Ajouter"} : ${titre}`,
+    outil: "ajouter_tache", genre: qui === autre(ctx.proprio) ? "gros" : "petit", libelle: `${evt ? "Rendez-vous" : "Ajouter"} : ${titre}`,
     details: [libelleJour(jour, ctx.now), heure ? heureFr(heure) + (fin ? ` – ${heureFr(fin)}` : "") : "", nomDe(ctx.noms, qui),
       repete ? "revient" : "", b.niveau === 2 ? "important" : "", etapes.length ? `${etapes.length} étape${etapes.length > 1 ? "s" : ""}` : ""].filter(Boolean),
     brouillon: b,
@@ -143,12 +143,15 @@ async function modifierTache(e: Record<string, unknown>, ctx: ContexteEcho): Pro
     maj.titre ? `renommée « ${maj.titre} »` : "",
     maj.jour || maj.heure !== undefined ? `→ ${quand(maj.jour ?? t.jour, maj.heure ?? t.heure, ctx.now)}` : "",
     maj.qui ? `pour ${nomDe(ctx.noms, maj.qui)}` : "",
-    maj.niveau === 2 ? "important" : maj.niveau === 1 ? "plus important" : "",
+    maj.niveau === 2 ? "important" : maj.niveau === 1 ? "n'est plus important" : "",
   ].filter(Boolean);
-  const avant: Partial<Tache> = Object.fromEntries(Object.keys(maj).map((k) => [k, t[k as keyof Tache]]));
   return {
-    outil: "modifier_tache", genre: genrePour(t, ctx), cible: t.id, libelle: `Changer : ${t.titre}`, details: changes,
+    outil: "modifier_tache", genre: maj.qui === autre(ctx.proprio) ? "gros" : genrePour(t, ctx), cible: t.id, libelle: `Changer : ${t.titre}`, details: changes,
     faire: async () => {
+      // Ce qu'Annuler remettra : la tâche telle qu'elle est au moment du oui (elle a pu changer depuis la proposition).
+      const actuelle = await db.taches.get(t.id);
+      if (!actuelle) throw new Error("tâche disparue");
+      const avant: Partial<Tache> = Object.fromEntries(Object.keys(maj).map((k) => [k, actuelle[k as keyof Tache]]));
       await db.taches.update(t.id, maj);
       return () => db.taches.update(t.id, avant);
     },
@@ -163,8 +166,9 @@ async function cocherTache(e: Record<string, unknown>, ctx: ContexteEcho): Promi
   return {
     outil: "cocher_tache", genre: genrePour(t, ctx), cible: t.id, libelle: `Fait : ${t.titre}`, details: [libelleJour(t.jour, ctx.now)],
     faire: async () => {
-      await marquerFait(t.id);
-      return () => decocher(t.id);
+      // Déjà cochée entre-temps (par l'autre, par exemple) : Annuler ne doit pas défaire son geste.
+      const fait = await marquerFait(t.id);
+      return fait ? () => decocher(t.id) : async () => {};
     },
   };
 }
@@ -175,8 +179,8 @@ async function supprimerTache(e: Record<string, unknown>, ctx: ContexteEcho): Pr
   return {
     outil: "supprimer_tache", genre: "gros", cible: t.id, libelle: `Effacer : ${t.titre}`, details: [quand(t.jour, t.heure, ctx.now), nomDe(ctx.noms, t.qui)],
     faire: async () => {
-      await mettreCorbeille(t.id);
-      return () => remettre(t.id);
+      const fait = await mettreCorbeille(t.id);
+      return fait ? () => remettre(t.id) : async () => {};
     },
   };
 }
