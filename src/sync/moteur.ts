@@ -19,6 +19,18 @@ export interface Membre { userId: string; prenom: string; place: Personne }
 type Ligne = { genre: string; cle: string; data: unknown; supprime: boolean; par: string | null; maj: string };
 
 const CURSEUR = "echo-curseur"; // l'heure (serveur) du dernier changement reçu
+const CONNUS = "echo-genres"; // les genres que cette version sait lire
+// Une version plus ancienne laisse passer les genres qu'elle ne connaît pas, et son curseur avance quand même.
+// Quand une nouvelle version sait en lire de nouveaux (un module de plus), on relit tout le foyer une fois.
+export function relireSiNouveauxGenres(genres = Object.keys(GENRES)) {
+  const liste = [...genres].sort().join(",");
+  try {
+    if (localStorage.getItem(CONNUS) === liste) return false;
+    localStorage.removeItem(CURSEUR);
+    localStorage.setItem(CONNUS, liste);
+    return true;
+  } catch { return false; }
+}
 let foyer: Foyer | null = null;
 let canal: RealtimeChannel | null = null;
 
@@ -181,6 +193,7 @@ async function envoyer() {
 
 async function recevoir() {
   if (!foyer || !navigator.onLine) return;
+  relireSiNouveauxGenres();
   let curseur: string | null = null;
   try { curseur = localStorage.getItem(CURSEUR); } catch { /* rien */ }
   const premier = !curseur;
