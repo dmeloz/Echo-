@@ -14,6 +14,7 @@ export interface ContexteModule {
   now: Date;
   aller: (id: string) => void;
   ouvrir: (t: Tache) => void; // ouvre la feuille d'une tâche (la feuille appartient à la base)
+  creer?: (pre: { jour: string; heure?: string }) => void; // ouvre la feuille d'une nouvelle tâche, déjà réglée sur ce jour (et cette heure)
 }
 
 // Une phrase prise par un module : ce qu'on montre avant d'envoyer, et ce qui se passe à l'envoi.

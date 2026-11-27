@@ -1109,3 +1109,9 @@ button.jour-repas:active { background: rgb(255 255 255 / .55); }
 .ligne-journee svg:last-child { color: var(--discret); }
 .ligne-journee:active { scale: .98; }
 .planning-jour .ligne-journee { margin: var(--e4) 0; }
+/* Un trou de la journée : une ligne en pointillés, calme, qui ouvre l'ajout réglé sur cette heure. */
+.lt-libre button { display: flex; align-items: center; justify-content: space-between; gap: var(--e4); min-height: 44px; width: 100%; padding: 8px 14px; border-radius: 16px; border: 1.5px dashed rgb(18 40 58 / .16); background: none; font-size: 14px; color: var(--discret); text-align: left; }
+.lt-libre button b { color: var(--bleu); font-weight: 700; }
+.lt-libre button:active { background: rgb(255 255 255 / .6); }
+.aide-fermable { display: flex; align-items: center; gap: var(--e4); }
+.aide-fermable .bouton-texte { flex: none; }
