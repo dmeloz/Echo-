@@ -28,7 +28,7 @@ export const maison: Module = {
     const nouvelle = /^\s*(?:nouvelle\s+)?corv[ée]e\s*:?\s+(.+)$/i.exec(texte);
     const lu = nouvelle && lireCorvee(nouvelle[1]);
     if (lu) return { titre: lu.nom, ou: "Maison", faire: () => ajouterCorvees([lu]) };
-    const casse = /^\s*(?:[àa]\s+)?r[ée]parer\s*:?\s+(.+)$/i.exec(texte);
+    const casse = /^\s*[àa]\s+r[ée]parer\s*:?\s+(.+)$/i.exec(texte);
     if (casse) return { titre: casse[1].trim(), ou: "Maison, à réparer", faire: () => ajouterReparation(casse[1]) };
     const faites = ditFait(texte) ? trouverCorvees(texte, connues) : [];
     if (!faites.length) return null;

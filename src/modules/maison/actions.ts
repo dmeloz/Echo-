@@ -86,8 +86,9 @@ export async function ajouterReparation(nom: string, x: { note?: string; apparei
 }
 // Changer l'état : « Réparé » garde la date, et la ligne quitte la liste (avec Annuler).
 export async function etatReparation(r: Reparation, etat: EtatReparation) {
-  await db.maison_reparations.put({ ...r, etat, fini: etat === 3 ? Date.now() : undefined });
-  if (etat === 3) toast(`${r.nom} : réparé`, annuler(() => db.maison_reparations.put(r)));
+  // Seuls l'état et la date changent : une note écrite juste avant n'est pas écrasée.
+  await db.maison_reparations.update(r.id, { etat, fini: etat === 3 ? Date.now() : undefined });
+  if (etat === 3) toast(`${r.nom} : réparé`, annuler(() => db.maison_reparations.update(r.id, { etat: r.etat, fini: r.fini })));
 }
 export const changerReparation = (id: string, x: Partial<Pick<Reparation, "note" | "appareil">>) => db.maison_reparations.update(id, x);
 export async function retirerReparation(r: Reparation) {

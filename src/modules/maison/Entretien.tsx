@@ -12,10 +12,10 @@ import { ETATS_REPARATION, GARANTIES, aFaire, gestesPour, jourDu, lireContact, l
 // L'entretien : ce qui est cassé en haut, ce qui s'entretient en dessous, puis les appareils et les contacts.
 
 // Un champ qui s'écrit tout seul : enregistré quand on le quitte.
-function Champ({ nom, valeur, onChange, ...reste }: { nom: string; valeur: string; onChange: (v: string) => void; type?: string; maxLength?: number; inputMode?: "tel"; placeholder?: string }) {
+function Champ({ nom, valeur, onChange, garde = (x) => x, ...reste }: { nom: string; valeur: string; onChange: (v: string) => void; garde?: (v: string) => string; type?: string; maxLength?: number; inputMode?: "tel"; placeholder?: string }) {
   const [v, setV] = useState(valeur);
   useEffect(() => setV(valeur), [valeur]);
-  return <input aria-label={nom} value={v} onChange={(e) => setV(e.target.value)} onBlur={() => { if (v.trim() !== valeur) onChange(v.trim()); }} enterKeyHint="done" {...reste} />;
+  return <input aria-label={nom} value={v} onChange={(e) => setV(garde(e.target.value))} onBlur={() => { if (v.trim() !== valeur) onChange(v.trim()); }} enterKeyHint="done" {...reste} />;
 }
 // La petite barre « Ajouter » en bas d'une liste.
 function Ajout({ id, nom, exemple, onAjout }: { id: string; nom: string; exemple: string; onAjout: (texte: string) => void }) {
@@ -117,7 +117,7 @@ function Carnet({ appareils, contacts, gestes, reparations, now, onQuitter }: { 
               {ouvert === c.id && (
                 <div className="stock-plus">
                   <Champ nom="Qui c'est" valeur={c.role} maxLength={30} placeholder="Qui c'est : « régie », « plombier »" onChange={(role) => changerContact(c.id, { role })} />
-                  <Champ nom="Téléphone" valeur={c.tel} type="tel" inputMode="tel" maxLength={20} placeholder="Téléphone" onChange={(tel) => changerContact(c.id, { tel: tel.replace(/[^\d+ ]/g, "") })} />
+                  <Champ nom="Téléphone" valeur={c.tel} type="tel" inputMode="tel" maxLength={20} placeholder="Téléphone" garde={(t) => t.replace(/[^\d+ ]/g, "")} onChange={(tel) => changerContact(c.id, { tel })} />
                   <button type="button" className="bouton-texte danger" onClick={() => { setOuvert(null); retirerContact(c); }}>Retirer</button>
                 </div>
               )}

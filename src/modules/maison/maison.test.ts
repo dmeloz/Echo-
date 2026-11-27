@@ -238,11 +238,13 @@ describe("l'entretien", () => {
     const r = (await ajouterReparation("le robinet goutte"))!;
     expect(r).toMatchObject({ nom: "Le robinet goutte", etat: 1 });
     expect(await ajouterReparation("Le robinet goutte")).toBeNull();
-    await etatReparation(r, 3);
-    expect((await db.maison_reparations.get(r.id))!).toMatchObject({ etat: 3, fini: expect.any(Number) });
+    await db.maison_reparations.update(r.id, { note: "régie prévenue" });
+    await etatReparation(r, 3); // la ligne à l'écran n'a pas encore la note : elle ne doit pas se perdre
+    expect((await db.maison_reparations.get(r.id))!).toMatchObject({ etat: 3, fini: expect.any(Number), note: "régie prévenue" });
     expect(await ajouterReparation("le robinet goutte", {}, true)).not.toBeNull(); // réparée : la même panne peut revenir
     await annuler();
-    expect((await db.maison_reparations.get(r.id))!.etat).toBe(1);
+    expect((await db.maison_reparations.get(r.id))!).toMatchObject({ etat: 1, note: "régie prévenue" });
+    expect(maison.comprendre!("Réparer le vélo samedi")).toBeNull(); // sans « à réparer », c'est une tâche
   });
   it("les réparations finies depuis plus d'un an sont rangées", async () => {
     await db.maison_reparations.bulkAdd([
