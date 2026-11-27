@@ -1,0 +1,67 @@
+import { db } from "../../data/db";
+import type { Action, Executant } from "../../lib/echo/outils";
+import { autre, type Personne } from "../../lib/types";
+import { ajouterCorvees, faireCorvee } from "./actions";
+import { besoin, depuis, equilibre, nomRythme, parts, pour, trouverCorvees, type Corvee, type QuiCorvee, type Taille } from "./donnees";
+
+// Ce que l'assistant Echo peut faire dans la Maison (décrit dans supabase/functions/_shared/echo-outils.ts).
+const court = (s: unknown, n: number) => (typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, n) : "");
+const ETATS = ["", "peut attendre", "bientôt", "à faire aujourd'hui"];
+const TAILLES: Record<string, Taille> = { vite: 1, moyen: 2, gros: 3 };
+const QUIS: QuiCorvee[] = ["moi", "elle", "tour", "echo"];
+
+export const OUTILS_MAISON: Record<string, Executant> = {
+  voir_maison: {
+    lire: async (_e, ctx) => {
+      const corvees = await db.maison_corvees.toArray();
+      const e = equilibre(await db.maison_faits.toArray(), ctx.now.getTime()), p = parts(e);
+      return {
+        corvees: corvees.map((c) => ({
+          nom: c.nom, ...(c.piece ? { piece: c.piece } : {}), etat: ETATS[besoin(c, ctx.now)], pour: ctx.noms[pour(c, e)], revient: nomRythme(c.tous).toLowerCase(),
+          ...(c.fait ? { derniereFois: [depuis(c, ctx.now), c.par ? `par ${ctx.noms[c.par]}` : ""].filter(Boolean).join(" ") } : {}),
+        })),
+        equilibreSur4Semaines: e.moi + e.elle ? { [ctx.noms.moi]: `${p.moi} %`, [ctx.noms.elle]: `${p.elle} %` } : "rien de noté encore",
+      };
+    },
+  },
+  corvee_faite: {
+    preparer: async (e, ctx): Promise<Action | string> => {
+      const dits = (Array.isArray(e.corvees) ? e.corvees : []).map((x) => court(x, 80)).filter(Boolean).slice(0, 10);
+      const toutes = await db.maison_corvees.toArray();
+      const trouvees: Corvee[] = [];
+      for (const d of dits) {
+        const c = trouverCorvees(d, toutes)[0];
+        if (!c) return `Pas de corvée « ${d} » dans la liste. Regarde les noms avec voir_maison.`;
+        if (!trouvees.includes(c)) trouvees.push(c);
+      }
+      if (!trouvees.length) return "Donne au moins une corvée.";
+      const par: Personne = e.par === "moi" || e.par === "elle" ? e.par : ctx.proprio;
+      return {
+        // Cocher à la place de l'autre : toujours demandé.
+        outil: "corvee_faite", genre: par === autre(ctx.proprio) ? "gros" : "petit",
+        libelle: `Fait : ${trouvees.map((c) => c.nom).join(", ")}`, details: [`par ${ctx.noms[par]}`],
+        faire: async () => {
+          const defaire: Array<(() => Promise<void>) | null> = [];
+          for (const c of trouvees) defaire.push(await faireCorvee(c.id, par));
+          return async () => { for (const d of defaire.reverse()) await d?.(); };
+        },
+      };
+    },
+  },
+  ajouter_corvee: {
+    preparer: async (e): Promise<Action | string> => {
+      const nom = court(e.nom, 80), tous = Number(e.tousLesJours);
+      if (!nom) return "Donne le nom de la corvée.";
+      if (!Number.isInteger(tous) || tous < 1 || tous > 365) return "tousLesJours : un nombre de jours entre 1 et 365.";
+      if (trouverCorvees(nom, await db.maison_corvees.toArray()).some((c) => c.nom.toLowerCase() === nom.toLowerCase())) return `« ${nom} » est déjà dans les corvées.`;
+      const qui = QUIS.find((q) => q === e.qui) ?? "tour";
+      return {
+        outil: "ajouter_corvee", genre: "petit", libelle: `Corvée : ${nom}`, details: [nomRythme(tous).toLowerCase()],
+        faire: async () => {
+          const ajoutees = await ajouterCorvees([{ nom: nom[0].toUpperCase() + nom.slice(1), tous, taille: TAILLES[String(e.taille)] ?? 2, qui, piece: court(e.piece, 30) }], true);
+          return () => db.maison_corvees.bulkDelete(ajoutees.map((c) => c.id));
+        },
+      };
+    },
+  },
+};

@@ -2,6 +2,7 @@ import Dexie, { type EntityTable } from "dexie";
 import type { Noms, Tache } from "../lib/types";
 import type { Horaire } from "../lib/horaires";
 import type { Article, Gouts, Habitude, Batch, Produit, Recette, Repas, Ticket } from "../modules/cuisine/donnees";
+import type { Corvee, Fait } from "../modules/maison/donnees";
 import type { LigneJournal } from "../lib/echo/journal";
 import type { Souvenir } from "../lib/echo/memoire";
 
@@ -26,6 +27,9 @@ export const db = new Dexie("echo") as Dexie & {
   cuisine_tickets: EntityTable<Ticket, "id">;
   cuisine_batch: EntityTable<Batch, "semaine">;
   cuisine_recettes: EntityTable<Recette, "cle">;
+  // Le module Maison : les corvées, et une ligne par corvée faite (pour l'équilibre entre les deux).
+  maison_corvees: EntityTable<Corvee, "id">;
+  maison_faits: EntityTable<Fait, "id">;
   // Le journal d'Echo : ce que l'assistant a fait, partagé au foyer.
   echo_journal: EntityTable<LigneJournal, "id">;
   echo_memoire: EntityTable<Souvenir, "id">;
@@ -39,6 +43,7 @@ db.version(6).stores({ cuisine_tickets: "id" }); // les tickets de caisse lus pa
 db.version(7).stores({ echo_journal: "id, quand" });
 db.version(8).stores({ echo_memoire: "id, quand" }); // la mémoire d'Echo
 db.version(9).stores({ cuisine_batch: "semaine", cuisine_recettes: "cle" }); // le plan du batch par semaine, le livre de recettes
+db.version(10).stores({ maison_corvees: "id", maison_faits: "id, quand" });
 
 export const NOMS_DEFAUT: Noms = { moi: "Dany", elle: "Sarah" };
 
