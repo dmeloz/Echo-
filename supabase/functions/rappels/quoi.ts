@@ -2,6 +2,8 @@
 
 export interface Abonne { id: string; place: "moi" | "elle"; fuseau: string; aLHeure: boolean; matin: string | null }
 export interface TacheLue { id: string; titre: string; jour: string; heure: string; qui: "moi" | "elle" | "nous"; fait: number | null; evt?: boolean }
+// Un papier du foyer (Maison → Papiers) : ce qu'il y a à faire, pour quand, et le montant en centimes s'il faut payer.
+export interface PapierLu { id: string; titre: string; quoi: string; echeance?: string; fait?: string; montant?: number }
 export interface Envoi { cle: string; titre: string; texte: string; tag: string }
 
 export const FENETRE = 5; // minutes : un rappel part dans les 5 minutes qui suivent son heure (si un passage a été manqué)
@@ -17,7 +19,13 @@ export function chezLui(now: Date, fuseau: string): { jour: string; minutes: num
 
 const due = (heure: string, maintenant: number) => { const e = maintenant - min(heure); return e >= 0 && e < FENETRE; };
 
-export function aEnvoyer(a: Abonne, taches: TacheLue[], now: Date): Envoi[] {
+// Un papier est rappelé le matin 7 jours avant, la veille, et le jour même. Les papiers sont à tout le foyer : chacun est prévenu.
+export const AVANT_PAPIER = [7, 1, 0];
+const QUOI_PAPIER: Record<string, string> = { payer: "à payer", renouveler: "à renouveler", resilier: "à résilier", repondre: "à répondre" };
+const ecartJours = (de: string, a: string) => Math.round((Date.parse(`${a}T12:00:00Z`) - Date.parse(`${de}T12:00:00Z`)) / 86_400_000);
+const francs = (c: number) => `${Math.floor(c / 100)}.${String(c % 100).padStart(2, "0")} CHF`;
+
+export function aEnvoyer(a: Abonne, taches: TacheLue[], now: Date, papiers: PapierLu[] = []): Envoi[] {
   let ici: { jour: string; minutes: number };
   try { ici = chezLui(now, a.fuseau); } catch { ici = chezLui(now, "Europe/Zurich"); }
   const miennes = taches.filter((t) => !t.fait && (t.qui === a.place || t.qui === "nous"));
@@ -41,6 +49,20 @@ export function aEnvoyer(a: Abonne, taches: TacheLue[], now: Date): Envoi[] {
         titre: n === 1 ? "Une chose à faire aujourd'hui" : `${n} choses à faire aujourd'hui`,
         texte: `${n === 1 ? "" : "En premier : "}${premiere.titre}${premiere.heure ? ` à ${heureFr(premiere.heure)}` : ""}`,
         tag: "matin",
+      });
+    }
+  }
+  if (a.matin && due(a.matin, ici.minutes)) {
+    for (const p of papiers) {
+      if (!p || typeof p.titre !== "string" || !QUOI_PAPIER[p.quoi] || p.fait || typeof p.echeance !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(p.echeance)) continue;
+      const n = ecartJours(ici.jour, p.echeance);
+      if (!AVANT_PAPIER.includes(n)) continue;
+      const quand = n === 0 ? "aujourd'hui" : n === 1 ? "demain" : `dans ${n} jours`;
+      envois.push({
+        cle: `p|${a.id}|${p.id}|${p.echeance}|${n}`,
+        titre: `${p.titre} : ${QUOI_PAPIER[p.quoi]} ${quand}`,
+        texte: p.quoi === "payer" && typeof p.montant === "number" && Number.isInteger(p.montant) && p.montant > 0 ? francs(p.montant) : "Dans Maison, Papiers",
+        tag: `papier-${p.id}`,
       });
     }
   }

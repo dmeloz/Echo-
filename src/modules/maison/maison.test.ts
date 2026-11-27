@@ -11,7 +11,7 @@ import { db } from "../../data/db";
 import { lireFile } from "../../sync/file";
 import { appliquer } from "../../sync/moteur";
 import { ajouterAppareil, ajouterContact, ajouterCorvees, ajouterPapier, ajouterPhotosPapier, changerPapier, retirerPapierSansBruit, retirerPhotoPapier, ajouterReparation, papierFait, retirerPapier, cocherCorvee, etatReparation, faireCorvee, rangerFaits, rangerReparations, reporterCorvee, retirerCorvee } from "./actions";
-import { aPayer, apresFait, bientot, devinerDossier, lireMontant, lirePapier, nettoyerPapier, quandPapier, texteMontant, type Papier, aFaire, besoin, deborde, ditFait, equilibre, gestesPour, jourDu, lireContact, lireCorvee, nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation, nomRythme, parts, pour, pourMoi, texteGarantie, trouverCorvees, type Corvee } from "./donnees";
+import { papiersDu, aPayer, apresFait, bientot, devinerDossier, lireMontant, lirePapier, nettoyerPapier, quandPapier, texteMontant, type Papier, aFaire, besoin, deborde, ditFait, equilibre, gestesPour, jourDu, lireContact, lireCorvee, nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerReparation, nomRythme, parts, pour, pourMoi, texteGarantie, trouverCorvees, type Corvee } from "./donnees";
 import { maison } from "./index";
 import { OUTILS_MAISON } from "./outilsEcho";
 
@@ -452,6 +452,12 @@ describe("les papiers", () => {
     suivreBudget(); await budgetSuivi();
     expect((await base.budget_apayer.toArray()).map((l) => l.id)).toEqual(["papier:vieux"]);
     expect((await base.reglages.get("maisonBudgetRelie"))?.valeur).toBe(true);
+  });
+  it("la ligne de la journée : ce qui tombe ce jour-là, les retards aujourd'hui, pas les factures chiffrées", () => {
+    const l = [papier({ id: "a", quoi: "renouveler", montant: undefined, echeance: "2026-11-27" }), papier({ id: "b", quoi: "repondre", montant: undefined, echeance: "2026-11-20" }),
+      papier({ id: "c" , echeance: "2026-11-27" }), papier({ id: "d", quoi: "resilier", montant: undefined, echeance: "2026-11-30" }), papier({ id: "e", quoi: "renouveler", montant: undefined, echeance: "2026-11-27", fait: "2026-11-26" })];
+    expect(papiersDu(l, "2026-11-27", "2026-11-27").map((p) => p.id)).toEqual(["b", "a"]);
+    expect(papiersDu(l, "2026-11-30", "2026-11-27").map((p) => p.id)).toEqual(["d"]);
   });
   it("donne au Budget la ligne à payer convenue", () => {
     expect(aPayer(papier({ emetteur: "Swisscom", repete: "mois" }))).toEqual({ id: "papier:p1:2026-12-15", titre: "Facture Swisscom", emetteur: "Swisscom", montant: 8990, echeance: "2026-12-15", repete: "mois", dossier: "abonnements", papier: "p1", paye: false });
