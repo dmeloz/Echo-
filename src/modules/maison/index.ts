@@ -9,10 +9,14 @@ import { ReglagesMaison } from "./ReglagesMaison";
 import { TuileMaison } from "./Tuile";
 import { JourneeMaison } from "./Journee";
 import { OUTILS_MAISON } from "./outilsEcho";
+import { suivreBudget } from "./lienBudget";
 
 // La barre d'Echo lit une phrase sans attendre : on garde sous la main les corvées connues (tenues à jour par la base).
 let connues: Corvee[] = [];
 liveQuery(() => db.maison_corvees.toArray()).subscribe({ next: (c) => { connues = c; }, error: () => {} });
+
+// Une facture payée dans le Budget coche son papier.
+suivreBudget();
 
 export const maison: Module = {
   id: "maison",
