@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronLeft, ChevronRight, Plus, Users } from "pulsoicon-react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { db } from "../../data/db";
 import { poserReglage, useReglage } from "../../data/hooks";
@@ -377,7 +377,7 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
   const [depense, setDepense] = useState(false);
   const [solde, setSolde] = useState<CompteSolde | null>(null);
   const [groupe, setGroupe] = useState<string | null>(null);
-  useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie, chacun, entreNous, point]);
+  useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie, chacun, entreNous, point, decalage]);
   // Le geste « retour » de l'app (glisser vers la droite) ferme le détail de chacun.
   useEffect(() => { const retour = () => { setChacun(null); setGroupe(null); setEntreNous(false); setPoint(false); }; window.addEventListener("echo-retour", retour); return () => window.removeEventListener("echo-retour", retour); }, []);
 
@@ -440,12 +440,13 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
           <Users size={19} strokeWidth={1.8} />{aRendre > 0 && <i aria-hidden="true" />}
         </button>
       </div>
-      {/* key : la partie se redessine au changement de mois (le lot « Mouvement » la fait alors glisser du bon côté). Les feuilles restent en dehors. */}
-      <div className="budget-partie" key={mois}>
+      {/* key : la partie se redessine au changement de mois (le lot « Mouvement » la fait alors glisser du bon côté).
+          Un Fragment, pour que ses blocs restent des enfants directs de la page (l'arrivée en cascade). Les feuilles restent en dehors. */}
+      <Fragment key={mois}>
       {partie === "charges" ? <Charges {...vue} onChacun={setChacun} onNouveau={setNouveau} onGroupe={setGroupe} />
         : partie === "comptes" ? <Comptes {...vue} soldes={soldes} onSolde={setSolde} onNouveau={setNouveau} />
         : <Mois {...vue} depenses={depenses} categories={categories} apayer={apayer} today={today} onChacun={setChacun} onPartie={(p) => poserReglage("budgetPartie", p)} onPoint={() => setPoint(true)} />}
-      </div>
+      </Fragment>
       {feuilles}
     </>
   );
