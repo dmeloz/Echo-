@@ -18,6 +18,7 @@ export function Repartir({ corvees, noms, proprio, now, onQuitter }: Pick<Contex
   const faits = useLiveQuery(() => db.maison_faits.toArray(), [], undefined);
   const prop = useMemo(() => (faits ? repartir(corvees, horaires, faits, now) : null), [corvees, horaires, faits, now]);
   const [changes, setChanges] = useState<Record<string, Personne>>({});
+  const [envoi, setEnvoi] = useState(false);
   useEffect(() => {
     addEventListener("echo-retour", onQuitter);
     return () => removeEventListener("echo-retour", onQuitter);
@@ -29,10 +30,12 @@ export function Repartir({ corvees, noms, proprio, now, onQuitter }: Pick<Contex
   const parts = prop.parts.map((p) => ({ ...p, qui: changes[p.corvee.id] ?? p.qui }));
   const m = minutesDeChacun(parts);
   const prenom = (p: Personne) => (p === proprio ? "Toi" : noms[p]);
+  const aRepartir = parts.filter((p) => !p.fixe);
   const valider = async () => {
+    if (envoi) return; // un double toucher n'écrit pas deux fois (l'Annuler resterait sur la mauvaise version)
+    setEnvoi(true);
     vibrer(12);
-    await poserRepartition(parts.filter((p) => !p.fixe).map((p) => ({ id: p.corvee.id, qui: p.qui })), prop.jusqu);
-    onQuitter();
+    try { await poserRepartition(aRepartir.map((p) => ({ id: p.corvee.id, qui: p.qui })), prop.jusqu); onQuitter(); } finally { setEnvoi(false); }
   };
   const sansHoraires = !prop.travail.moi && !prop.travail.elle;
 
@@ -66,7 +69,7 @@ export function Repartir({ corvees, noms, proprio, now, onQuitter }: Pick<Contex
           <p className="aide-champ">Pour la semaine : {noms[proprio]} {m[proprio]} min, {noms[l_autre]} {m[l_autre]} min. Jusqu'à {libelleJour(prop.jusqu, now).toLowerCase()}, puis tout redevient libre.</p>
           <div className="rangee gouts-pied">
             <button type="button" className="bouton-texte" onClick={onQuitter}>Plus tard</button>
-            <button type="button" className="bouton" onClick={valider}>Valider</button>
+            {aRepartir.length > 0 && <button type="button" className="bouton" disabled={envoi} onClick={valider}>Valider</button>}
           </div>
         </>
       )}

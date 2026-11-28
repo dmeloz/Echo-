@@ -2,7 +2,7 @@ import { db } from "../../data/db";
 import type { Action, Executant } from "../../lib/echo/outils";
 import { autre, type Personne } from "../../lib/types";
 import { ajouterCorvees, ajouterPapier, ajouterReparation, faireCorvee, memeNom, retirerPapierSansBruit } from "./actions";
-import { DOSSIERS, ETATS_REPARATION, QUOIS, REPETES, aFairePapier, besoin, depuis, devinerDossier, equilibre, joursAvant, nomDossier, nomRythme, parts, pour, quandPapier, texteMontant, trouverCorvees, vraiJour, type Corvee, type QuiCorvee, type Taille } from "./donnees";
+import { DOSSIERS, ETATS_REPARATION, QUOIS, REPETES, aFairePapier, besoin, depuis, devinerDossier, equilibre, joursAvant, nomDossier, nomRythme, parts, quandPapier, texteMontant, trouverCorvees, vraiJour, type Corvee, type QuiCorvee, type Taille, prisPar } from "./donnees";
 
 // Ce que l'assistant Echo peut faire dans la Maison (décrit dans supabase/functions/_shared/echo-outils.ts).
 const court = (s: unknown, n: number) => (typeof s === "string" ? s.replace(/\s+/g, " ").trim().slice(0, n) : "");
@@ -17,7 +17,7 @@ export const OUTILS_MAISON: Record<string, Executant> = {
       const e = equilibre(await db.maison_faits.toArray(), ctx.now.getTime()), p = parts(e);
       return {
         corvees: corvees.map((c) => ({
-          nom: c.nom, ...(c.entretien ? { entretien: true } : {}), ...(c.piece ? { piece: c.piece } : {}), etat: ETATS[besoin(c, ctx.now)], pour: pour(c) ? ctx.noms[pour(c)!] : "libre (celui qui la fait)", revient: nomRythme(c.tous).toLowerCase(),
+          nom: c.nom, ...(c.entretien ? { entretien: true } : {}), ...(c.piece ? { piece: c.piece } : {}), etat: ETATS[besoin(c, ctx.now)], pour: c.qui === "moi" || c.qui === "elle" ? ctx.noms[c.qui] : "libre (celui qui la fait)", ...(prisPar(c, ctx.now) ? { cetteSemaine: `${ctx.noms[prisPar(c, ctx.now)!]}, jusqu'au ${c.prisJusqu}` } : {}), revient: nomRythme(c.tous).toLowerCase(),
           ...(c.fait ? { derniereFois: [depuis(c, ctx.now), c.par ? `par ${ctx.noms[c.par]}` : ""].filter(Boolean).join(" ") } : {}),
         })),
         aReparer: (await db.maison_reparations.toArray()).filter((r) => r.etat < 3).map((r) => ({ nom: r.nom, etat: ETATS_REPARATION[r.etat - 1].nom.toLowerCase(), ...(r.note ? { note: r.note } : {}) })),

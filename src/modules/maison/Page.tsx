@@ -121,7 +121,7 @@ export function PageMaison(ctx: ContexteModule) {
           {texte.trim() && <button type="submit" className="rond-champ plein" aria-label="Ajouter la corvée"><Plus size={20} strokeWidth={2.4} /></button>}
         </form>
       )}
-      {corvees.some((c) => c.qui === "libre") && (
+      {corvees.some((c) => c.qui !== "moi" && c.qui !== "elle") && (
         <div className="rangee repartir-pied">
           <button type="button" className="bouton second" onClick={() => { vibrer(); setRepartir(true); }}>Répartir la semaine</button>
         </div>

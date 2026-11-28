@@ -49,3 +49,15 @@ describe("Maison : une corvée prise pour la semaine", () => {
     expect(nettoyerCorvee({ ...c({}), pris: "lui", prisJusqu: "2026-12-06" })).not.toHaveProperty("pris");
   });
 });
+
+describe("Maison : répartir, cas de bord", () => {
+  it("des horaires pour un seul des deux ne donnent pas tout à l'autre", () => {
+    const corvees = ["A", "B", "C", "D"].map((nom) => c({ nom, taille: 2 }));
+    expect(minutesDeChacun(repartir(corvees, travaille("elle", [0, 1, 2, 3, 4]), [], now).parts)).toEqual({ moi: 30, elle: 30 });
+  });
+  it("garde ce qui a déjà été réparti cette semaine", () => {
+    const corvees = [c({ nom: "A", taille: 3, pris: "elle", prisJusqu: jour(6) }), c({ nom: "B", taille: 3 })];
+    const p = repartir(corvees, [], [], now);
+    expect(Object.fromEntries(p.parts.map((x) => [x.corvee.nom, x.qui]))).toEqual({ A: "elle", B: "moi" });
+  });
+});
