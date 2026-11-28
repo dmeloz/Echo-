@@ -459,10 +459,24 @@ describe("le résumé du matin", () => {
       "2 choses en retard (140) : Amende, Dentiste.", // la plus ancienne d'abord
     ]);
     expect(matinBudget([ligne("a", "Garage", "2026-12-10", 45_000)], [], "2026-12-10", true)).toEqual(["Garage (450) : à payer demain."]);
-    expect(matinBudget([ligne("b", "Dentiste", "2026-12-02")], [], "2026-12-10", true)).toEqual(["Dentiste (100) : pas encore payé."]);
+    expect(matinBudget([ligne("b", "Dentiste", "2026-12-02")], [], "2026-12-10", true)).toEqual(["Dentiste (100) : toujours à payer."]);
   });
   it("ne redit pas les factures des Papiers, déjà dites par la Maison", () => {
     expect(matinBudget([ligne("papier:x", "Swisscom", "2026-12-10"), ligne("papier:y:2026-12-01", "Loyer", "2026-12-01")], [], "2026-12-10")).toEqual([]);
+  });
+  it("Maison masquée : le Budget dit aussi les factures des Papiers", () => {
+    expect(matinBudget([ligne("papier:x", "Swisscom", "2026-12-10")], [], "2026-12-10", false, true)).toEqual(["Swisscom (100) : à payer aujourd'hui."]);
+  });
+  it("une charge à l'année déjà suivie par une facture des Papiers n'est dite ni deux fois, ni par le Budget", () => {
+    const facture = ligne("papier:x", "Assurance", "2026-12-10", 120_000);
+    expect(matinBudget([facture], [assurance("12-10")], "2026-12-10")).toEqual([]);
+  });
+  it("le crochet du module lit les réglages", async () => {
+    await db.budget_apayer.add(ligne("papier:x", "Swisscom", "2026-12-10"));
+    expect(await budget.matin!({ jour: "2026-12-10", demain: false })).toEqual([]);
+    await db.reglages.put({ cle: "modulesMasques", valeur: ["maison"] });
+    expect(await budget.matin!({ jour: "2026-12-10", demain: false })).toEqual(["Swisscom (100) : à payer aujourd'hui."]);
+    await db.reglages.delete("modulesMasques");
   });
   it("rien à payer : rien à dire", () => {
     expect(matinBudget([], FOYER, "2026-12-10")).toEqual([]);

@@ -238,10 +238,11 @@ export function echeancesDu(jour: string, today: string, apayer: APayer[], poste
 }
 
 // Le résumé du matin : au plus deux phrases, ce qui tombe le jour raconté, puis ce qui traîne d'avant.
-// Les factures venues des Papiers (id « papier:… ») sont déjà dites par la Maison dans le même résumé : on ne les redit pas.
+// avecPapiers false (la Maison est allumée) : les factures venues des Papiers (id « papier:… ») sont déjà dites par la Maison, on ne les redit pas.
 // Le soir (demain), ce qui reste d'avant n'est pas dit « en retard » : il est simplement encore là.
-export function matinBudget(apayer: APayer[], postes: Poste[], jour: string, demain = false): string[] {
-  const dues = echeancesDu(jour, jour, apayer.filter((l) => !l.id.startsWith("papier:")), postes);
+export function matinBudget(apayer: APayer[], postes: Poste[], jour: string, demain = false, avecPapiers = false): string[] {
+  // Toute la liste passe par echeancesDu, pour qu'une charge à l'année déjà suivie par une facture des Papiers ne soit pas dite en plus.
+  const dues = echeancesDu(jour, jour, apayer, postes).filter((e) => avecPapiers || !e.cle.startsWith("papier:"));
   // seul : « à payer aujourd'hui » ; plusieurs : « choses à payer aujourd'hui ».
   const dire = (liste: Echeance[], seul: string, plusieurs: string) => {
     const total = liste.reduce((s, e) => s + e.c, 0);
@@ -251,7 +252,7 @@ export function matinBudget(apayer: APayer[], postes: Poste[], jour: string, dem
   const duJour = dues.filter((e) => !e.retard), avant = dues.filter((e) => e.retard);
   return [
     duJour.length ? dire(duJour, `à payer ${demain ? "demain" : "aujourd'hui"}`, `choses à payer ${demain ? "demain" : "aujourd'hui"}`) : "",
-    avant.length ? dire(avant, demain ? "pas encore payé" : "en retard", demain ? "choses pas encore payées" : "choses en retard") : "",
+    avant.length ? dire(avant, demain ? "toujours à payer" : "en retard", demain ? "choses toujours à payer" : "choses en retard") : "",
   ].filter(Boolean);
 }
 

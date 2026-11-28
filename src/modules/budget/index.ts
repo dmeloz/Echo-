@@ -18,6 +18,10 @@ export const budget: Module = {
   Tuile: TuileBudget,
   Journee: JourneeBudget,
   outils: OUTILS_BUDGET,
-  // Le résumé du matin : les charges à l'année et les factures qui tombent ce jour-là (pas celles des Papiers, que la Maison dit déjà).
-  matin: async ({ jour, demain }) => matinBudget(await db.budget_apayer.toArray(), await db.budget_postes.toArray(), jour, demain),
+  // Le résumé du matin : les charges à l'année et les factures qui tombent ce jour-là (celles des Papiers seulement si la Maison est masquée).
+  // Maison masquée : elle ne parle pas, le Budget dit alors aussi les factures des Papiers.
+  matin: async ({ jour, demain }) => {
+    const masques = ((await db.reglages.get("modulesMasques"))?.valeur as string[] | undefined) ?? [];
+    return matinBudget(await db.budget_apayer.toArray(), await db.budget_postes.toArray(), jour, demain, masques.includes("maison"));
+  },
 };
