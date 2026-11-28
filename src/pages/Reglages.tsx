@@ -262,7 +262,7 @@ function SectionFoyer({ noms, proprio, onRelier }: { noms: Noms; proprio: Person
         <p>Ce téléphone n'est plus relié : les changements attendent ici. Crée un code sur l'autre téléphone, puis entre-le ici.</p>
         <div className="rangee"><button className="bouton" onClick={onRelier}>Entrer un code</button></div>
       </> : seul ? <>
-        <p>Invite {lautre} : sur son téléphone, Echo lui demandera ce code.</p>
+        <p>Invite {lautre} : envoie-lui le lien, qui ouvre Echo avec le code, ou seulement le code à écrire dans Echo.</p>
         {code ? <CodeInvitation code={code} /> : (
           <div className="rangee"><button className="bouton" disabled={occupe} onClick={async () => {
             setOccupe(true);

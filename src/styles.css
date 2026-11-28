@@ -698,6 +698,13 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .invitation b { font-size: 36px; font-weight: 800; letter-spacing: .12em; font-variant-numeric: tabular-nums; color: var(--bleu); }
 .invitation small { color: var(--discret); font-size: var(--t-petit); }
 .invitation .bouton { display: inline-flex; align-items: center; gap: 6px; }
+.invitation .rangee { justify-content: center; }
+/* Le lien d'invitation ouvert dans Safari : les étapes pour installer Echo, numérotées. */
+.installer { margin: 4px 0; padding: 0; list-style: none; counter-reset: etape; display: grid; gap: 12px; }
+.installer li { counter-increment: etape; display: grid; grid-template-columns: 30px 1fr; gap: 12px; align-items: start; font-size: 16px; line-height: 1.45; color: var(--encre); }
+.installer li::before { content: counter(etape); width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: var(--bleu); font-weight: 800; font-size: 15px; box-shadow: 0 4px 12px var(--ombre); }
+.installer li > span { padding-top: 3px; }
+.installer svg { display: inline; vertical-align: -3px; color: var(--bleu); }
 .membres { display: flex; flex-wrap: wrap; gap: 8px; }
 .membres span { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px; border-radius: 99px; background: rgb(18 40 58 / .05); font-weight: 600; }
 .membres i { font-style: normal; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; color: #fff; background: var(--encre); font-size: 13px; }
