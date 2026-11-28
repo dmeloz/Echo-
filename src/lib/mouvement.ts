@@ -12,13 +12,22 @@ const CHOISI = '[aria-selected="true"], [aria-pressed="true"]';
 const RETOURS = ".retour, .retour-agenda";
 let minuterie = 0;
 
+// Ce qui est encore en train d'arriver finit tout de suite : un changement de sens ne le fait pas sauter de côté.
+function finirArrivees() {
+  for (const a of document.querySelector(".cadre.arrivee")?.getAnimations({ subtree: true }) ?? []) {
+    if ((a as CSSAnimation).animationName === "apparition" && a.playState === "running") a.finish();
+  }
+}
+
 // « avant » : la place de l'onglet quitté, pour que la goutte de verre parte de là même si la barre est redessinée.
+// Posé sur la page du module (pas sur toute l'app) : la barre d'un autre module n'en hérite pas.
 export function poserSens(sens: Sens, avant?: number) {
-  const racine = document.documentElement;
+  const racine = document.documentElement, page = document.querySelector<HTMLElement>(".cadre.arrivee");
+  finirArrivees();
   racine.dataset.sens = sens;
-  if (avant === undefined) racine.style.removeProperty("--i-avant"); else racine.style.setProperty("--i-avant", String(avant));
+  if (avant === undefined) page?.style.removeProperty("--i-avant"); else page?.style.setProperty("--i-avant", String(avant));
   clearTimeout(minuterie);
-  minuterie = window.setTimeout(() => { delete racine.dataset.sens; racine.style.removeProperty("--i-avant"); }, DUREE);
+  minuterie = window.setTimeout(() => { finirArrivees(); delete racine.dataset.sens; page?.style.removeProperty("--i-avant"); }, DUREE);
 }
 
 // D'un choix à l'autre dans un groupe : de quel côté part-on ? (null : pas de sens à donner)
@@ -76,7 +85,10 @@ export function suivreMouvement() {
     memeModule();
     const avant = ici(), haut = defile()?.scrollTop ?? 0;
     requestAnimationFrame(() => {
-      if (location.hash !== module || !bouton() || ici() === avant) return;
+      // Plus de bouton retour : on est sur la page de départ, il n'y a plus de chemin à garder
+      // (une sous-page fermée autrement, par « Enregistrer » ou un onglet, ne laisse pas de vieille hauteur).
+      if (!bouton()) { pile = []; return; }
+      if (location.hash !== module || ici() === avant) return;
       pile = [...pile.slice(-7), { page: avant, haut }];
       defile()?.scrollTo(0, 0);
     });

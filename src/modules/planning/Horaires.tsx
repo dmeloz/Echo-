@@ -174,7 +174,7 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
         <button type="button" className="pinceau plus-codes" aria-expanded={autres} onClick={() => setAutres((a) => !a)}><b>{autres ? "Moins" : "Autres"}</b><small>{autres ? "codes rares" : "C2, C3, C4"}</small></button>
       </div>
 
-      <div className={`grille-mois${apercu ? " en-apercu" : ""}`} role="grid" aria-label={`Horaires de ${nomMois(mois)}`}
+      <div key={mois} className={`grille-mois${apercu ? " en-apercu" : ""}`} role="grid" aria-label={`Horaires de ${nomMois(mois)}`}
         onPointerDown={debut} onPointerMove={suivre} onPointerUp={fin} onPointerCancel={fin} onPointerLeave={fin}>
         {ENTETES.map((e, i) => <span key={i} className="gm-entete" aria-hidden="true">{e}</span>)}
         {vide.map((_, i) => <span key={"v" + i} aria-hidden="true" />)}

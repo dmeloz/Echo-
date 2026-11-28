@@ -83,8 +83,8 @@ p { text-wrap: pretty; }
 /* 8. Le sens d'arrivée. La base (styles.css) : ce qui arrive monte de 10 px. Ici, selon le chemin :
    une sous-page (elle montre le bouton retour) vient de la droite ; au retour, la page d'avant revient de la gauche ;
    d'un onglet ou d'un jour à l'autre, la page vient du côté touché. Une seule animation (« apparition »), deux variables. */
-.cadre.arrivee:has(.retour, .retour-agenda) { --dx: 26px; --dy: 0px; --m-cascade: 28ms; }
-html[data-sens] .cadre.arrivee { --dy: 0px; --m-cascade: 28ms; }
+.cadre.arrivee:has(.retour, .retour-agenda) { --dx: 26px; --dy: 0px; }
+html[data-sens] .cadre.arrivee { --dy: 0px; }
 html[data-sens="droite"] .cadre.arrivee, html[data-sens="apres"] .cadre.arrivee { --dx: 26px; }
 html[data-sens="gauche"] .cadre.arrivee, html[data-sens="retour"] .cadre.arrivee, html[data-sens="avant"] .cadre.arrivee { --dx: -26px; }
 /* Mois d'avant, mois d'après (flèches marquées data-va) : seule la grille glisse, les flèches restent sous le doigt. */

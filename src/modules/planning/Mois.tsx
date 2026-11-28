@@ -20,7 +20,7 @@ export function VueMois({ taches, travail, today, onJour }: { taches: Tache[]; t
         <b>{nomMois(mois)}</b>
         <button type="button" className="rond-petit" aria-label="Mois suivant" data-va="apres" onClick={() => setMois(moisVoisin(mois, 1))}><ChevronRight size={18} strokeWidth={2} animated={false} /></button>
       </div>
-      <div className="mois-grille">
+      <div className="mois-grille" key={mois}>
         {NOMS_JOURS.map((n, i) => <span key={i} className="mg-nom" aria-hidden="true">{n}</span>)}
         {Array.from({ length: decalageLundi(mois) }, (_, i) => <span key={"v" + i} />)}
         {jours.map((j) => {
