@@ -19,7 +19,7 @@ export const NOUVEAUTES: Nouveaute[] = [
   },
   {
     jour: "2026-11-27", titre: "Annuler une action d'Echo pendant 7 jours",
-    points: ["Dans « Ce qu'Echo a fait », juste au-dessus, chaque action a son bouton Annuler, sur le téléphone qui l'a demandée."],
+    points: ["Dans Réglages → Echo, « Ce qu'Echo a fait » : chaque action a son bouton Annuler, sur le téléphone qui l'a demandée."],
   },
   {
     jour: "2026-11-27", titre: "L'heure de départ au travail",

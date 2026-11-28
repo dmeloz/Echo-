@@ -317,7 +317,7 @@ function SectionEcho({ autre: nomAutre }: { autre: string }) {
         <input type="checkbox" role="switch" className="interrupteur" checked={actif} onChange={() => poserReglage("assistantEcho", !actif)} />
       </label>
       <label className="module-ligne">
-        <span><b>Petites choses sans demander</b><small>Echo ajoute, déplace et coche tes choses tout seul, et tu as 10 secondes pour annuler. Effacer, et toucher aux choses de l'autre, restent toujours demandés.</small></span>
+        <span><b>Petites choses sans demander</b><small>Echo ajoute, déplace et coche tes choses tout seul, et tu peux l'annuler pendant 7 jours (Ce qu'Echo a fait, plus bas). Effacer, et toucher aux choses de l'autre, restent toujours demandés.</small></span>
         <input type="checkbox" role="switch" className="interrupteur" checked={seul} disabled={!actif} onChange={() => poserReglage("echoSeul", !seul)} />
       </label>
       <label className="module-ligne">
