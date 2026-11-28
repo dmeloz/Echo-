@@ -147,6 +147,26 @@ export const OUTILS_ECHO: OutilEcho[] = [
     },
   },
   {
+    name: "repartir_semaine",
+    genre: "gros",
+    description: "Répartit les corvées libres des 7 prochains jours entre les deux personnes, d'après leurs horaires de travail et ce que chacun a fait ces 4 semaines (« répartis les corvées de la semaine »). L'app calcule la proposition ; changements sert seulement si la personne demande qu'une corvée aille à quelqu'un. La personne voit qui prend quoi et valide. Ensuite, les corvées redeviennent libres.",
+    input_schema: {
+      type: "object", additionalProperties: false, required: ["changements"],
+      properties: {
+        changements: {
+          type: "array", description: "les corvées imposées par la personne (« la vaisselle pour Sarah »), sinon une liste vide",
+          items: {
+            type: "object", additionalProperties: false, required: ["corvee", "qui"],
+            properties: {
+              corvee: { type: "string", description: "le nom de la corvée, comme dans voir_maison" },
+              qui: { type: "string", enum: ["moi", "elle"], description: "la place de la personne qui la prend (voir la situation)" },
+            },
+          },
+        },
+      },
+    },
+  },
+  {
     name: "noter_reparation",
     genre: "petit",
     description: "Note une chose cassée ou à réparer à la maison (« le robinet goutte », « l'ampoule du couloir a grillé »). Elle s'affiche dans Maison → Entretien.",
@@ -260,7 +280,7 @@ Comment travailler :
 - Les actions sont montrées à la personne, qui dit oui ou non. Ne refais pas une action déjà proposée dans le même tour.
 - Les lignes « [Note de l'app : …] » viennent de l'app : la date et l'heure du moment (la plus récente compte), et ce qui a été fait (oui) ou pas (non) après tes propositions. Tiens-en compte.
 - N'invente rien : pas d'id, pas de date, pas de tâche qui n'est pas demandée. S'il manque une chose indispensable, pose UNE question courte au lieu de deviner. Si tout est clair, ne pose pas de question.
-- Les corvées de la maison (ménage, lessive, poubelles : ce qui revient) ne sont pas des tâches. « J'ai passé l'aspirateur » : corvee_faite si tu as cet outil (regarde les noms avec voir_maison). « Qu'est-ce que j'ai à faire à la maison ? », « qui en a fait le plus ? » : voir_maison. Une chose cassée ou à réparer (« le robinet goutte ») : noter_reparation si tu as cet outil, pas une tâche. Un papier du foyer (facture à payer, impôts, assurance, contrat, passeport qui expire) : ranger_papier si tu as cet outil ; « qu'est-ce qu'on doit payer ? », « quand expire… ? » : voir_papiers. Tu ne paies rien toi-même et tu ne dis jamais qu'une facture est payée sans qu'on te l'ait dit.
+- Les corvées de la maison (ménage, lessive, poubelles : ce qui revient) ne sont pas des tâches. « J'ai passé l'aspirateur » : corvee_faite si tu as cet outil (regarde les noms avec voir_maison). « Répartis les corvées de la semaine » : repartir_semaine si tu as cet outil, puis dis en une phrase qui prend le plus, d'après ce que l'action montre (les heures de travail de chacun). « Qu'est-ce que j'ai à faire à la maison ? », « qui en a fait le plus ? » : voir_maison. Une chose cassée ou à réparer (« le robinet goutte ») : noter_reparation si tu as cet outil, pas une tâche. Un papier du foyer (facture à payer, impôts, assurance, contrat, passeport qui expire) : ranger_papier si tu as cet outil ; « qu'est-ce qu'on doit payer ? », « quand expire… ? » : voir_papiers. Tu ne paies rien toi-même et tu ne dis jamais qu'une facture est payée sans qu'on te l'ait dit.
 - Le budget du foyer : « combien il me reste ? », « on a dépensé combien en courses ? » : voir_budget si tu as cet outil ; « fais le point du mois » : point_du_mois, puis dis l'essentiel en quelques lignes, avec les chiffres, sans tout réciter. Une dépense déjà faite (« j'ai payé 45 fr. à la Migros ») : ajouter_depense si tu as cet outil ; une facture reçue qu'il faudra payer : ranger_papier ; une chose à acheter : les courses. Tu ne changes jamais un salaire, une charge ou un virement, et tu ne coches jamais une facture comme payée : dis où le faire dans Budget. Ne donne pas un chiffre du budget de mémoire : relis-le.
 - Une tâche n'est jamais effacée sans que la personne l'ait demandé clairement.
 - Ce que tu ne peux pas faire avec tes outils : appelle signaler_manque, puis dis-le en une phrase.
@@ -283,8 +303,13 @@ Ta réponse : courte, chaleureuse, en tutoyant, comme un message. Pour un plan d
 Si la demande n'est pas pour toi, réponds gentiment en une phrase ce que tu sais faire.`;
 
 // Les outils tels que Claude les reçoit (sans le genre, qui ne regarde que l'app). Seulement ceux que l'app a (modules allumés).
+// L'API accepte au plus 20 outils « strict » par demande. Un outil qui ne fait que lire et ne prend rien n'a rien à vérifier : il part sans strict.
+export const sansRienAVerifier = (o: OutilEcho) => o.genre === "lire" && !Object.keys(o.input_schema.properties).length;
 export const outilsPourClaude = (noms?: string[]) =>
-  OUTILS_ECHO.filter((o) => !noms || noms.includes(o.name)).map(({ genre: _genre, ...o }) => ({ ...o, strict: true }));
+  OUTILS_ECHO.filter((o) => !noms || noms.includes(o.name)).map((o) => {
+    const { genre: _genre, ...pourClaude } = o;
+    return sansRienAVerifier(o) ? pourClaude : { ...pourClaude, strict: true as const };
+  });
 export const genreDe = (nom: string): GenreOutil | undefined => OUTILS_ECHO.find((o) => o.name === nom)?.genre;
 
 // La demande envoyée à Claude pour un tour de la boucle. Le serveur et les phrases d'essai (essais/) l'utilisent tous les deux :

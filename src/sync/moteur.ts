@@ -133,10 +133,10 @@ async function entrer(foyerId: string, place: Personne, userId: string) {
       await db.cuisine_gouts.bulkPut(gouts.map((g) => ({ ...g, qui: inv(g.qui) })));
       const tickets = await db.cuisine_tickets.toArray();
       await db.cuisine_tickets.bulkPut(tickets.map((t) => ({ ...t, par: inv(t.par) })));
-      // Maison : à qui est la corvée, qui l'a faite la dernière fois, et les lignes « corvée faite » (l'équilibre entre les deux).
+      // Maison : à qui est la corvée, qui l'a faite la dernière fois, qui l'a prise pour la semaine (« Répartir la semaine »), et les lignes « corvée faite » (l'équilibre entre les deux).
       // Les papiers, les réparations, les appareils et les contacts ne sont à personne : rien à échanger.
       const corvees = await db.maison_corvees.toArray();
-      await db.maison_corvees.bulkPut(corvees.map((c) => ({ ...c, qui: c.qui === "libre" ? c.qui : inv(c.qui), ...(c.par ? { par: inv(c.par) } : {}) })));
+      await db.maison_corvees.bulkPut(corvees.map((c) => ({ ...c, qui: c.qui === "libre" ? c.qui : inv(c.qui), ...(c.par ? { par: inv(c.par) } : {}), ...(c.pris ? { pris: inv(c.pris) } : {}) })));
       const faits = await db.maison_faits.toArray();
       await db.maison_faits.bulkPut(faits.map((f) => ({ ...f, par: inv(f.par) })));
       // Budget : le salaire, les charges perso et le virement de chacun suivent la personne (les lignes de départ ont la place dans leur id).

@@ -7,7 +7,7 @@ vi.stubGlobal("navigator", {});
 import { db } from "../../data/db";
 import { plusJours } from "../dates";
 import type { Tache } from "../types";
-import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, MODELE_ECHO, MODELE_PLAN, OUTILS_ECHO, coutMicro, demandeTour, estPlan, outilsPourClaude } from "../../../supabase/functions/_shared/echo-outils";
+import { MAX_SITUATION, MAX_SOUVENIR, MAX_TOURS, MODELE_ECHO, MODELE_PLAN, OUTILS_ECHO, coutMicro, demandeTour, estPlan, outilsPourClaude, sansRienAVerifier } from "../../../supabase/functions/_shared/echo-outils";
 import { executer, lancerEcho, type Appeler, type Bloc, type Message, type Tour } from "./boucle";
 import { OUTILS_BASE, type ContexteEcho } from "./outils";
 import { nettoyerJournal } from "./journal";
@@ -42,10 +42,11 @@ describe("la liste fermée des outils", () => {
   it("un outil « lire » n'a pas d'action, un outil qui change prépare une action", () => {
     for (const o of OUTILS_ECHO) expect(!!TOUS[o.name].lire).toBe(o.genre === "lire");
   });
-  it("Claude ne reçoit pas le genre, et les schémas sont stricts (tous les champs requis)", () => {
+  it("Claude ne reçoit pas le genre, et les schémas sont stricts (tous les champs requis), sauf un outil de lecture sans paramètre", () => {
     for (const o of outilsPourClaude()) {
       expect("genre" in o).toBe(false);
-      expect(o.strict).toBe(true);
+      const lecture = OUTILS_ECHO.find((x) => x.name === o.name)!;
+      expect("strict" in o && o.strict).toBe(!sansRienAVerifier(lecture));
       expect([...o.input_schema.required].sort()).toEqual(Object.keys(o.input_schema.properties).sort());
     }
   });
@@ -55,7 +56,7 @@ describe("la limite des outils stricts", () => {
   // L'API accepte au plus 20 outils « strict » par demande : un 21e ferait refuser TOUTES les demandes d'Echo.
   // Avant d'ajouter un outil : retirer strict des outils qui ne font que lire (outilsPourClaude), puis ajuster cet essai.
   it("pas plus de 20 outils stricts envoyés", () => {
-    expect(outilsPourClaude().filter((o) => o.strict).length).toBeLessThanOrEqual(20);
+    expect(outilsPourClaude().filter((o) => "strict" in o).length).toBeLessThanOrEqual(20);
   });
 });
 

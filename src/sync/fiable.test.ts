@@ -85,11 +85,11 @@ describe("rejoindre à nouveau le foyer", () => {
     expect(await db.taches.get("z")).toBeTruthy();
   });
 
-  it("5. en changeant de place, les corvées (à qui, faite par) et les corvées faites suivent la personne", async () => {
+  it("5. en changeant de place, les corvées (à qui, faite par, prise pour la semaine) et les corvées faites suivent la personne", async () => {
     await db.reglages.put({ cle: "proprio", valeur: "moi" });
     await db.maison_corvees.bulkPut([
       { id: "v", nom: "Vaisselle", piece: "Cuisine", tous: 1, taille: 2, qui: "moi", fait: 5, par: "moi", cree: 1 },
-      { id: "l", nom: "Lit", piece: "Chambre", tous: 1, taille: 1, qui: "libre", fait: 6, par: "elle", cree: 1 },
+      { id: "l", nom: "Lit", piece: "Chambre", tous: 1, taille: 1, qui: "libre", fait: 6, par: "elle", pris: "moi", prisJusqu: "2026-12-06", cree: 1 },
     ]);
     await db.maison_faits.put({ id: "f", corvee: "v", nom: "Vaisselle", par: "moi", quand: 5, min: 10 });
     await db.maison_papiers.put({ id: "p", titre: "Bail", dossier: "logement", emetteur: "", note: "", quoi: "", repete: "", photos: [], cree: 1 });
@@ -102,7 +102,7 @@ describe("rejoindre à nouveau le foyer", () => {
     await calme();
 
     expect(await db.maison_corvees.get("v")).toMatchObject({ qui: "elle", par: "elle" });
-    expect(await db.maison_corvees.get("l")).toMatchObject({ qui: "libre", par: "moi" });
+    expect(await db.maison_corvees.get("l")).toMatchObject({ qui: "libre", par: "moi", pris: "elle", prisJusqu: "2026-12-06" });
     expect((await db.maison_faits.get("f"))?.par).toBe("elle");
     expect((await db.budget_depenses.get("x"))?.qui).toBe("elle");
     expect(await db.taches.get("t")).toMatchObject({ qui: "elle", faitPar: "elle" });
