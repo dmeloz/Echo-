@@ -16,7 +16,7 @@ import {
 } from "./donnees";
 import { budget } from "./index";
 import { OUTILS_BUDGET } from "./outilsEcho";
-import { pointDuMois } from "./donnees";
+import { matinBudget, pointDuMois } from "./donnees";
 import type { Action, ContexteEcho } from "../../lib/echo/outils";
 
 // Un foyer d'essai (des chiffres ronds, pas ceux d'un vrai foyer).
@@ -444,6 +444,28 @@ describe("lot 3 : le point du mois et les outils d'Echo", () => {
     expect(await prep({ categorie: "frais divers" })).toMatchObject({ outil: "ajouter_depense" });
     // Deux prénoms pareils : on les distingue quand même.
     expect((await OUTILS_BUDGET.voir_budget.lire!({}, { ...ctx, noms: { moi: "Alex", elle: "Alex" } }) as { resteAChacun: object }).resteAChacun).toEqual({ "Alex (qui écrit)": "1 200 CHF", "Alex (l'autre)": "1 800 CHF" });
+  });
+});
+
+describe("le résumé du matin", () => {
+  const ligne = (id: string, titre: string, echeance: string, c = 10_000, paye: false | string = false) => nettoyerAPayer({ id, titre, emetteur: "", c, echeance, repete: "", dossier: "autre", paye, cree: 1 })!;
+  const assurance = (echeance: string) => ({ ...FOYER.find((p) => p.id === "assurance-voiture")!, nom: "Assurance voiture", echeance });
+
+  it("ce qui tombe le jour, puis ce qui est en retard, au plus deux phrases", () => {
+    const l = [ligne("a", "Garage", "2026-12-10", 45_000), ligne("b", "Dentiste", "2026-12-02"), ligne("c", "Amende", "2026-12-01", 4_000), ligne("d", "Payée", "2026-12-10", 1_000, "2026-12-09")];
+    // chf écrit les milliers avec une espace fine : on compare avec des espaces simples.
+    expect(matinBudget(l, [assurance("12-10")], "2026-12-10").map((x) => x.replace(/\s/g, " "))).toEqual([
+      "2 choses à payer aujourd'hui (1 650) : Garage, Assurance voiture.",
+      "2 choses en retard (140) : Amende, Dentiste.", // la plus ancienne d'abord
+    ]);
+    expect(matinBudget([ligne("a", "Garage", "2026-12-10", 45_000)], [], "2026-12-10", true)).toEqual(["Garage (450) : à payer demain."]);
+    expect(matinBudget([ligne("b", "Dentiste", "2026-12-02")], [], "2026-12-10", true)).toEqual(["Dentiste (100) : pas encore payé."]);
+  });
+  it("ne redit pas les factures des Papiers, déjà dites par la Maison", () => {
+    expect(matinBudget([ligne("papier:x", "Swisscom", "2026-12-10"), ligne("papier:y:2026-12-01", "Loyer", "2026-12-01")], [], "2026-12-10")).toEqual([]);
+  });
+  it("rien à payer : rien à dire", () => {
+    expect(matinBudget([], FOYER, "2026-12-10")).toEqual([]);
   });
 });
 

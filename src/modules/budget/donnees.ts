@@ -237,6 +237,24 @@ export function echeancesDu(jour: string, today: string, apayer: APayer[], poste
   return [...factures, ...annuelles];
 }
 
+// Le résumé du matin : au plus deux phrases, ce qui tombe le jour raconté, puis ce qui traîne d'avant.
+// Les factures venues des Papiers (id « papier:… ») sont déjà dites par la Maison dans le même résumé : on ne les redit pas.
+// Le soir (demain), ce qui reste d'avant n'est pas dit « en retard » : il est simplement encore là.
+export function matinBudget(apayer: APayer[], postes: Poste[], jour: string, demain = false): string[] {
+  const dues = echeancesDu(jour, jour, apayer.filter((l) => !l.id.startsWith("papier:")), postes);
+  // seul : « à payer aujourd'hui » ; plusieurs : « choses à payer aujourd'hui ».
+  const dire = (liste: Echeance[], seul: string, plusieurs: string) => {
+    const total = liste.reduce((s, e) => s + e.c, 0);
+    return liste.length === 1 ? `${liste[0].titre} (${chf(total)}) : ${seul}.`
+      : `${liste.length} ${plusieurs} (${chf(total)}) : ${liste.slice(0, 3).map((e) => e.titre).join(", ")}${liste.length > 3 ? "…" : ""}.`;
+  };
+  const duJour = dues.filter((e) => !e.retard), avant = dues.filter((e) => e.retard);
+  return [
+    duJour.length ? dire(duJour, `à payer ${demain ? "demain" : "aujourd'hui"}`, `choses à payer ${demain ? "demain" : "aujourd'hui"}`) : "",
+    avant.length ? dire(avant, demain ? "pas encore payé" : "en retard", demain ? "choses pas encore payées" : "choses en retard") : "",
+  ].filter(Boolean);
+}
+
 /* ---------- Les comptes : les vrais soldes, notés à la main ---------- */
 
 export type CompteSolde = "epargne" | "facture";

@@ -1,6 +1,8 @@
 import { lazy } from "react";
+import { db } from "../../data/db";
 import type { Module } from "../contrat";
 import { JourneeBudget } from "./Journee";
+import { matinBudget } from "./donnees";
 import { OUTILS_BUDGET } from "./outilsEcho";
 import { TuileBudget } from "./Tuile";
 
@@ -16,4 +18,6 @@ export const budget: Module = {
   Tuile: TuileBudget,
   Journee: JourneeBudget,
   outils: OUTILS_BUDGET,
+  // Le résumé du matin : les charges à l'année et les factures qui tombent ce jour-là (pas celles des Papiers, que la Maison dit déjà).
+  matin: async ({ jour, demain }) => matinBudget(await db.budget_apayer.toArray(), await db.budget_postes.toArray(), jour, demain),
 };
