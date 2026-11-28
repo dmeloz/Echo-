@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { Check, ChevronRight, Plus } from "pulsoicon-react";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { db } from "../../data/db";
 import { poserReglage, useReglage } from "../../data/hooks";
 import { libelleJour } from "../../lib/dates";
@@ -11,6 +11,7 @@ import { ajouterCorvees, ajouterModeles, rangerFaits, rangerReparations } from "
 import { LigneCorvee } from "./Corvee";
 import { Entretien } from "./Entretien";
 import { Papiers } from "./Papiers";
+import { Repartir } from "./Repartir";
 import { DEPART, aFaire, depuis, equilibre, jourDu, lireCorvee, minutesDe, parts, pour, pourMoi, type Corvee, type Modele } from "./donnees";
 
 // Le premier jour : on touche ce qui existe chez soi, au lieu d'écrire une liste.
@@ -50,6 +51,8 @@ export function PageMaison(ctx: ContexteModule) {
   const [choisir, setChoisir] = useState(false);
   const [ouvert, setOuvert] = useState<string | null>(null);
   const [voirAutres, setVoirAutres] = useState(false);
+  const [repartirOuvert, setRepartir] = useState(false);
+  const fermerRepartir = useCallback(() => setRepartir(false), []);
   const [texte, setTexte] = useState("");
   useEffect(() => { rangerFaits().then(() => rangerReparations()).catch(() => {}); }, []);
   useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie]);
@@ -69,11 +72,12 @@ export function PageMaison(ctx: ContexteModule) {
   if (partie === "papiers") return <Papiers {...ctx} choix={choix} />;
   if (choisir || (!corvees.length && !departVu)) return <Depart onFini={() => { poserReglage("maisonDepartVu", true); setChoisir(false); }} />;
 
+  if (repartirOuvert) return <Repartir corvees={corvees} noms={noms} proprio={proprio} now={now} onQuitter={fermerRepartir} />;
   const e = equilibre(faits, now.getTime());
   const l_autre = autre(proprio);
   const dues = corvees.filter((c) => aFaire(c, now)).sort((a, b) => jourDu(a).localeCompare(jourDu(b)) || a.nom.localeCompare(b.nom));
   // « À faire » : ce qui est libre et ce qui est à moi. À part : ce qui est donné à l'autre.
-  const miennes = dues.filter((c) => pourMoi(c, proprio)), siennes = dues.filter((c) => pour(c) === l_autre);
+  const miennes = dues.filter((c) => pourMoi(c, proprio, now)), siennes = dues.filter((c) => pour(c, now) === l_autre);
   const autres = corvees.filter((c) => !aFaire(c, now)).sort((a, b) => jourDu(a).localeCompare(jourDu(b)) || a.nom.localeCompare(b.nom));
   const min = miennes.reduce((s, c) => s + minutesDe(c.taille), 0);
   const p = parts(e);
@@ -81,7 +85,7 @@ export function PageMaison(ctx: ContexteModule) {
   const ligne = (c: Corvee, sous: string) => <LigneCorvee key={c.id} c={c} sous={sous} ouvert={ouvert === c.id} onOuvrir={setOuvert} noms={noms} proprio={proprio} now={now} />;
   // L'app retient qui l'a faite : « il y a 8 jours par Sarah ». Une corvée donnée à moi le dit.
   const qui = (p?: Personne) => (p ? (p === proprio ? "toi" : noms[p]) : "");
-  const sousDue = (c: Corvee) => [pour(c) === proprio ? "pour toi" : c.piece, [depuis(c, now), c.fait && c.par ? `par ${qui(c.par)}` : ""].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
+  const sousDue = (c: Corvee) => [pour(c, now) === proprio ? "pour toi" : c.piece, [depuis(c, now), c.fait && c.par ? `par ${qui(c.par)}` : ""].filter(Boolean).join(" ")].filter(Boolean).join(" · ");
   const ajouter = () => { const lu = lireCorvee(texte); if (!lu) return; ajouterCorvees([lu]); setTexte(""); };
 
   return (
@@ -116,6 +120,11 @@ export function PageMaison(ctx: ContexteModule) {
           <input id="ajout-corvee" enterKeyHint="done" maxLength={80} placeholder="Ajouter : « litière tous les 2 jours »" value={texte} onChange={(ev) => setTexte(ev.target.value)} />
           {texte.trim() && <button type="submit" className="rond-champ plein" aria-label="Ajouter la corvée"><Plus size={20} strokeWidth={2.4} /></button>}
         </form>
+      )}
+      {corvees.some((c) => c.qui === "libre") && (
+        <div className="rangee repartir-pied">
+          <button type="button" className="bouton second" onClick={() => { vibrer(); setRepartir(true); }}>Répartir la semaine</button>
+        </div>
       )}
       {montrerEquilibre && e.moi + e.elle > 0 && (
         <div className="equilibre" role="img" aria-label={`Ces 4 dernières semaines : ${noms[proprio]} ${p[proprio]} %, ${noms[l_autre]} ${p[l_autre]} %`}>

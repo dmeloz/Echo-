@@ -1249,3 +1249,9 @@ label.rond-champ:focus-within { outline: 2px solid var(--accent); outline-offset
 @keyframes budget-pouls { 0%, 100% { box-shadow: 0 0 0 0 rgb(47 107 255 / .35); } 50% { box-shadow: 0 0 0 5px rgb(47 107 255 / 0); } }
 .budget-rendu { align-self: flex-start; margin: var(--e4) 0 var(--e2); }
 @media (prefers-reduced-motion: reduce) { .budget-nous i { animation: none; } }
+
+/* Maison : répartir la semaine (une ligne par corvée, le prénom à droite se touche pour changer) */
+.repartir-pied { justify-content: center; margin-top: var(--e4); }
+.repartir-ligne { display: flex; align-items: center; justify-content: space-between; gap: var(--e4); min-height: 54px; }
+.repartir-ligne .puce { flex: none; min-width: 72px; min-height: 40px; }
+.repartir-ligne .puce:disabled { opacity: .6; }
