@@ -1160,6 +1160,8 @@ button.budget-reste:active { scale: .97; }
 .budget-tete { display: flex; align-items: baseline; justify-content: space-between; gap: var(--e5); }
 .budget-tete > b { font-size: 17px; font-weight: 700; }
 .budget-tete > span:not(.budget-chiffre) { font-size: 14px; color: var(--discret); }
+/* Le grand chiffre d'un en-tête (Entre nous, Le point du mois) garde l'encre des autres grands chiffres. */
+.budget-tete .budget-chiffre.grand:not(.negatif) { color: var(--encre); }
 .budget-tete.colonne { flex-direction: column; align-items: flex-start; gap: 0; }
 .budget-tete small { font-size: var(--t-petit); color: var(--discret); }
 .budget-tete .depasse { color: var(--urgent); font-weight: 700; }
