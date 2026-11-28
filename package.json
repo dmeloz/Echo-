@@ -1,0 +1,43 @@
+{
+  "name": "echo",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "verifier": "node scripts/verifier-ui.mjs",
+    "atelier": "ATELIER=1 VITE_APP=app.html vite build && node scripts/atelier-page.mjs",
+    "essais": "vitest run --config vitest.essais.config.ts"
+  },
+  "dependencies": {
+    "@fontsource-variable/figtree": "5.3.0",
+    "@supabase/supabase-js": "^2.119.2",
+    "@use-gesture/react": "^10.3.1",
+    "barcode-detector": "3.2.5",
+    "dexie": "^4.4.7",
+    "dexie-react-hooks": "^4.4.0",
+    "motion": "^14.14.0",
+    "pulsoicon-react": "6.2.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "sonner": "^2.0.8",
+    "vaul": "^1.1.2"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "1.12.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
+    "fake-indexeddb": "^6.2.8",
+    "oxlint": "^1.90.0",
+    "typescript": "~7.0.2",
+    "vite": "^8.3.6",
+    "vite-plugin-pwa": "^2.0.0",
+    "vitest": "^5.1.1"
+  }
+}

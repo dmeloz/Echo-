@@ -1,0 +1,42 @@
+import type { Table } from "dexie";
+import { db } from "../data/db";
+import { nettoyerJournal } from "../lib/echo/journal";
+import { nettoyerAPayer, nettoyerCategorie, nettoyerDepense, nettoyerPoste, nettoyerSolde, posteRempli, type Poste } from "../modules/budget/donnees";
+import { nettoyerAppareil, nettoyerContact, nettoyerCorvee, nettoyerFait, nettoyerPapier, nettoyerReparation } from "../modules/maison/donnees";
+import { nettoyerSouvenir } from "../lib/echo/memoire";
+import { nettoyerArticle, nettoyerGouts, nettoyerHabitude, nettoyerBatch, nettoyerProduit, nettoyerRecette, nettoyerRepas, nettoyerTicket } from "../modules/cuisine/donnees";
+
+// Les données des modules qui partent au foyer : un « genre » par table, une ligne par clé.
+// Pour synchroniser une nouvelle table : l'ajouter ici, et son genre dans la règle de la table « elements » (migration).
+// naturelle : la clé a un sens (un produit, un jour, une personne), deux téléphones peuvent donc avoir la même.
+// garderLocal : pour une clé naturelle, au moment d'entrer dans le foyer, la ligne de ce téléphone gagne quand même (ici, foyer = déjà nettoyé).
+// fusion : si les deux changent la même ligne chacun de son côté, les champs sont fusionnés un par un (fusion.ts).
+// Réservé aux lignes simples, où chaque champ veut dire quelque chose tout seul (pas un repas : le plat et ses ingrédients vont ensemble).
+export interface Genre { table: Table; cle: string; nettoyer: (x: unknown) => unknown; naturelle?: boolean; garderLocal?: (ici: unknown, foyer: unknown) => boolean; fusion?: boolean }
+export const GENRES: Record<string, Genre> = {
+  course: { table: db.cuisine_courses, cle: "id", nettoyer: nettoyerArticle, fusion: true },
+  habitude: { table: db.cuisine_habitudes, cle: "cle", nettoyer: nettoyerHabitude, naturelle: true },
+  repas: { table: db.cuisine_repas, cle: "jour", nettoyer: nettoyerRepas, naturelle: true },
+  stock: { table: db.cuisine_stock, cle: "id", nettoyer: nettoyerProduit, fusion: true },
+  ticket: { table: db.cuisine_tickets, cle: "id", nettoyer: nettoyerTicket },
+  batch: { table: db.cuisine_batch, cle: "semaine", nettoyer: nettoyerBatch, naturelle: true },
+  recette: { table: db.cuisine_recettes, cle: "cle", nettoyer: nettoyerRecette, naturelle: true },
+  gout: { table: db.cuisine_gouts, cle: "qui", nettoyer: nettoyerGouts, naturelle: true },
+  corvee: { table: db.maison_corvees, cle: "id", nettoyer: nettoyerCorvee, fusion: true },
+  corvee_faite: { table: db.maison_faits, cle: "id", nettoyer: nettoyerFait },
+  reparation: { table: db.maison_reparations, cle: "id", nettoyer: nettoyerReparation, fusion: true },
+  appareil: { table: db.maison_appareils, cle: "id", nettoyer: nettoyerAppareil, fusion: true },
+  contact: { table: db.maison_contacts, cle: "id", nettoyer: nettoyerContact, fusion: true },
+  // Le Budget. Les postes de départ et les catégories ont une clé qui a un sens : les deux téléphones peuvent créer la même.
+  budget_poste: { table: db.budget_postes, cle: "id", nettoyer: nettoyerPoste, naturelle: true,
+    // Une ligne de départ encore vide au foyer n'efface pas celle que ce téléphone a remplie.
+    garderLocal: (ici, foyer) => posteRempli(ici as Poste) && !posteRempli(foyer as Poste | null) },
+  budget_depense: { table: db.budget_depenses, cle: "id", nettoyer: nettoyerDepense },
+  budget_categorie: { table: db.budget_categories, cle: "id", nettoyer: nettoyerCategorie, naturelle: true },
+  budget_solde: { table: db.budget_soldes, cle: "id", nettoyer: nettoyerSolde },
+  budget_apayer: { table: db.budget_apayer, cle: "id", nettoyer: nettoyerAPayer },
+  papier: { table: db.maison_papiers, cle: "id", nettoyer: nettoyerPapier, fusion: true },
+  journal: { table: db.echo_journal, cle: "id", nettoyer: nettoyerJournal },
+  memoire: { table: db.echo_memoire, cle: "id", nettoyer: nettoyerSouvenir },
+};
+export const TABLES_MODULES = Object.values(GENRES).map((g) => g.table);

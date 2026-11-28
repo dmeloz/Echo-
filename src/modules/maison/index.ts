@@ -1,0 +1,50 @@
+import { lazy } from "react";
+import { liveQuery } from "dexie";
+import { db } from "../../data/db";
+import type { Personne } from "../../lib/types";
+import type { Module } from "../contrat";
+import { ajouterCorvees, ajouterPapier, ajouterReparation, cocherCorvees } from "./actions";
+import { ditFait, lireCorvee, lirePapier, matinPapiers, nomDossier, trouverCorvees, type Corvee } from "./donnees";
+import { ReglagesMaison } from "./ReglagesMaison";
+import { TuileMaison } from "./Tuile";
+import { JourneeMaison } from "./Journee";
+import { OUTILS_MAISON } from "./outilsEcho";
+import { suivreBudget } from "./lienBudget";
+
+// La barre d'Echo lit une phrase sans attendre : on garde sous la main les corvées connues (tenues à jour par la base).
+let connues: Corvee[] = [];
+liveQuery(() => db.maison_corvees.toArray()).subscribe({ next: (c) => { connues = c; }, error: () => {} });
+
+// Une facture payée dans le Budget coche son papier.
+suivreBudget();
+
+export const maison: Module = {
+  id: "maison",
+  libelle: "Maison",
+  resume: "Corvées, entretien, papiers",
+  etat: "construit",
+  prevu: [],
+  Page: lazy(() => import("./Page").then((m) => ({ default: m.PageMaison }))), // chargée à la première ouverture
+  Tuile: TuileMaison,
+  Journee: JourneeMaison,
+  Reglages: ReglagesMaison,
+  outils: OUTILS_MAISON,
+  matin: async ({ jour, demain }) => matinPapiers(await db.maison_papiers.toArray(), jour, demain),
+  // « j'ai passé l'aspirateur » coche la corvée ; « corvée : litière tous les 2 jours » en ajoute une ; « à réparer : le robinet » note une réparation ; « facture : Swisscom 89.90 le 15.12 » range un papier.
+  comprendre: (texte) => {
+    const nouvelle = /^\s*(?:nouvelle\s+)?corv[ée]e\s*:?\s+(.+)$/i.exec(texte);
+    const lu = nouvelle && lireCorvee(nouvelle[1]);
+    if (lu) return { titre: lu.nom, ou: "Maison", faire: () => ajouterCorvees([lu]) };
+    const casse = /^\s*[àa]\s+r[ée]parer\s*:?\s+(.+)$/i.exec(texte);
+    if (casse) return { titre: casse[1].trim(), ou: "Maison, à réparer", faire: () => ajouterReparation(casse[1]) };
+    const papier = /^\s*(?:papier|facture|[àa]\s+payer)\s*:\s*(.+)$/i.exec(texte);
+    const lp = papier && lirePapier(/^\s*facture/i.test(texte) ? `Facture ${papier[1]}` : papier[1]);
+    if (lp) return { titre: lp.titre, ou: `Papiers, ${nomDossier(lp.dossier)}`, faire: async () => { await ajouterPapier(lp); } };
+    const faites = ditFait(texte) ? trouverCorvees(texte, connues) : [];
+    if (!faites.length) return null;
+    return { titre: `${faites.map((c) => c.nom).join(", ")} : fait`, ou: "Maison", faire: async () => {
+      const par = ((await db.reglages.get("proprio"))?.valeur as Personne | undefined) ?? "moi";
+      await cocherCorvees(faites, par);
+    } };
+  },
+};

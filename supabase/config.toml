@@ -1,0 +1,22 @@
+# Les fonctions d'Echo vérifient elles-mêmes qui les appelle (code du foyer ou session),
+# donc la passerelle Supabase ne doit pas exiger de jeton JWT en plus.
+[functions.echo]
+verify_jwt = false
+
+[functions.lire-horaires]
+verify_jwt = false
+
+[functions.icloud]
+verify_jwt = false
+
+[functions.rappels]
+verify_jwt = false
+
+[functions.cuisine]
+verify_jwt = false
+
+[functions.lire-ticket]
+verify_jwt = false
+
+[functions.trajet]
+verify_jwt = false
