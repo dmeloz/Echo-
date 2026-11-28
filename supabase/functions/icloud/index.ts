@@ -7,10 +7,8 @@
 //   { action: "ecrire", cal?, href?, uid, titre, note, jour, heure, fin } → { href, etag }
 //   { action: "effacer", href } → { ok }
 import { createClient } from "npm:@supabase/supabase-js@2.119.2";
-import {
-  creerIcs, depuisZurich, estCalendrierEvenements, formatUtc, lienDans, lireEvenements, modifierIcs, prop, reponses,
-  type Champs, type Evenement,
-} from "./caldav.ts";
+import { depuisZurich, estCalendrierEvenements, formatUtc, lienDans, lireEvenements, prop, reponses, type Champs, type Evenement } from "./caldav.ts";
+import { ecrireEvenement, ErreurApple, type Dav } from "./ecrire.ts";
 
 const ORIGINES = ["https://dmeloz.github.io", "http://localhost:5173", "http://localhost:4173"];
 const RACINE = "https://caldav.icloud.com/";
@@ -164,26 +162,15 @@ Deno.serve(async (req) => {
         jour: String(q.jour ?? ""), heure: String(q.heure ?? ""), fin: String(q.fin ?? ""),
       };
       if (!/^[^\r\n]{1,200}$/.test(c.uid) || !c.titre || !JOUR.test(c.jour) || !HEURE.test(c.heure) || !HEURE.test(c.fin)) throw new Erreur("demande");
-      let href = typeof q.href === "string" && q.href ? pourApple(q.href) : "";
-      let r: Response;
-      if (href) {
-        const avant = await dav("GET", href, auth);
-        if (avant.status === 404) { await avant.body?.cancel(); href = ""; }
-        else {
-          if (!avant.ok) { await avant.body?.cancel(); throw new Erreur("apple", 502); }
-          r = await dav("PUT", href, auth, modifierIcs(await avant.text(), c));
-          if (!r.ok) { await r.body?.cancel(); throw new Erreur("apple", 502); }
-          await r.body?.cancel();
-          return repondre({ href, etag: r.headers.get("etag") ?? "" });
-        }
-      }
-      let cal = typeof q.cal === "string" && q.cal ? pourApple(q.cal) : "";
-      if (!cal) cal = await calendrierPourEcrire(auth);
-      href = new URL(encodeURIComponent(c.uid) + ".ics", cal.endsWith("/") ? cal : cal + "/").href;
-      r = await dav("PUT", href, auth, creerIcs(c), { "If-None-Match": "*" });
-      if (!r.ok) { await r.body?.cancel(); throw new Erreur("apple", 502); }
-      await r.body?.cancel();
-      return repondre({ href, etag: r.headers.get("etag") ?? "" });
+      const href = typeof q.href === "string" && q.href ? pourApple(q.href) : "";
+      const cal = typeof q.cal === "string" && q.cal ? pourApple(q.cal) : "";
+      const requete: Dav = async (methode, url, corps, plus) => {
+        const r = await dav(methode, url, auth, corps, plus);
+        const texte = methode === "GET" && r.ok ? await r.text() : (await r.body?.cancel(), "");
+        return { status: r.status, ok: r.ok, etag: r.headers.get("etag") ?? "", texte: () => Promise.resolve(texte) };
+      };
+      try { return repondre(await ecrireEvenement(requete, c, href, () => (cal ? Promise.resolve(cal) : calendrierPourEcrire(auth)))); }
+      catch (e) { if (e instanceof ErreurApple) throw new Erreur("apple", 502); throw e; }
     }
 
     if (q.action === "effacer") {
