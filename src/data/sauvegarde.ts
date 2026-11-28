@@ -25,7 +25,7 @@ export async function exporter() {
   const fichier = new File([JSON.stringify(f)], nom, { type: "application/json" });
   // Sur iPhone : la feuille de partage (Enregistrer dans Fichiers, AirDrop, Messages…).
   if (navigator.canShare?.({ files: [fichier] })) {
-    try { await navigator.share({ files: [fichier], title: "Sauvegarde Echo" }); return; }
+    try { await navigator.share({ files: [fichier], title: "Sauvegarde Echo" }); confirmer("Sauvegarde prête"); return; }
     catch (e) { if ((e as Error).name === "AbortError") return; } // autre souci : on passe au téléchargement
   }
   const url = URL.createObjectURL(fichier);

@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { confirmer } from "../lib/messages";
+import { confirmer, quandFait } from "../lib/messages";
 import { auJour, heureFr, libelleJour, minutes, nouvelId } from "../lib/dates";
 import { NIVEAUX, niveau } from "../lib/importance";
 import type { Etape, Niveau, Noms, Personne, Qui, Repete, Tache } from "../lib/types";
@@ -125,7 +125,7 @@ export async function changerNiveau(t: Tache, sens: 1 | -1) {
 // Supprimer = mettre à la corbeille (30 jours). Les photos restent sur le téléphone jusqu'à la fin du délai.
 export const DELAI_CORBEILLE = 30 * 86400_000;
 export async function supprimer(id: string) {
-  if (await mettreCorbeille(id)) toast("Mis à la corbeille", { action: { label: "Annuler", onClick: () => remettre(id) } });
+  if (await mettreCorbeille(id)) toast("Mis à la corbeille", { action: { label: "Annuler", onClick: () => { quandFait(remettre(id), "Remis dans tes tâches", undefined, "Elle est déjà revenue"); } } });
 }
 // Mettre à la corbeille sans message (aussi utilisé par Echo). false : la tâche n'existe plus.
 export async function mettreCorbeille(id: string) {
@@ -143,11 +143,13 @@ export async function mettreCorbeille(id: string) {
 }
 
 // Sortir une tâche de la corbeille : elle revient comme avant (sans son ancien lien iCloud, qui n'existe plus).
+// Rend vrai si la tâche est revenue (faux : elle n'était plus à la corbeille, déjà remise ici ou par l'autre téléphone).
 export const remettre = (id: string) => db.transaction("rw", db.taches, db.corbeille, async () => {
   const e = await db.corbeille.get(id);
-  if (!e) return;
+  if (!e) return false;
   await db.taches.put({ ...e.tache, ical: undefined });
   await db.corbeille.delete(id);
+  return true;
 });
 
 // Au démarrage : ce qui est à la corbeille depuis plus de 30 jours s'en va pour de bon, avec ses photos.
