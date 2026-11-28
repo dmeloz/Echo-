@@ -437,7 +437,7 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
           {PARTIES.map((p) => <button key={p} type="button" role="tab" aria-selected={partie === p} onClick={() => { vibrer(4); poserReglage("budgetPartie", p); }}>{NOM_PARTIE[p]}</button>)}
         </div>
         <button type="button" className="rond-horaires budget-nous" aria-label={aRendre ? `Entre nous : ${chf(aRendre)} francs à rendre` : "Entre nous"} onClick={() => setEntreNous(true)}>
-          <Users size={19} strokeWidth={1.8} />{aRendre > 0 && <i aria-hidden="true" />}
+          <Users size={19} strokeWidth={1.8} />{aRendre > 0 && <i key={aRendre} aria-hidden="true" />}
         </button>
       </div>
       {/* key : la partie se redessine au changement de mois (le lot « Mouvement » la fait alors glisser du bon côté).
