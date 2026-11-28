@@ -468,8 +468,13 @@ async function prevenir(nouvelles: Array<{ par: string; texte: string }>) {
       if (mot) annoncer(mot);
     }
   }
-  if (nouvelles.length > 3) { toast(`${prenom(nouvelles[0].par)} a fait ${nouvelles.length} changements`); return; }
-  for (const n of nouvelles) toast(`${prenom(n.par)} ${n.texte}`, { duration: 5000 });
+  // Un message par personne pour les changements arrivés ensemble ; s'il serait trop long, le nombre suffit.
+  const parNom = new Map<string, string[]>();
+  for (const n of nouvelles) parNom.set(prenom(n.par), [...(parNom.get(prenom(n.par)) ?? []), n.texte]);
+  for (const [nom, textes] of parNom) {
+    const phrase = `${nom} ${textes.join(", puis ")}`;
+    toast(textes.length > 3 || phrase.length > 90 ? `${nom} a fait ${textes.length} changements` : phrase, { duration: 5000 });
+  }
 }
 
 // Les prénoms viennent du foyer : chacun a donné le sien au premier lancement.
