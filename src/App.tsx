@@ -163,7 +163,7 @@ export default function App() {
         onChoisir={aller} onApercu={setApercu} onOuvert={ranger}
         echo={<BoutonEcho ouverte={barre !== "ferme"} ecoute={barre === "voix"} onToucher={() => (barre === "ferme" ? montrer() : ranger())} onMaintenir={ecouter} />}
       >
-        <div className="cadre">
+        <main className="cadre">
           <header className="entete">
             {recherche !== null ? <ChampRecherche valeur={recherche} onValeur={setRecherche} onFermer={() => setRecherche(null)} /> : <>
             <div>
@@ -175,8 +175,8 @@ export default function App() {
               {/* La place d'un module dans l'en-tête : il y pose un petit bouton (« Au magasin » pour Cuisine). */}
               <span id="entete-module" />
               <button type="button" className="loupe-ouvrir" aria-label="Chercher dans Echo" onClick={() => setRecherche("")}><Search size={20} strokeWidth={2} /></button>
-              <a className="duo" href="#reglages" aria-label={autreLa ? "Les deux profils du foyer" : "Ton profil"} onClick={(e) => { e.preventDefault(); aller("reglages"); }}>
-                <i className={proprio}>{initialeDe(noms, proprio)}</i>{autreLa && <i className={autre(proprio)}>{initialeDe(noms, autre(proprio))}</i>}
+              <a className="duo" href="#reglages" aria-label={autreLa ? `${initialeDe(noms, proprio)} ${initialeDe(noms, autre(proprio))}, les deux profils du foyer` : `${initialeDe(noms, proprio)}, ton profil`} onClick={(e) => { e.preventDefault(); aller("reglages"); }}>
+                <i className={proprio}>{initialeDe(noms, proprio)}</i>{autreLa && " "}{autreLa && <i className={autre(proprio)}>{initialeDe(noms, autre(proprio))}</i>}
               </a>
             </div>
             </>}
@@ -192,7 +192,7 @@ export default function App() {
               : <Aujourdhui taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} onOuvrir={(t) => ouvrir(t)} onAller={aller} onCreer={() => ouvrir(null, { titre: "", jour: auJour(0, now), heure: "", qui: proprio, repete: "", niveau: null })} />}
           </div>
           </Secours>}
-        </div>
+        </main>
       </MenuGlissant>
 
       {!astuceVue && <span className="astuce" aria-hidden="true">Touche pour écrire · maintiens pour parler</span>}

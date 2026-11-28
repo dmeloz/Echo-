@@ -194,7 +194,7 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail, proprio, all
   const rangs = [...avecHeure.map((t) => ({ m: minutes(t.heure), t, libre: null as null | { de: number; a: number } })), ...libres.map((l) => ({ m: l.de, t: null as Tache | null, libre: l }))].sort((a, b) => a.m - b.m);
   // Le trait « maintenant » se pose avant la première chose à venir (un trou commence toujours à maintenant ou après).
   const iMaintenant = jour === today ? rangs.findIndex((r) => (r.libre ? r.m >= nowMin : r.m > nowMin)) : -1;
-  const trait = <span className="maintenant-p" aria-label={`Il est ${heureFr(hm(nowMin))}`} />;
+  const trait = <span className="maintenant-p" role="img" aria-label={`Il est ${heureFr(hm(nowMin))}`} />;
   const ligne = (t: Tache) => (
     <li key={t.id}>
       <button className={`bloc-p ${classeQui(t)}${t.fait ? " fait" : ""}${t.evt ? " evt" : ""}`} onClick={() => ouvrir(t)}>
