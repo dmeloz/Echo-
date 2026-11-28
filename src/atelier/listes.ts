@@ -44,7 +44,7 @@ const CODES: Record<string, string> = { c1: "C1", c5: "C5", c6: "C6", "c-repos":
 export const NOMS_JETONS: { groupe: string; test: (n: string) => boolean; noms: Record<string, string> }[] = [
   { groupe: "Couleurs", test: (n) => /^--(fond|coulisses|reflet|bleu|turquoise|encre|discret|trait|verre|bord|ombre|rouge)/.test(n), noms: {
     "--fond": "Fond de la page", "--coulisses": "Fond derrière le menu", "--reflet-bleu": "Reflet bleu", "--reflet-turquoise": "Reflet turquoise", "--reflet-lavande": "Reflet lavande",
-    "--bleu": "Bleu (important, Echo)", "--bleu-pale": "Bleu pâle", "--turquoise": "Turquoise (fait, 2e profil)", "--turquoise-texte": "Turquoise des textes", "--turquoise-pale": "Turquoise pâle",
+    "--bleu": "Bleu (important, Echo)", "--bleu-pale": "Bleu pâle", "--bleu-texte": "Bleu des textes", "--turquoise": "Turquoise (fait, 2e profil)", "--turquoise-texte": "Turquoise des textes", "--turquoise-pale": "Turquoise pâle",
     "--encre": "Texte", "--discret": "Texte discret", "--trait": "Traits fins", "--verre": "Verre des cartes", "--verre-fort": "Verre épais", "--bord": "Bord des cartes", "--ombre": "Ombre des cartes", "--rouge": "Rouge (en retard)" } },
   { groupe: "Tailles de texte", test: (n) => n.startsWith("--t-"), noms: { "--t-petit": "Petit texte", "--t-corps": "Texte normal", "--t-phrase": "Phrase d'accueil", "--t-carte": "Titre de carte", "--t-titre": "Titre de page" } },
   { groupe: "Espaces et arrondis", test: (n) => /^--[er]\d$/.test(n), noms: Object.fromEntries([1, 2, 3, 4, 5, 6, 7].flatMap((i) => [[`--e${i}`, `Espace ${i}`], [`--r${i}`, `Arrondi ${i}`]])) },
