@@ -13,18 +13,13 @@ describe("un seul message à la fois", () => {
   });
   it("rien à faire avec un seul message", () => { expect(aFermer([v(1)])).toEqual([]); });
   it("reconnaît ce qui compte", () => {
-    expect(estSimple({ id: 1, title: "Enregistré" })).toBe(true);
-    expect(estSimple({ id: 1, title: "Ordre changé", type: "success" })).toBe(true);
-    expect(estSimple({ id: 1 })).toBe(false);
-    expect(estSimple({ id: 1, title: "Pas enregistré. Réessaie." })).toBe(false);
-    expect(estSimple({ id: 1, title: "Je n'ai reconnu aucun code." })).toBe(false);
-    expect(estSimple({ id: 1, title: "Sarah a ajouté Vétérinaire pour le chat demain" })).toBe(false);
-    expect(estSimple({ id: 1, title: "Enregistré", onAutoClose: () => {} })).toBe(false);
-    expect(estSimple({ id: 1, title: "Chargement", type: "loading" })).toBe(false);
-    expect(estSimple({ id: 1, title: "Pain : ajouté", action: { label: "Annuler", onClick: () => {} } })).toBe(false);
-    expect(estSimple({ id: 1, title: "Retiré", onDismiss: () => {} })).toBe(false);
-    expect(estSimple({ id: 1, title: "Enregistré", duration: 7000 })).toBe(false);
-    expect(estSimple({ id: "erreur", title: "Oups" })).toBe(false);
-    expect(estSimple({ id: 1, title: "Oups", type: "error" })).toBe(false);
+    const c = { className: "remplacable" };
+    expect(estSimple({ id: 1, title: "Enregistré", ...c })).toBe(true);
+    expect(estSimple({ id: 1, title: "Enregistré" })).toBe(false);
+    expect(estSimple({ id: 1, title: "Plus aucune semaine libre à proposer." })).toBe(false);
+    expect(estSimple({ id: 1, title: "Pain : ajouté", ...c, action: { label: "Annuler", onClick: () => {} } })).toBe(false);
+    expect(estSimple({ id: 1, title: "Retiré", ...c, onDismiss: () => {} })).toBe(false);
+    expect(estSimple({ id: 1, title: "Enregistré", ...c, onAutoClose: () => {} })).toBe(false);
+    expect(estSimple({ id: 1, title: "Enregistré", ...c, duration: 7000 })).toBe(false);
   });
 });

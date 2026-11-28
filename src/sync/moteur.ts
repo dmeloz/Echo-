@@ -276,11 +276,13 @@ async function prevenir(nouvelles: Array<{ par: string; texte: string }>) {
     }
   }
   // Un seul message pour les changements arrivés ensemble ; s'il serait trop long ou à plusieurs, le nombre suffit.
-  const auteurs = [...new Set(nouvelles.map((n) => prenom(n.par)))];
-  const phrase = nouvelles.map((n, i) => (i ? n.texte : `${auteurs[0]} ${n.texte}`)).join(", puis ");
   if (!nouvelles.length) return;
-  if (auteurs.length > 1) toast(`${auteurs.join(" et ")} : ${nouvelles.length} changements`, { duration: 5000 });
-  else if (nouvelles.length > 1 && (nouvelles.length > 3 || phrase.length > 90)) toast(`${auteurs[0]} a fait ${nouvelles.length} changements`, { duration: 5000 });
+  const ids = [...new Set(nouvelles.map((n) => n.par))];
+  const noms = ids.map(prenom);
+  const liste = noms.length > 1 ? `${noms.slice(0, -1).join(", ")} et ${noms[noms.length - 1]}` : noms[0];
+  const phrase = nouvelles.map((n, i) => (i ? n.texte : `${noms[0]} ${n.texte}`)).join(", puis ");
+  if (ids.length > 1) toast(`${liste} : ${nouvelles.length} changements`, { duration: 5000 });
+  else if (nouvelles.length > 3 || phrase.length > 90) toast(`${noms[0]} a fait ${nouvelles.length} changements`, { duration: 5000 });
   else toast(phrase, { duration: 5000 });
 }
 

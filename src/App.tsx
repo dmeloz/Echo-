@@ -2,6 +2,7 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { BarreAjout } from "./components/BarreAjout";
 import { UnMessage } from "./components/UnMessage";
+import { DUREE_MESSAGE } from "./lib/messages";
 import { BoutonEcho } from "./components/BoutonEcho";
 import { ChampRecherche, ResultatsRecherche } from "./components/Recherche";
 import { Search } from "pulsoicon-react";
@@ -187,7 +188,7 @@ export default function App() {
       )}
       {/* Les messages (avec Annuler) prennent la place de la barre rangée, à gauche de la capsule. */}
       <UnMessage />
-      <Toaster position="bottom-center" offset={BORDS_MESSAGE} mobileOffset={BORDS_MESSAGE} toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: 4000 }} />
+      <Toaster position="bottom-center" offset={BORDS_MESSAGE} mobileOffset={BORDS_MESSAGE} toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: DUREE_MESSAGE }} />
     </>
   );
 }

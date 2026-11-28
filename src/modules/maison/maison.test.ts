@@ -101,7 +101,7 @@ describe("les gestes", () => {
     await ajouterCorvees([{ nom: "Vaisselle", tous: 1 }, { nom: "vaisselle", tous: 2 }]);
     expect(await db.maison_corvees.count()).toBe(1);
     await ajouterCorvees([{ nom: "Vaisselle", tous: 1 }]);
-    expect(toast).toHaveBeenLastCalledWith("C'est déjà dans la liste");
+    expect(toast).toHaveBeenLastCalledWith("C'est déjà dans la liste", { className: "remplacable" });
     await ajouterCorvees([{ nom: "Draps", tous: 14 }]);
     await annuler();
     expect((await db.maison_corvees.toArray()).map((c) => c.nom)).toEqual(["Vaisselle"]);

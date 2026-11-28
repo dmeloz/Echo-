@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { confirmer } from "../../lib/messages";
 import { db } from "../../data/db";
 import { auJour, nouvelId, sansAccents } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
@@ -37,7 +38,7 @@ export async function ajouterPoste(n: NouveauPoste): Promise<Poste | null> {
   const nom = propre(n.nom, 60);
   if (!nom) return null;
   const tous = await db.budget_postes.toArray();
-  if (tous.some((p) => p.sorte === n.sorte && p.qui === n.qui && memeNom(p.nom, nom) && valeurDe(p, n.des) !== null)) { toast("C'est déjà dans la liste"); return null; }
+  if (tous.some((p) => p.sorte === n.sorte && p.qui === n.qui && memeNom(p.nom, nom) && valeurDe(p, n.des) !== null)) { confirmer("C'est déjà dans la liste"); return null; }
   const quand = Date.now();
   const p: Poste = {
     id: nouvelId(), nom: nom[0].toUpperCase() + nom.slice(1), sorte: n.sorte, ...(n.qui && n.sorte !== "foyer" ? { qui: n.qui } : {}), ...(n.sorte === "foyer" ? { compte: n.compte ?? "commun" } : {}),

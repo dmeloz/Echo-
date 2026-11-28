@@ -1,4 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
+import { confirmer } from "../../lib/messages";
 import { useState } from "react";
 import { toast } from "sonner";
 import { db } from "../../data/db";
@@ -57,5 +58,5 @@ export function PopupGouts({ noms, proprio, onFini }: ContexteModule & { onFini:
 export function GoutsReglages({ proprio }: { proprio: Personne }) {
   const g = useLiveQuery(async () => (await db.cuisine_gouts.get(proprio)) ?? null, [proprio], undefined);
   if (g === undefined) return null;
-  return <FormGouts key={g?.maj ?? 0} qui={proprio} depart={g} onFini={() => toast("Enregistré")} />;
+  return <FormGouts key={g?.maj ?? 0} qui={proprio} depart={g} onFini={() => confirmer("Enregistré")} />;
 }
