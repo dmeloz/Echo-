@@ -119,9 +119,9 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
   return (
     <section className="g horaires" aria-labelledby="lab-horaires">
       <div className="mois-tete">
-        <button type="button" className="rond-petit" aria-label="Mois précédent" disabled={!!apercu} onClick={() => changerMois(-1)}><ChevronLeft size={20} strokeWidth={2} /></button>
+        <button type="button" className="rond-petit" aria-label="Mois précédent" data-va="avant" disabled={!!apercu} onClick={() => changerMois(-1)}><ChevronLeft size={20} strokeWidth={2} /></button>
         <h2 id="lab-horaires">{nomMois(mois)}</h2>
-        <button type="button" className="rond-petit" aria-label="Mois suivant" disabled={!!apercu} onClick={() => changerMois(1)}><ChevronRight size={20} strokeWidth={2} /></button>
+        <button type="button" className="rond-petit" aria-label="Mois suivant" data-va="apres" disabled={!!apercu} onClick={() => changerMois(1)}><ChevronRight size={20} strokeWidth={2} /></button>
       </div>
 
       {apercu ? (
@@ -174,7 +174,7 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
         <button type="button" className="pinceau plus-codes" aria-expanded={autres} onClick={() => setAutres((a) => !a)}><b>{autres ? "Moins" : "Autres"}</b><small>{autres ? "codes rares" : "C2, C3, C4"}</small></button>
       </div>
 
-      <div className={`grille-mois${apercu ? " en-apercu" : ""}`} role="grid" aria-label={`Horaires de ${nomMois(mois)}`}
+      <div key={mois} className={`grille-mois${apercu ? " en-apercu" : ""}`} role="grid" aria-label={`Horaires de ${nomMois(mois)}`}
         onPointerDown={debut} onPointerMove={suivre} onPointerUp={fin} onPointerCancel={fin} onPointerLeave={fin}>
         {ENTETES.map((e, i) => <span key={i} className="gm-entete" aria-hidden="true">{e}</span>)}
         {vide.map((_, i) => <span key={"v" + i} aria-hidden="true" />)}

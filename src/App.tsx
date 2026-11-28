@@ -1,6 +1,8 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { toast, Toaster } from "sonner";
 import { BarreAjout } from "./components/BarreAjout";
+import { UnMessage } from "./components/UnMessage";
+import { DUREE_MESSAGE } from "./lib/messages";
 import { BoutonEcho } from "./components/BoutonEcho";
 import { ChampRecherche, ResultatsRecherche } from "./components/Recherche";
 import { Search } from "pulsoicon-react";
@@ -145,7 +147,7 @@ export default function App() {
             {recherche !== null ? <ChampRecherche valeur={recherche} onValeur={setRecherche} onFermer={() => setRecherche(null)} /> : <>
             <div>
               <div className="date">{vue.id === "aujourdhui" ? `${salut} ${noms[proprio]} · ${dCourt}` : dCourt.replace(/^./, (c) => c.toUpperCase())}</div>
-              <h1 className="page-titre">{vue.libelle}</h1>
+              <h1 className="page-titre" key={vue.id}>{vue.libelle}</h1>
             </div>
             <div className="entete-droite">
               {vue.id === "aujourdhui" && taches && <ResumeMatin taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} />}
@@ -185,7 +187,8 @@ export default function App() {
           onPlusTard={() => { setRelier(false); poserReglage("connexionProposee", true); }} />
       )}
       {/* Les messages (avec Annuler) prennent la place de la barre rangée, à gauche de la capsule. */}
-      <Toaster position="bottom-center" offset={BORDS_MESSAGE} mobileOffset={BORDS_MESSAGE} toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: 4000 }} />
+      <UnMessage />
+      <Toaster position="bottom-center" offset={BORDS_MESSAGE} mobileOffset={BORDS_MESSAGE} toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: DUREE_MESSAGE }} />
     </>
   );
 }
