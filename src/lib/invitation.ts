@@ -15,8 +15,8 @@ export const lienInvitation = (code: string, adresse = location.href) => {
   return u.href;
 };
 
-// Echo ouvert dans Safari, sur iPhone ou iPad (pas depuis l'écran d'accueil) : il vaut mieux l'installer avant
-// de rejoindre le foyer, car l'app de l'écran d'accueil ne voit rien de ce qui a été fait dans Safari.
+// Echo ouvert dans un navigateur sur iPhone ou iPad (pas depuis l'écran d'accueil) : il vaut mieux l'installer avant
+// de rejoindre le foyer, car l'app de l'écran d'accueil ne voit rien de ce qui a été fait dans le navigateur.
 export const dansSafariIos = (n: Navigator = navigator, installe = matchMedia("(display-mode: standalone)").matches) => {
   const ios = /iPhone|iPad|iPod/.test(n.userAgent) || (/Macintosh/.test(n.userAgent) && n.maxTouchPoints > 1);
   return ios && !installe && !(n as Navigator & { standalone?: boolean }).standalone;

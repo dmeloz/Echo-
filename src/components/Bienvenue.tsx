@@ -50,7 +50,7 @@ export function Bienvenue({ noms, proprio, onFini, codeRecu }: { noms: Noms; pro
       </div>
     );
   }
-  if (relier) return <Connexion prenom={noms[moi]} proprio={moi} codeRecu={codeRecu} onFini={() => setRelier(false)} onPlusTard={() => setRelier(false)} />;
+  if (relier) return <Connexion key={codeRecu ?? ""} prenom={noms[moi]} proprio={moi} codeRecu={codeRecu} onFini={() => setRelier(false)} onPlusTard={() => setRelier(false)} />;
 
   const qui = proprio ?? moi; // la place a pu changer en rejoignant le foyer
   const pages = guide(noms, qui);

@@ -63,12 +63,13 @@ export default function App() {
   const verifie = useRef<string | null>(null);
   const aUnFoyer = etatFoyer && !!etatFoyer.foyer;
   useEffect(() => {
-    if (!invitation || aUnFoyer === undefined || verifie.current === invitation) return;
+    if (!invitation) { verifie.current = null; return; } // oublié : le même lien pourra revenir
+    if (aUnFoyer === undefined || verifie.current === invitation) return;
     verifie.current = invitation;
     (aUnFoyer ? estConnecte() : Promise.resolve(false)).then((relie) => {
       if (relie) { confirmer("Ce téléphone est déjà dans le foyer."); oublierInvitation(); }
       else setLibre(invitation);
-    });
+    }, () => setLibre(invitation)); // sans réponse sûre, on laisse essayer : le serveur dira si le code ne va pas
   }, [invitation, aUnFoyer]);
   const codeRecu = invitation && libre === invitation ? invitation : null;
   const accueilSafari = !!codeRecu && !resteDansSafari && dansSafariIos();
@@ -201,7 +202,7 @@ export default function App() {
       <MiseAJour />
       {!accueilSafari && bienvenue && <Bienvenue noms={noms} proprio={proprioBrut} codeRecu={codeRecu} onFini={() => setGuideFerme(true)} />}
       {!accueilSafari && !bienvenue && proprioBrut && (relier || (guideVu && aProposer) || codeRecu) && (
-        <Connexion prenom={noms[proprioBrut]} proprio={proprioBrut} rejoindreSeulement={!!etatFoyer?.foyer} demanderPrenom codeRecu={codeRecu} onFini={() => { setRelier(false); poserReglage("connexionProposee", true); }}
+        <Connexion key={codeRecu ?? ""} prenom={noms[proprioBrut]} proprio={proprioBrut} rejoindreSeulement={!!etatFoyer?.foyer} demanderPrenom codeRecu={codeRecu} onFini={() => { setRelier(false); poserReglage("connexionProposee", true); }}
           onPlusTard={() => { setRelier(false); poserReglage("connexionProposee", true); }} />
       )}
       {accueilSafari && codeRecu && <InvitationSafari code={codeRecu} onIci={() => setResteDansSafari(true)} />}

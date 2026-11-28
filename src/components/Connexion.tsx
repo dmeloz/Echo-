@@ -130,8 +130,8 @@ function useCopie() {
   return [copie, copier] as const;
 }
 
-// Le lien ouvert dans Safari sur iPhone ou iPad. Echo se rejoint depuis l'écran d'accueil (c'est là qu'il garde
-// le foyer et envoie les rappels), et Safari ne lui passe rien : le code passe par « Copier », puis se colle dans Echo.
+// Le lien ouvert dans un navigateur sur iPhone ou iPad (Safari, Chrome…). Echo se rejoint depuis l'écran d'accueil (c'est là
+// qu'il garde le foyer et envoie les rappels), et le navigateur ne lui passe rien : le code passe par « Copier », puis se colle.
 export function InvitationSafari({ code, onIci }: { code: string; onIci: () => void }) {
   const [copie, copier] = useCopie();
   return (
@@ -141,7 +141,7 @@ export function InvitationSafari({ code, onIci }: { code: string; onIci: () => v
         <h1 id="is-titre">On t'invite dans Echo</h1>
         <p>D'abord, installe Echo sur ton écran d'accueil :</p>
         <ol className="installer">
-          <li><span>Touche <Share size={18} strokeWidth={2} aria-hidden="true" /> <b>Partager</b> en bas de Safari (parfois sous « ••• »).</span></li>
+          <li><span>Touche <Share size={18} strokeWidth={2} aria-hidden="true" /> <b>Partager</b> (dans Safari : en bas, parfois sous « ••• »).</span></li>
           <li><span>Choisis <b>Sur l'écran d'accueil</b>, puis <b>Ajouter</b>.</span></li>
           <li><span>Ouvre Echo depuis l'écran d'accueil, écris ton prénom, touche <b>J'ai un code</b> et colle ce code.</span></li>
         </ol>
@@ -150,7 +150,7 @@ export function InvitationSafari({ code, onIci }: { code: string; onIci: () => v
           <small>Valable 1 heure, une seule fois.</small>
           <button type="button" className="bouton second" onClick={() => copier(code, "code")}><Copy size={18} strokeWidth={2} /> {copie ? "Code copié" : "Copier le code"}</button>
         </div>
-        <button type="button" className="bouton-texte" onClick={onIci}>Continuer dans Safari</button>
+        <button type="button" className="bouton-texte" onClick={onIci}>Continuer sans installer</button>
       </div>
     </div>
   );
