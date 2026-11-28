@@ -1,7 +1,11 @@
 import { db } from "../../data/db";
 import type { Action, Executant } from "../../lib/echo/outils";
 import { autre, type Personne } from "../../lib/types";
-import { ajouterCorvees, ajouterPapier, ajouterReparation, faireCorvee, memeNom, retirerPapierSansBruit } from "./actions";
+import { ajouterCorvees, ajouterPapier, ajouterReparation, faireCorvee, memeNom, poserRepartition, retirerPapierSansBruit } from "./actions";
+import { completer } from "../../lib/fixes";
+import { CODES } from "../../lib/horaires";
+import { auJour, plusJours } from "../../lib/dates";
+import { minutesDeChacun, repartir } from "./repartition";
 import { DOSSIERS, ETATS_REPARATION, QUOIS, REPETES, aFairePapier, besoin, depuis, devinerDossier, equilibre, joursAvant, nomDossier, nomRythme, parts, quandPapier, texteMontant, trouverCorvees, vraiJour, type Corvee, type QuiCorvee, type Taille, prisPar } from "./donnees";
 
 // Ce que l'assistant Echo peut faire dans la Maison (décrit dans supabase/functions/_shared/echo-outils.ts).
@@ -46,6 +50,29 @@ export const OUTILS_MAISON: Record<string, Executant> = {
           for (const c of trouvees) defaire.push(await faireCorvee(c.id, par));
           return async () => { for (const d of defaire.reverse()) await d?.(); };
         },
+      };
+    },
+  },
+  repartir_semaine: {
+    preparer: async (e, ctx): Promise<Action | string> => {
+      const debut = auJour(0, ctx.now), fin = plusJours(debut, 6);
+      const poses = (await db.horaires.where("jour").between(debut, fin, true, true).toArray()).filter((h) => h.code in CODES && !CODES[h.code].auto);
+      const prop = repartir(await db.maison_corvees.toArray(), completer(poses, ctx.noms, debut, fin), await db.maison_faits.toArray(), ctx.now);
+      const libres = prop.parts.filter((p) => !p.fixe);
+      if (!libres.length) return "Aucune corvée libre ne tombe dans les 7 jours : rien à répartir.";
+      for (const ch of (Array.isArray(e.changements) ? e.changements : []).slice(0, 20)) {
+        const o = (ch ?? {}) as Record<string, unknown>, dit = court(o.corvee, 80);
+        const c = trouverCorvees(dit, libres.map((p) => p.corvee))[0];
+        if (!c) return `« ${dit} » n'est pas une corvée libre de la semaine. Regarde les noms avec voir_maison.`;
+        if (o.qui !== "moi" && o.qui !== "elle") return "qui : « moi » ou « elle ».";
+        libres.find((p) => p.corvee.id === c.id)!.qui = o.qui;
+      }
+      const m = minutesDeChacun(prop.parts);
+      return {
+        // Donner des corvées à l'autre : toujours demandé.
+        outil: "repartir_semaine", genre: "gros", libelle: "Répartir la semaine",
+        details: [...libres.map((p) => `${p.corvee.nom} : ${ctx.noms[p.qui]}`), `${ctx.noms.moi} ${m.moi} min, ${ctx.noms.elle} ${m.elle} min`],
+        faire: () => poserRepartition(libres.map((p) => ({ id: p.corvee.id, qui: p.qui })), prop.jusqu, true),
       };
     },
   },
