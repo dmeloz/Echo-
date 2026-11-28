@@ -77,3 +77,45 @@ p { text-wrap: pretty; }
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .ajout, .apercu { background: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* ===== Lot 2 « Mouvement » : on sent d'où l'on vient et où l'on va. Le sens est donné par src/lib/mouvement.ts. ===== */
+
+/* 8. Le sens d'arrivée. La base (styles.css) : ce qui arrive monte de 10 px. Ici, selon le chemin :
+   une sous-page (elle montre le bouton retour) vient de la droite ; au retour, la page d'avant revient de la gauche ;
+   d'un onglet ou d'un jour à l'autre, la page vient du côté touché. Une seule animation (« apparition »), deux variables. */
+.cadre.arrivee:has(.retour, .retour-agenda) { --dx: 26px; --dy: 0px; }
+html[data-sens] .cadre.arrivee { --dy: 0px; }
+html[data-sens="droite"] .cadre.arrivee, html[data-sens="apres"] .cadre.arrivee { --dx: 26px; }
+html[data-sens="gauche"] .cadre.arrivee, html[data-sens="retour"] .cadre.arrivee, html[data-sens="avant"] .cadre.arrivee { --dx: -26px; }
+/* Mois d'avant, mois d'après (flèches marquées data-va) : seule la grille glisse, les flèches restent sous le doigt. */
+html:is([data-sens="avant"], [data-sens="apres"]) :is(.mois-grille, .grille-mois) { animation: apparition var(--m-apparition) var(--douce) both; }
+.reglage-page { animation: apparition var(--m-onglet) var(--douce) both; }
+/* La barre des onglets ne bouge pas quand on change d'onglet : seule la goutte glisse, même si la barre est redessinée. */
+html[data-sens="droite"] .arrivee > .agenda-barre, html[data-sens="gauche"] .arrivee > .agenda-barre { --dx: 0px; --op: 1; }
+.vues-goutte { animation: goutte-part .55s cubic-bezier(.34, 1.45, .5, 1); }
+@keyframes goutte-part { from { left: calc(var(--i-avant, var(--i)) * 100% / var(--n)); } }
+/* Le titre de la page change avec elle, sans sauter. */
+.page-titre { animation: titre-arrive var(--m-apparition) var(--douce) both; }
+@keyframes titre-arrive { from { opacity: 0; translate: 0 6px; } }
+
+/* 9. L'appui : tout ce qui se touche répond sous le doigt, tout de suite. Un bouton se tasse un peu, une ligne de liste s'éclaire.
+   Règle de base sans poids (:where) : un bouton qui a déjà son propre appui le garde. */
+:where(button, [role="button"], a.duo) { transition: scale .2s var(--douce); }
+:where(button:active, [role="button"]:active, a.duo:active):where(:not(:disabled, .ombrage, .corps, .tuile, .jour-rang, .stock-ligne, .sommaire-ligne, .art-nom, .art-magasin, .deja-tete, .res, .jour-repas, .etape-batch, .lt-ajout, .tourner, .focus-titre)) { scale: .97; }
+.lt-libre button:active { scale: none; }
+.puce:active, .case:active, .retirer:active, .ray:active { scale: .94; }
+.stock-ligne, .art-nom, .deja-tete, .res { border-radius: 10px; transition: background .2s var(--douce), box-shadow .2s var(--douce); }
+.stock-ligne:active, .art-nom:active, .deja-tete:active, .res:active { background: rgb(18 40 58 / .05); box-shadow: 0 0 0 6px rgb(18 40 58 / .05); transition-duration: .05s; }
+
+/* 10. Le haut de la page : ce qui défile s'efface en arrivant sous l'heure, au lieu d'être coupé net (comme autour de la capsule). */
+.scene::before { content: ""; position: absolute; z-index: 2; top: 0; left: 0; right: 0; height: calc(env(safe-area-inset-top, 0px) + 20px); pointer-events: none;
+  background: color-mix(in srgb, var(--fond) 40%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  -webkit-mask-image: linear-gradient(#000 30%, transparent); mask-image: linear-gradient(#000 30%, transparent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .vues-goutte, .page-titre, .mois-grille, .grille-mois { animation: none !important; }
+  :where(button, [role="button"], a.duo) { transition: none; }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  .scene::before { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(var(--fond), transparent); -webkit-mask-image: none; mask-image: none; }
+}

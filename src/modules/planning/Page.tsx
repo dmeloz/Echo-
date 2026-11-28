@@ -93,7 +93,7 @@ export function PagePlanning({ noms, proprio, now, ouvrir, aller, creer }: Conte
       <IdeeEcho taches={taches} travail={travail} proprio={proprio} lautre={lautre} noms={noms} now={now} refusees={refusees} onRefuser={(id) => setRefusees((r) => [...r, id])} />
 
       {vue === "jour"
-        ? <VueJour taches={taches} jour={jourVu} today={today} now={now} noms={noms} ouvrir={ouvrir} travail={travail.get(jourVu)} proprio={proprio} aller={aller} creer={creer} />
+        ? <VueJour key={jourVu} taches={taches} jour={jourVu} today={today} now={now} noms={noms} ouvrir={ouvrir} travail={travail.get(jourVu)} proprio={proprio} aller={aller} creer={creer} />
         : <VueSemaine taches={taches} jours={jours} today={today} now={now} noms={noms} proprio={proprio} lautre={lautre} travail={travail} onJour={choisirJour} />}
       </>}
     </>

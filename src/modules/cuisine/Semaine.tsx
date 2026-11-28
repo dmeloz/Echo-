@@ -94,7 +94,7 @@ export function Semaine({ now, noms, proprio, prochaine, setProchaine, onBatch }
       )}
 
       {rienDuTout && !ecrit && pense !== "semaine" ? (
-        <section className="g vide">
+        <section key={jours[0]} className="g vide">
           <span className="vide-icone bleu" aria-hidden="true"><Sparkles size={24} strokeWidth={1.8} animated={false} /></span>
           <h2>Rien de prévu {prochaine ? "la semaine prochaine" : "cette semaine"}</h2>
           <p>Echo regarde vos horaires, vos goûts et ce qu'il reste à la maison, puis te propose les repas.</p>
@@ -104,7 +104,7 @@ export function Semaine({ now, noms, proprio, prochaine, setProchaine, onBatch }
       ) : null}
 
       {(!rienDuTout || ecrit || pense === "semaine") && (
-        <section className={`g semaine-repas${pense === "semaine" ? " attend" : ""}`}>
+        <section key={jours[0]} className={`g semaine-repas${pense === "semaine" ? " attend" : ""}`}>
           {jours.map((j) => {
             const r = platDe(j), b = besoinDe(j), nom = court(j, { weekday: "short" });
             if (ecrit === j) return (

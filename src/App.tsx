@@ -145,7 +145,7 @@ export default function App() {
             {recherche !== null ? <ChampRecherche valeur={recherche} onValeur={setRecherche} onFermer={() => setRecherche(null)} /> : <>
             <div>
               <div className="date">{vue.id === "aujourdhui" ? `${salut} ${noms[proprio]} · ${dCourt}` : dCourt.replace(/^./, (c) => c.toUpperCase())}</div>
-              <h1 className="page-titre">{vue.libelle}</h1>
+              <h1 className="page-titre" key={vue.id}>{vue.libelle}</h1>
             </div>
             <div className="entete-droite">
               {vue.id === "aujourdhui" && taches && <ResumeMatin taches={liste} noms={noms} proprio={proprio} now={now} modules={actifs} />}
