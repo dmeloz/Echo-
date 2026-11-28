@@ -226,7 +226,7 @@ function VueJour({ taches, jour, today, now, noms, ouvrir, travail, proprio, all
               <BlocGlissable t={r.t!}>{ligne(r.t!)}</BlocGlissable>
             </li>
           ))}
-          {jour === today && iMaintenant === -1 && <li className="lt-rang fin"><span className="maintenant-p" aria-hidden="true" /></li>}
+          {jour === today && iMaintenant === -1 && <li className="lt-rang fin">{trait}</li>}
         </ol>
       )}
       <LignesModules noms={noms} proprio={proprio} now={now} ouvrir={ouvrir} aller={aller} jour={jour} />
