@@ -1,5 +1,4 @@
 import { toast } from "sonner";
-import { confirmer } from "../../lib/messages";
 import { db } from "../../data/db";
 import { auJour, nouvelId, sansAccents } from "../../lib/dates";
 import type { Personne } from "../../lib/types";
@@ -26,7 +25,7 @@ export async function ajouterCorvees(nouvelles: NouvelleCorvee[], silencieux = f
     await db.maison_corvees.bulkAdd(ajoutees);
   });
   if (silencieux) return ajoutees;
-  if (!ajoutees.length) confirmer("C'est déjà dans la liste");
+  if (!ajoutees.length) toast("C'est déjà dans la liste");
   else toast(ajoutees.length > 1 ? `${ajoutees.length} ajoutées` : `${ajoutees[0].nom} : ajouté`, annuler(() => db.maison_corvees.bulkDelete(ajoutees.map((c) => c.id))));
   return ajoutees;
 }
@@ -103,7 +102,7 @@ export const rangerReparations = (now = Date.now()) => db.maison_reparations.fil
 export async function ajouterAppareil(nom: string): Promise<Appareil | null> {
   const n = propre(nom, 60);
   if (!n) return null;
-  if ((await db.maison_appareils.toArray()).some((a) => memeNom(a.nom, n))) { confirmer("C'est déjà dans la liste"); return null; }
+  if ((await db.maison_appareils.toArray()).some((a) => memeNom(a.nom, n))) { toast("C'est déjà dans la liste"); return null; }
   const a: Appareil = { id: nouvelId(), nom: n[0].toUpperCase() + n.slice(1), piece: "", garantie: 0, cree: Date.now() };
   await db.maison_appareils.add(a);
   toast(`${a.nom} : ajouté`, annuler(() => db.maison_appareils.delete(a.id)));
@@ -118,7 +117,7 @@ export async function retirerAppareil(a: Appareil) {
 export async function ajouterContact(c: { nom: string; role: string; tel: string }): Promise<Contact | null> {
   const nom = propre(c.nom, 80);
   if (!nom) return null;
-  if ((await db.maison_contacts.toArray()).some((x) => memeNom(x.nom, nom))) { confirmer("C'est déjà dans la liste"); return null; }
+  if ((await db.maison_contacts.toArray()).some((x) => memeNom(x.nom, nom))) { toast("C'est déjà dans la liste"); return null; }
   const contact: Contact = { id: nouvelId(), nom, role: propre(c.role, 30), tel: c.tel.slice(0, 20), cree: Date.now() };
   await db.maison_contacts.add(contact);
   toast(`${nom} : ajouté`, annuler(() => db.maison_contacts.delete(contact.id)));

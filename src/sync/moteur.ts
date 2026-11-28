@@ -275,15 +275,13 @@ async function prevenir(nouvelles: Array<{ par: string; texte: string }>) {
       if (mot) annoncer(mot);
     }
   }
-  // Un seul message pour les changements arrivés ensemble ; s'il serait trop long ou à plusieurs, le nombre suffit.
-  if (!nouvelles.length) return;
-  const ids = [...new Set(nouvelles.map((n) => n.par))];
-  const noms = ids.map(prenom);
-  const liste = noms.length > 1 ? `${noms.slice(0, -1).join(", ")} et ${noms[noms.length - 1]}` : noms[0];
-  const phrase = nouvelles.map((n, i) => (i ? n.texte : `${noms[0]} ${n.texte}`)).join(", puis ");
-  if (ids.length > 1) toast(`${liste} : ${nouvelles.length} changements`, { duration: 5000 });
-  else if (nouvelles.length > 3 || phrase.length > 90) toast(`${noms[0]} a fait ${nouvelles.length} changements`, { duration: 5000 });
-  else toast(phrase, { duration: 5000 });
+  // Un message par personne pour les changements arrivés ensemble ; s'il serait trop long, le nombre suffit.
+  const parNom = new Map<string, string[]>();
+  for (const n of nouvelles) parNom.set(prenom(n.par), [...(parNom.get(prenom(n.par)) ?? []), n.texte]);
+  for (const [nom, textes] of parNom) {
+    const phrase = `${nom} ${textes.join(", puis ")}`;
+    toast(textes.length > 3 || phrase.length > 90 ? `${nom} a fait ${textes.length} changements` : phrase, { duration: 5000 });
+  }
 }
 
 // Les prénoms viennent du foyer : chacun a donné le sien au premier lancement.
