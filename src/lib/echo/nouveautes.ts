@@ -4,6 +4,13 @@ export interface Nouveaute { jour: string; titre: string; points: string[] }
 
 export const NOUVEAUTES: Nouveaute[] = [
   {
+    jour: "2026-11-28", titre: "Inviter par un lien",
+    points: [
+      "Dans Réglages → Foyer, « Envoyer le lien » : l'autre le touche et Echo s'ouvre avec le code déjà écrit.",
+      "Sur iPhone, le lien explique d'abord comment mettre Echo sur l'écran d'accueil, et le code se copie d'un geste.",
+    ],
+  },
+  {
     jour: "2026-11-27", titre: "Le temps qu'il fait",
     points: [
       "Le résumé du matin et le petit mot d'Echo disent le temps en quelques mots.",

@@ -17,9 +17,11 @@ import { premierLancement, viderVieilleCorbeille, viderVieuxJournal } from "./da
 import { baseOuverte, db, garderLesDonnees } from "./data/db";
 import { initialeDe, poserReglage, useMaintenant, useNoms, useProfil, useReglage, useTaches } from "./data/hooks";
 import { Bienvenue } from "./components/Bienvenue";
-import { Connexion } from "./components/Connexion";
+import { Connexion, InvitationSafari } from "./components/Connexion";
+import { codeDuLien, dansSafariIos, oublierInvitation, useInvitation } from "./lib/invitation";
+import { confirmer } from "./lib/messages";
 import { ResumeMatin } from "./components/ResumeMatin";
-import { suivre } from "./sync/moteur";
+import { estConnecte, suivre } from "./sync/moteur";
 import { demarrerIcloud } from "./sync/icloud";
 import { useLiveQuery } from "dexie-react-hooks";
 import { autre } from "./lib/types";
@@ -32,7 +34,8 @@ import { Reglages } from "./pages/Reglages";
 import { Secours } from "./components/Secours";
 import { HorsLigne } from "./components/HorsLigne";
 
-const depuisAdresse = () => location.hash.slice(1) || "aujourdhui";
+// Un lien d'invitation (#rejoindre=…) ouvre l'accueil : le code est lu à part (src/lib/invitation.ts).
+const depuisAdresse = () => (codeDuLien(location.hash) ? "" : location.hash.slice(1)) || "aujourdhui";
 const BORDS_MESSAGE = { bottom: "calc(env(safe-area-inset-bottom, 0px) + 17px)", left: "14px", right: "calc(env(safe-area-inset-right, 0px) + 84px)" };
 const BASE = [{ id: "aujourdhui", libelle: "Aujourd'hui" }, { id: "reglages", libelle: "Réglages" }];
 
@@ -53,6 +56,23 @@ export default function App() {
   const autreLa = !etatFoyer?.foyer || etatFoyer.membres.some((m) => m.place === autre(proprio));
   const aProposer = !!etatFoyer && !etatFoyer.foyer && !etatFoyer.proposee;
   const [relier, setRelier] = useState(false);
+  // Ouvert par un lien d'invitation : on vérifie une fois que ce téléphone n'est pas déjà dans le foyer.
+  const invitation = useInvitation();
+  const [libre, setLibre] = useState<string | null>(null); // le code que ce téléphone peut utiliser
+  const [resteDansSafari, setResteDansSafari] = useState(false);
+  const verifie = useRef<string | null>(null);
+  const aUnFoyer = etatFoyer && !!etatFoyer.foyer;
+  useEffect(() => {
+    if (!invitation) { verifie.current = null; return; } // oublié : le même lien pourra revenir
+    if (aUnFoyer === undefined || verifie.current === invitation) return;
+    verifie.current = invitation;
+    (aUnFoyer ? estConnecte() : Promise.resolve(false)).then((relie) => {
+      if (relie) { confirmer("Ce téléphone est déjà dans le foyer."); oublierInvitation(); }
+      else setLibre(invitation);
+    }, () => setLibre(invitation)); // sans réponse sûre, on laisse essayer : le serveur dira si le code ne va pas
+  }, [invitation, aUnFoyer]);
+  const codeRecu = invitation && libre === invitation ? invitation : null;
+  const accueilSafari = !!codeRecu && !resteDansSafari && dansSafariIos();
   const now = useMaintenant();
   const [page, setPage] = useState(depuisAdresse);
   const [apercu, setApercu] = useState<string | null>(null);
@@ -128,6 +148,7 @@ export default function App() {
   const id = apercu ?? page;
   const module = actifs.find((m) => m.id === id);
   const vue = module ?? BASE.find((p) => p.id === id) ?? BASE[0];
+  const bienvenue = proprioBrut !== undefined && (proprioBrut === null || (!guideVu && !guideFerme));
   const liste = taches ?? [];
   const reste = tachesDuJour(liste, now).ouvertes.length;
   // La date s'écrit en court (« ven. 27 nov. ») : elle tient sur une ligne à côté de la salutation ou d'un bouton de module.
@@ -179,13 +200,12 @@ export default function App() {
         onTexte={setTexte} onRanger={ranger} onFinEcoute={finEcoute} onPlusOptions={(pre) => { ranger(); ouvrir(null, pre); }} />
       <FeuilleTache {...feuille} noms={noms} proprio={proprio} onFermer={() => setFeuille((f) => ({ ...f, ouverte: false }))} />
       <MiseAJour />
-      {proprioBrut !== undefined && (proprioBrut === null || (!guideVu && !guideFerme)) && (
-        <Bienvenue noms={noms} proprio={proprioBrut} onFini={() => setGuideFerme(true)} />
-      )}
-      {proprioBrut && (relier || (guideVu && aProposer)) && (
-        <Connexion prenom={noms[proprioBrut]} proprio={proprioBrut} rejoindreSeulement={!!etatFoyer?.foyer} demanderPrenom onFini={() => { setRelier(false); poserReglage("connexionProposee", true); }}
+      {!accueilSafari && bienvenue && <Bienvenue noms={noms} proprio={proprioBrut} codeRecu={codeRecu} onFini={() => setGuideFerme(true)} />}
+      {!accueilSafari && !bienvenue && proprioBrut && (relier || (guideVu && aProposer) || codeRecu) && (
+        <Connexion key={codeRecu ?? ""} prenom={noms[proprioBrut]} proprio={proprioBrut} rejoindreSeulement={!!etatFoyer?.foyer} demanderPrenom codeRecu={codeRecu} onFini={() => { setRelier(false); poserReglage("connexionProposee", true); }}
           onPlusTard={() => { setRelier(false); poserReglage("connexionProposee", true); }} />
       )}
+      {accueilSafari && codeRecu && <InvitationSafari code={codeRecu} onIci={() => setResteDansSafari(true)} />}
       {/* Les messages (avec Annuler) prennent la place de la barre rangée, à gauche de la capsule. */}
       <UnMessage />
       <Toaster position="bottom-center" offset={BORDS_MESSAGE} mobileOffset={BORDS_MESSAGE} toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: DUREE_MESSAGE }} />

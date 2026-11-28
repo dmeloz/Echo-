@@ -20,7 +20,8 @@ const guide = (noms: Noms, proprio: Personne): PageGuide[] => {
   ];
 };
 
-export function Bienvenue({ noms, proprio, onFini }: { noms: Noms; proprio: Personne | null; onFini: () => void }) {
+// codeRecu : Echo a été ouvert par un lien d'invitation ; après le prénom, on arrive sur « Rejoindre », code déjà écrit.
+export function Bienvenue({ noms, proprio, onFini, codeRecu }: { noms: Noms; proprio: Personne | null; onFini: () => void; codeRecu?: string | null }) {
   const [moi, setMoi] = useState<Personne | null>(proprio);
   const [prenom, setPrenom] = useState("");
   const [relier, setRelier] = useState(false);
@@ -49,7 +50,7 @@ export function Bienvenue({ noms, proprio, onFini }: { noms: Noms; proprio: Pers
       </div>
     );
   }
-  if (relier) return <Connexion prenom={noms[moi]} proprio={moi} onFini={() => setRelier(false)} onPlusTard={() => setRelier(false)} />;
+  if (relier) return <Connexion key={codeRecu ?? ""} prenom={noms[moi]} proprio={moi} codeRecu={codeRecu} onFini={() => setRelier(false)} onPlusTard={() => setRelier(false)} />;
 
   const qui = proprio ?? moi; // la place a pu changer en rejoignant le foyer
   const pages = guide(noms, qui);
