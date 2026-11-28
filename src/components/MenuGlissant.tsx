@@ -1,5 +1,6 @@
 import { vibrer as vibrerPartout } from "../lib/gestes";
 import { useEffect, useRef, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { Settings } from "pulsoicon-react";
 
 // Le menu glissant : la page vit devant, le menu derrière, en coulisses.
@@ -198,18 +199,48 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
 
     // Le geste sur la page : tirer vers la gauche ouvre le menu (sauf là où le doigt a déjà un autre geste :
     // une tâche, la grille des horaires, le résumé du matin, les pastilles des rayons). Tirer vers la droite, menu fermé : retour d'une sous-page, sinon rien.
-    let g: { x0: number; y0: number; axe: "x" | "y" | null; base: number; traces: Array<[number, number]>; retour?: [number, number] } | null = null;
+    let g: { x0: number; y0: number; axe: "x" | "y" | null; base: number; traces: Array<[number, number]>; retour?: [number, number]; cible: HTMLElement } | null = null;
+    // Le retour au doigt : la sous-page suit le doigt (en retenue) et s'efface un peu ; au-delà du seuil, un « tic » dit que lâcher fait revenir.
+    const SEUIL_RETOUR = 70;
+    const sousPage = () => scene.querySelector<HTMLElement>(".cadre.arrivee");
+    const calme = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let passe = false;
+    const suivreRetour = (dx: number) => {
+      const el = sousPage();
+      if (!el || calme()) return;
+      const d = Math.max(0, dx);
+      el.style.transition = "none";
+      el.style.translate = `${Math.round(d * 0.4)}px 0`;
+      el.style.opacity = String(1 - Math.min(d / 320, 0.45));
+      if (d > SEUIL_RETOUR !== passe) { passe = d > SEUIL_RETOUR; if (passe) vibrer(4); }
+    };
+    const lacherRetour = (revenu: boolean) => {
+      passe = false;
+      const el = sousPage();
+      if (!el || !el.style.translate) return;
+      // Revenu : la page d'avant arrive seule par la gauche. Sinon : la sous-page reprend sa place en douceur.
+      el.style.transition = revenu ? "none" : "translate .3s var(--douce), opacity .3s var(--douce)";
+      el.style.translate = ""; el.style.opacity = "";
+      setTimeout(() => { el.style.transition = ""; }, revenu ? 0 : 320);
+    };
+    // Une bande qui défile de côté sous le doigt garde son geste : pas de retour par-dessus.
+    const defileDeCote = (el: HTMLElement | null) => {
+      for (; el && el !== scene; el = el.parentElement) {
+        if (el.scrollWidth > el.clientWidth + 8 && /auto|scroll/.test(getComputedStyle(el).overflowX)) return true;
+      }
+      return false;
+    };
     on(window, "touchstart", (e: TouchEvent) => {
       const cibleT = e.target as HTMLElement;
       if (e.touches.length > 1 || cibleT.closest?.(".capsule, .tache, .barre-bas, .feuille, .grille-mois, .resume, .resume-fond, .rayons, .gouts, input, textarea") || racine.classList.contains("feuille-ouverte")) { g = null; return; }
       if ((estOuvert() || rafId) && menu.contains(cibleT)) { g = null; return; }
       const t = e.touches[0];
-      g = { x0: t.clientX, y0: t.clientY, axe: null, base: 0, traces: [] };
+      g = { x0: t.clientX, y0: t.clientY, axe: null, base: 0, traces: [], cible: cibleT };
     }, { passive: true });
     on(window, "touchmove", (e: TouchEvent) => {
       if (!g) return;
       const t = e.touches[0];
-      if (g.retour) { g.retour = [t.clientX - g.x0, t.clientY - g.y0]; return; }
+      if (g.retour) { g.retour = [t.clientX - g.x0, t.clientY - g.y0]; if (e.cancelable) e.preventDefault(); suivreRetour(g.retour[0]); return; }
       if (!g.axe) {
         const dx = t.clientX - g.x0, dy = t.clientY - g.y0;
         if (Math.hypot(dx, dy) < 10) return;
@@ -218,7 +249,7 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
         if (!estOuvert() && p < 0.01 && dx * S < 0) {
           // Vers la droite, menu fermé : sur une sous-page (elle montre le bouton retour), c'est le retour ; ailleurs, rien.
           // On attend la fin du geste : seul un vrai glisser (assez long, bien horizontal) compte comme retour.
-          if (scene.querySelector(".retour, .retour-agenda, .reglage-page")) g.retour = [dx, dy]; else g = null;
+          if (scene.querySelector(".retour, .retour-agenda, .reglage-page") && !defileDeCote(g.cible)) { g.retour = [dx, dy]; if (e.cancelable) e.preventDefault(); suivreRetour(dx); } else g = null;
           return;
         }
         cancelAnimationFrame(rafId); rafId = 0;
@@ -233,10 +264,17 @@ export function MenuGlissant({ entrees, active, nom, initiale, onChoisir, onAper
       p = brut > 1 ? 1 + elastique(brut - 1) : Math.max(0, brut);
       planifier();
     }, { passive: false });
-    const finGeste = () => {
+    const finGeste = (e: TouchEvent) => {
       if (!g) return;
       const { axe, traces, retour } = g; g = null;
-      if (retour) { if (retour[0] > 70 && Math.abs(retour[1]) < retour[0] * 0.5) dispatchEvent(new Event("echo-retour")); return; }
+      if (retour) {
+        // Un geste coupé par le téléphone (appel, bord de l'écran) n'est pas un retour.
+        const revenu = e.type === "touchend" && retour[0] > SEUIL_RETOUR && Math.abs(retour[1]) < retour[0] * 0.5;
+        // La page d'avant est dessinée tout de suite : la sous-page ne reprend jamais sa place le temps d'une image.
+        if (revenu) flushSync(() => { dispatchEvent(new Event("echo-retour")); });
+        lacherRetour(revenu);
+        return;
+      }
       const span = MOUVEMENT.carte.decalage * largeur();
       const [t0, x0] = traces[0] || [0, 0], [t1, x1] = traces.at(-1) || [0, 0];
       const vitesse = t1 - t0 > 0 ? S * (x1 - x0) / span / (t1 - t0) * 1000 : 0;

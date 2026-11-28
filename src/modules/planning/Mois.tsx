@@ -16,9 +16,9 @@ export function VueMois({ taches, travail, today, onJour }: { taches: Tache[]; t
   return (
     <section className="g vue-mois" aria-label={`Mois de ${nomMois(mois)}`}>
       <div className="mois-tete">
-        <button type="button" className="rond-petit" aria-label="Mois précédent" onClick={() => setMois(moisVoisin(mois, -1))}><ChevronLeft size={18} strokeWidth={2} animated={false} /></button>
+        <button type="button" className="rond-petit" aria-label="Mois précédent" data-va="avant" onClick={() => setMois(moisVoisin(mois, -1))}><ChevronLeft size={18} strokeWidth={2} animated={false} /></button>
         <b>{nomMois(mois)}</b>
-        <button type="button" className="rond-petit" aria-label="Mois suivant" onClick={() => setMois(moisVoisin(mois, 1))}><ChevronRight size={18} strokeWidth={2} animated={false} /></button>
+        <button type="button" className="rond-petit" aria-label="Mois suivant" data-va="apres" onClick={() => setMois(moisVoisin(mois, 1))}><ChevronRight size={18} strokeWidth={2} animated={false} /></button>
       </div>
       <div className="mois-grille">
         {NOMS_JOURS.map((n, i) => <span key={i} className="mg-nom" aria-hidden="true">{n}</span>)}

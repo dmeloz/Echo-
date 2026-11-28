@@ -119,9 +119,9 @@ export function VueHoraires({ proprio, now }: { proprio: Personne; now: Date }) 
   return (
     <section className="g horaires" aria-labelledby="lab-horaires">
       <div className="mois-tete">
-        <button type="button" className="rond-petit" aria-label="Mois précédent" disabled={!!apercu} onClick={() => changerMois(-1)}><ChevronLeft size={20} strokeWidth={2} /></button>
+        <button type="button" className="rond-petit" aria-label="Mois précédent" data-va="avant" disabled={!!apercu} onClick={() => changerMois(-1)}><ChevronLeft size={20} strokeWidth={2} /></button>
         <h2 id="lab-horaires">{nomMois(mois)}</h2>
-        <button type="button" className="rond-petit" aria-label="Mois suivant" disabled={!!apercu} onClick={() => changerMois(1)}><ChevronRight size={20} strokeWidth={2} /></button>
+        <button type="button" className="rond-petit" aria-label="Mois suivant" data-va="apres" disabled={!!apercu} onClick={() => changerMois(1)}><ChevronRight size={20} strokeWidth={2} /></button>
       </div>
 
       {apercu ? (
