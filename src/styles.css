@@ -27,6 +27,7 @@
   --reflet-lavande: #e6e3f8;
   --bleu: #2f6bff;
   --bleu-pale: #e4ecff;
+  --bleu-texte: #2459e0; /* le bleu des mots posés sur le fond (contraste 5,4) ; #2f6bff reste pour les boutons pleins et les pastilles */
   --turquoise: #12a594;
   --turquoise-texte: #0b7d70;
   --turquoise-pale: #cfeee9;
@@ -125,14 +126,14 @@ button { cursor: pointer; }
 .page-titre { margin: 2px 0 0; font-size: 30px; line-height: 1.1; font-weight: 800; letter-spacing: -.025em; text-wrap: balance; }
 .duo { display: flex; border: 0; background: none; padding: 0; }
 .duo i { font-style: normal; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 14px; border: 2px solid #fff; background: var(--encre); color: #fff; }
-.duo i + i { margin-left: -10px; background: var(--turquoise); }
+.duo i + i { margin-left: -10px; background: var(--turquoise-texte); }
 
 /* Le verre */
 .g { background: var(--verre); border: 1px solid var(--bord); box-shadow: inset 0 1px 0 #fff, 0 10px 26px var(--ombre); -webkit-backdrop-filter: blur(20px) saturate(1.7); backdrop-filter: blur(20px) saturate(1.7); border-radius: 26px; padding: 14px 16px; min-width: 0; }
 .lab { font-size: var(--t-petit); font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--discret); }
 
 .exemples { display: flex; align-items: center; gap: 10px; font-size: 13px; padding: 10px 12px 10px 16px; border-radius: 20px; background: var(--bleu-pale); color: var(--encre); }
-.bouton-texte { border: 0; background: none; color: var(--bleu); font-weight: 700; font-size: 14px; padding: 6px 8px; min-height: 44px; }
+.bouton-texte { border: 0; background: none; color: var(--bleu-texte); font-weight: 700; font-size: 14px; padding: 6px 8px; min-height: 44px; }
 
 
 
@@ -389,7 +390,7 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .bv-boutons { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .bv-boutons .bouton { margin-left: auto; padding: 14px 22px; }
 .duo i.moi { background: var(--encre); }
-.duo i.elle { background: var(--turquoise); }
+.duo i.elle { background: var(--turquoise-texte); } /* lettre blanche lisible (5,0 au lieu de 3,1) */
 
 /* Étapes et photos */
 .etapes { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -790,12 +791,13 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .cadre > .cadre { width: 100%; }
 .entete > div:first-child { min-width: 0; }
 .entete:has(.pilule-entete) .date { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pilule-entete { display: inline-flex; align-items: center; gap: var(--e3); height: 40px; padding: 0 13px; border-radius: 999px; border: 1px solid var(--bord); background: var(--verre-fort); color: var(--accent); font-weight: 700; font-size: 14px; white-space: nowrap; box-shadow: 0 6px 16px var(--ombre); }
+.pilule-entete { display: inline-flex; align-items: center; gap: var(--e3); height: 40px; padding: 0 13px; border-radius: 999px; border: 1px solid var(--bord); background: var(--verre-fort); color: var(--bleu-texte); font-weight: 700; font-size: 14px; white-space: nowrap; box-shadow: 0 6px 16px var(--ombre); }
 .pilule-entete:active { scale: .95; }
 
 /* Le champ pour écrire les articles, le micro à droite. */
 .ajout-courses { display: flex; align-items: center; gap: var(--e3); padding: 6px 6px 6px 16px; border-radius: 999px; }
 .ajout-courses input { flex: 1; min-width: 0; height: 44px; border: 0; background: transparent; font-size: 16px; font-weight: 500; outline: none; }
+.ajout-courses input::placeholder { color: var(--discret); }
 .rond-champ { width: 44px; height: 44px; flex: none; border-radius: 50%; border: 0; background: #fff; color: var(--encre); display: grid; place-items: center; }
 .rond-champ.plein, .rond-champ.ecoute { background: var(--accent); color: #fff; }
 .rond-champ:active { scale: .92; }
@@ -813,7 +815,7 @@ details.faites summary { padding: 6px 4px; color: var(--discret); }
 .carte-rayon header span { flex: none; font-size: 14px; color: var(--discret); font-variant-numeric: tabular-nums; }
 .art { border-top: 1px solid var(--trait); }
 .art-ligne { display: flex; align-items: center; gap: var(--e5); min-height: 54px; }
-.case { position: relative; width: 28px; height: 28px; flex: none; border-radius: 9px; border: 2px solid rgb(18 40 58 / .25); background: transparent; display: grid; place-items: center; color: #fff; transition: background var(--m-ligne) var(--douce), border-color var(--m-ligne); }
+.case { position: relative; width: 28px; height: 28px; flex: none; border-radius: 9px; border: 2px solid rgb(18 40 58 / .5); background: transparent; display: grid; place-items: center; color: #fff; transition: background var(--m-ligne) var(--douce), border-color var(--m-ligne); }
 button.case::after { content: ""; position: absolute; inset: -9px; } /* zone de toucher de 44 points */
 .case.cochee { background: var(--turquoise); border-color: var(--turquoise); }
 .coche-trait path { stroke-dasharray: 24; animation: coche-trace var(--m-ligne) var(--douce); }
