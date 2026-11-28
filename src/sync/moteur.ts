@@ -275,9 +275,13 @@ async function prevenir(nouvelles: Array<{ par: string; texte: string }>) {
       if (mot) annoncer(mot);
     }
   }
-  // Un seul message (l'app n'en montre qu'un à la fois) : les changements arrivés ensemble y sont réunis.
-  if (nouvelles.length > 3) { toast(`${prenom(nouvelles[0].par)} a fait ${nouvelles.length} changements`); return; }
-  if (nouvelles.length) toast(nouvelles.map((n, i) => (i && n.par === nouvelles[i - 1].par ? n.texte : `${prenom(n.par)} ${n.texte}`)).join(", puis "), { duration: 5000 + 1500 * (nouvelles.length - 1) });
+  // Un seul message pour les changements arrivés ensemble ; s'il serait trop long ou à plusieurs, le nombre suffit.
+  const auteurs = [...new Set(nouvelles.map((n) => prenom(n.par)))];
+  const phrase = nouvelles.map((n, i) => (i ? n.texte : `${auteurs[0]} ${n.texte}`)).join(", puis ");
+  if (!nouvelles.length) return;
+  if (auteurs.length > 1) toast(`${auteurs.join(" et ")} : ${nouvelles.length} changements`, { duration: 5000 });
+  else if (nouvelles.length > 1 && (nouvelles.length > 3 || phrase.length > 90)) toast(`${auteurs[0]} a fait ${nouvelles.length} changements`, { duration: 5000 });
+  else toast(phrase, { duration: 5000 });
 }
 
 // Les prénoms viennent du foyer : chacun a donné le sien au premier lancement.
