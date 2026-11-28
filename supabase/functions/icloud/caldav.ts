@@ -95,7 +95,8 @@ function lireLigne(l: string): Ligne {
   for (const p of ps) { const [k, v = ""] = p.split("="); params[k.toUpperCase()] = v.replace(/^"|"$/g, ""); }
   return { nom: nom.toUpperCase(), params, valeur };
 }
-const texteIcs = (v: string) => v.replace(/\\n/gi, "\n").replace(/\\([,;\\])/g, "$1");
+// En une seule passe : deux barres obliques inverses suivies d'un n, c'est une barre oblique inverse puis la lettre n, pas un retour à la ligne.
+export const texteIcs = (v: string) => v.replace(/\\([nN,;\\])/g, (_m, c: string) => (c === "n" || c === "N" ? "\n" : c));
 export const echapperIcs = (v: string) => v.replace(/\\/g, "\\\\").replace(/\n/g, "\\n").replace(/([,;])/g, "\\$1");
 
 // Une date de l'ics → jour + heure à Zurich (heure "" pour une journée entière).

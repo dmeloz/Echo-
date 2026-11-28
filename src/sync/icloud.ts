@@ -34,7 +34,7 @@ async function appeler<T>(corps: Record<string, unknown>): Promise<T> {
   if (error) {
     const r = (error as { context?: Response }).context;
     const code = r && typeof r.json === "function" ? ((await r.json().catch(() => ({}))) as { erreur?: string }).erreur : undefined;
-    throw new Error(MESSAGES[code ?? ""] ?? "iCloud ne répond pas pour le moment. Réessaie plus tard.");
+    throw Object.assign(new Error(MESSAGES[code ?? ""] ?? "iCloud ne répond pas pour le moment. Réessaie plus tard."), { code });
   }
   return data as T;
 }
@@ -64,9 +64,11 @@ export function fusionner(taches: Tache[], r: Reponse, de: string, a: string, no
     if (vus.has(id)) continue;
     vus.add(id);
     const avant = parId.get(id);
+    // iCloud ne connaît que le titre, la note, le jour et les heures. Tout le reste d'un événement déjà dans Echo
+    // (étapes, importance, ordre, répétition, pour qui) est gardé tel quel.
+    const { fin: _fin, ...garde } = avant ?? { qui: r.place, niveau: null, repete: "" as const, fait: null, faitLe: null, suite: null, cree: now };
     const t: Tache = {
-      id, titre: e.titre.slice(0, 140), qui: avant?.qui ?? r.place, jour: e.jour, heure: e.heure, niveau: null, repete: "", note: e.note,
-      fait: null, faitLe: null, suite: null, cree: avant?.cree ?? now, evt: true, ...(e.fin ? { fin: e.fin } : {}),
+      ...garde, id, titre: e.titre.slice(0, 140), jour: e.jour, heure: e.heure, note: e.note, evt: true, ...(e.fin ? { fin: e.fin } : {}),
       ical: { uid: e.uid, href: e.href, ...(e.serie ? { serie: true } : {}) },
     };
     const pareil = avant && avant.titre === t.titre && avant.jour === t.jour && avant.heure === t.heure && (avant.fin ?? "") === (t.fin ?? "")
@@ -149,6 +151,8 @@ export async function envoyer() {
         }
       } catch (e) {
         console.warn("[Echo iCloud]", e);
+        // Une demande que le serveur refuse telle quelle (« demande ») ne passera jamais : on l'oublie, pour qu'elle ne bloque pas les suivantes.
+        if ((e as { code?: string }).code === "demande" && !changesPendant.has(id)) { const f = lireFile(); delete f[id]; ecrireFile(f); continue; }
         changesPendant.clear();
         return; // on réessaiera plus tard, dans l'ordre
       }
