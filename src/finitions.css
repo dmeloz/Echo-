@@ -119,3 +119,16 @@ html[data-sens="droite"] .arrivee > .agenda-barre, html[data-sens="gauche"] .arr
 @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
   .scene::before { -webkit-backdrop-filter: none; backdrop-filter: none; background: linear-gradient(var(--fond), transparent); -webkit-mask-image: none; mask-image: none; }
 }
+
+/* ===== Lot 3 « Vitesse » : rien ne tourne pour rien, le verre là où il sert. ===== */
+
+/* 11. Les lueurs des coulisses ne bougent que quand on les voit (menu ouvert). Page fermée par-dessus,
+   elles dérivaient sans fin : l'écran recalculait chaque image pour rien, et la batterie s'usait. */
+:root:not(.menu-ouvert) .lueur { animation-play-state: paused; }
+/* Le point d'« Entre nous » pulse trois fois pour se faire voir, puis reste calme. */
+.budget-nous i { animation-iteration-count: 3; }
+
+/* 12. Le verre là où il sert : sur ce qui flotte (capsule, barre, feuilles, messages, résumé), pas sur les cartes de la page.
+   Sous une carte, il n'y a que le fond lisse : le flou n'y change rien à l'œil (mesuré : moins de 1 % des points, de 8/255 au plus),
+   mais chaque carte floutée coûte un calcul de plus à chaque image du défilement. Les cartes gardent leur blanc translucide et leurs reflets. */
+.defile .g { -webkit-backdrop-filter: none; backdrop-filter: none; }

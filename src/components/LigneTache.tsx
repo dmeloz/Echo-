@@ -109,7 +109,7 @@ export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau, aPhoto, o
       style={dy !== null ? { transform: `translateY(${dy}px)` } : undefined}
       {...lier()} onPointerDownCapture={appui} onPointerMoveCapture={bouge} onPointerUpCapture={lacher} onPointerCancelCapture={lacher}>
       <div className="fond" aria-hidden="true"><span className="haut">↑ Important</span><span className="bas">Plus tard ↓</span></div>
-      <div className="glisse" style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: lache ? "transform .45s var(--ressort, ease)" : "none" }}>
+      <div className="glisse" style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: lache ? "transform .45s var(--ressort, ease)" : "none", willChange: dx || lache ? "transform" : undefined }}>
         <button
           className="coche"
           aria-label={`${t.fait ? "Marquer comme pas fait" : "Marquer comme fait"} : ${t.titre}`}
