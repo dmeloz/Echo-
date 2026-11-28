@@ -2,7 +2,7 @@ import { vibrer } from "../../lib/gestes";
 import { autre } from "../../lib/types";
 import type { ContexteModule } from "../contrat";
 import { changerCorvee, cocherCorvee, reporterCorvee, retirerCorvee } from "./actions";
-import { RYTHMES, RYTHMES_ENTRETIEN, TAILLES, aFaire, besoin, deborde, nomRythme, pour, type Corvee, type QuiCorvee } from "./donnees";
+import { RYTHMES, RYTHMES_ENTRETIEN, TAILLES, aFaire, besoin, deborde, nomRythme, prisPar, type Corvee, type QuiCorvee } from "./donnees";
 
 // La ligne d'une corvée (ou d'un geste d'entretien) : le rond, le nom, son état, et ses réglages quand on la touche.
 
@@ -20,8 +20,11 @@ function Detail({ c, noms, proprio, now, onFermer }: Pick<ContexteModule, "noms"
   const base = c.entretien ? RYTHMES_ENTRETIEN : RYTHMES;
   const rythmes = base.some((r) => r.jours === c.tous) ? base : [...base, { jours: c.tous, nom: nomRythme(c.tous) }].sort((a, b) => a.jours - b.jours);
   const quis: Array<[QuiCorvee, string]> = [["libre", "Libre"], [proprio, noms[proprio]], [l_autre, noms[l_autre]]];
-  const qui = pour(c) ?? "libre";
-  const aide = qui === "libre" ? (c.par ? `Libre : celui qui la fait la coche. La dernière fois, c'était ${c.par === proprio ? "toi" : noms[c.par]}.` : "Libre : celui qui la fait la coche, l'app retient qui.") : "";
+  // Ce qui est posé pour de bon (la répartition de la semaine n'en fait pas partie : elle s'arrête seule).
+  const qui: QuiCorvee = c.qui === "moi" || c.qui === "elle" ? c.qui : "libre";
+  const semaine = prisPar(c, now);
+  const aide = qui === "libre" && semaine ? `Libre. Cette semaine, c'est ${semaine === proprio ? "toi" : noms[semaine]} (répartition de la semaine).`
+    : qui === "libre" ? (c.par ? `Libre : celui qui la fait la coche. La dernière fois, c'était ${c.par === proprio ? "toi" : noms[c.par]}.` : "Libre : celui qui la fait la coche, l'app retient qui.") : "";
   return (
     <div className="stock-plus corvee-plus">
       <span className="lab">Ça revient</span>

@@ -18,7 +18,7 @@ export function JourneeMaison({ proprio, now, aller, jour }: ContexteModule) {
   }, [], undefined);
   if (!d) return null;
   const today = auJour(0, now), vu = jour ?? today;
-  const miennes = vu === today ? d.corvees.filter((c) => aFaire(c, now) && pourMoi(c, proprio)) : [];
+  const miennes = vu === today ? d.corvees.filter((c) => aFaire(c, now) && pourMoi(c, proprio, now)) : [];
   const min = miennes.reduce((n, c) => n + minutesDe(c.taille), 0);
   const papiers = papiersDu(d.papiers, vu, today, d.auBudget);
   const retards = papiers.filter((p) => p.echeance! < today).length;

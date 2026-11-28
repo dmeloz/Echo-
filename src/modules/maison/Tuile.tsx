@@ -11,7 +11,7 @@ export function TuileMaison({ noms, proprio, now, aller }: ContexteModule) {
   let texte = "Corvées, entretien, papiers";
   if (d?.corvees.length) {
     const dues = d.corvees.filter((c) => aFaire(c, now));
-    const miennes = dues.filter((c) => pourMoi(c, proprio)), siennes = dues.length - miennes.length;
+    const miennes = dues.filter((c) => pourMoi(c, proprio, now)), siennes = dues.length - miennes.length;
     texte = miennes.length === 1 ? `Pour toi : ${miennes[0].nom}`
       : miennes.length ? `${miennes.length} pour toi, dont ${miennes[0].nom}`
       : siennes ? `Rien pour toi. ${noms[autre(proprio)]} en a ${siennes}.` : "Tout est fait pour aujourd'hui";

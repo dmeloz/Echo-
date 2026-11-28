@@ -23,7 +23,7 @@ export const nomRythme = (jours: number) => [...RYTHMES, ...RYTHMES_ENTRETIEN].f
 
 // fait : la dernière fois (ms). par : qui l'a faite. report : pas avant ce jour (« Pas cette fois »).
 // entretien : un geste d'entretien (« détartrer la machine à café ») : la même chose qu'une corvée, mais rangé dans Entretien. appareil : l'appareil concerné.
-export interface Corvee { id: string; nom: string; piece: string; tous: number; taille: Taille; qui: QuiCorvee; fait: number | null; par?: Personne; report?: string; entretien?: boolean; appareil?: string; cree: number }
+export interface Corvee { id: string; nom: string; piece: string; tous: number; taille: Taille; qui: QuiCorvee; fait: number | null; par?: Personne; report?: string; pris?: Personne; prisJusqu?: string; entretien?: boolean; appareil?: string; cree: number }
 // Une ligne par corvée faite : sert à l'équilibre entre les deux (gardée 60 jours).
 export interface Fait { id: string; corvee: string; nom: string; par: Personne; quand: number; min: number }
 
@@ -90,9 +90,11 @@ export function equilibre(faits: Fait[], now = Date.now()): Equilibre {
   return e;
 }
 // Pour qui est la corvée : une personne, ou null si elle est libre (les anciennes « chacun son tour » et « Echo choisit » aussi).
-export const pour = (c: Corvee): Personne | null => (c.qui === "moi" || c.qui === "elle" ? c.qui : null);
+export const pour = (c: Corvee, now = new Date()): Personne | null => (c.qui === "moi" || c.qui === "elle" ? c.qui : prisPar(c, now));
+// La répartition de la semaine : une corvée libre prise par quelqu'un jusqu'à un jour donné (« Répartir la semaine »). Après, elle redevient libre.
+export const prisPar = (c: Corvee, now = new Date()): Personne | null => (c.qui !== "moi" && c.qui !== "elle" && c.pris && c.prisJusqu && c.prisJusqu >= auJour(0, now) ? c.pris : null);
 // Ce que la personne qui tient le téléphone peut faire : ce qui est à elle, et ce qui est libre.
-export const pourMoi = (c: Corvee, proprio: Personne) => pour(c) !== autre(proprio);
+export const pourMoi = (c: Corvee, proprio: Personne, now = new Date()) => pour(c, now) !== autre(proprio);
 // La part de chacun, en pour cent (50/50 tant que rien n'est noté).
 export function parts(e: Equilibre): Equilibre {
   const total = e.moi + e.elle;
@@ -334,6 +336,7 @@ export function nettoyerCorvee(x: unknown): Corvee | null {
   const fait = nb(o.fait);
   return { id, nom, piece: txt(o.piece, 30).trim(), tous, taille, qui, fait: fait && fait > 0 ? fait : null,
     ...(personne(o.par) ? { par: o.par } : {}), ...(JOUR_ISO.test(report) ? { report } : {}),
+    ...(personne(o.pris) && JOUR_ISO.test(txt(o.prisJusqu, 10)) ? { pris: o.pris, prisJusqu: txt(o.prisJusqu, 10) } : {}),
     ...(o.entretien === true ? { entretien: true } : {}), ...(txt(o.appareil, 80) ? { appareil: txt(o.appareil, 80) } : {}), cree: nb(o.cree) ?? Date.now() };
 }
 export function nettoyerFait(x: unknown): Fait | null {

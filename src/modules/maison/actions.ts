@@ -61,7 +61,19 @@ export async function reporterCorvee(c: Corvee, now = new Date()) {
   toast(`${c.nom} : remis à plus tard`, annuler(() => db.maison_corvees.update(c.id, { report: c.report })));
 }
 
-export const changerCorvee = (id: string, x: Partial<Pick<Corvee, "nom" | "piece" | "tous" | "taille" | "qui">>) => db.maison_corvees.update(id, x);
+// Choisir à la main qui s'en occupe efface la répartition de la semaine pour cette corvée.
+export const changerCorvee = (id: string, x: Partial<Pick<Corvee, "nom" | "piece" | "tous" | "taille" | "qui">>) => db.maison_corvees.update(id, "qui" in x ? { ...x, pris: undefined, prisJusqu: undefined } : x);
+
+// Valider la répartition de la semaine : chaque corvée libre est prise par quelqu'un jusqu'au dernier jour (ou relâchée : qui = null).
+export async function poserRepartition(choix: Array<{ id: string; qui: Personne | null }>, jusqu: string, silencieux = false) {
+  const avant = (await db.maison_corvees.bulkGet(choix.map((c) => c.id))).filter((c): c is Corvee => !!c);
+  await db.transaction("rw", db.maison_corvees, async () => {
+    for (const c of choix) await db.maison_corvees.update(c.id, c.qui ? { pris: c.qui, prisJusqu: jusqu } : { pris: undefined, prisJusqu: undefined });
+  });
+  const defaire = () => db.transaction("rw", db.maison_corvees, async () => { for (const c of avant) await db.maison_corvees.update(c.id, { pris: c.pris, prisJusqu: c.prisJusqu }); });
+  if (!silencieux) toast(choix.some((c) => c.qui) ? "La semaine est répartie" : "Tout est de nouveau libre", annuler(defaire));
+  return defaire;
+}
 
 export async function retirerCorvee(c: Corvee) {
   await db.maison_corvees.delete(c.id);
