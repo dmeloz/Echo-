@@ -143,11 +143,13 @@ export async function mettreCorbeille(id: string) {
 }
 
 // Sortir une tâche de la corbeille : elle revient comme avant (sans son ancien lien iCloud, qui n'existe plus).
+// Rend vrai si la tâche est revenue (faux : elle n'était plus à la corbeille, déjà remise ici ou par l'autre téléphone).
 export const remettre = (id: string) => db.transaction("rw", db.taches, db.corbeille, async () => {
   const e = await db.corbeille.get(id);
-  if (!e) return;
+  if (!e) return false;
   await db.taches.put({ ...e.tache, ical: undefined });
   await db.corbeille.delete(id);
+  return true;
 });
 
 // Au démarrage : ce qui est à la corbeille depuis plus de 30 jours s'en va pour de bon, avec ses photos.

@@ -166,7 +166,7 @@ function Corbeille({ toi }: { toi: string }) {
           {effaces.map((e) => (
             <li key={e.id}>
               <span><b>{e.tache.titre}</b><small>Effacé {e.par ? `par ${e.par === toi ? "toi" : e.par}, ` : ""}{ilYA(e.quand)}</small></span>
-              <button className="bouton second" onClick={() => quandFait(remettre(e.id), "Remis dans tes tâches")}>Remettre</button>
+              <button className="bouton second" onClick={() => quandFait(remettre(e.id), "Remis dans tes tâches", undefined, "Déjà remise dans tes tâches")}>Remettre</button>
             </li>
           ))}
         </ul>
@@ -177,6 +177,7 @@ function Corbeille({ toi }: { toi: string }) {
 
 function SectionApp({ taches, onGuide, toi }: { taches: Tache[]; onGuide: () => void; toi: string }) {
   const [sur, setSur] = useState(false);
+  const [occupe, setOccupe] = useState(false); // les exemples s'écrivent : pas de deuxième toucher
   const [recherche, setRecherche] = useState(false);
   const maj = useMiseAJour();
   const nb = taches.length;
@@ -189,16 +190,16 @@ function SectionApp({ taches, onGuide, toi }: { taches: Tache[]; onGuide: () => 
         <div className="rangee">
           <button className="bouton" onClick={() => exporter().catch(() => toast("La sauvegarde n'a pas pu être préparée. Réessaie.", { duration: 7000 }))}>Faire une sauvegarde</button>
           <label className="bouton second">Récupérer une sauvegarde
-            <input type="file" accept="application/json,.json" className="vh" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) importer(f); }} /></label>
+            <input type="file" accept="application/json,.json" className="vh" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) importer(f).catch(() => toast("La sauvegarde n'a pas pu être lue. Rien n'a changé.", { duration: 7000 })); }} /></label>
         </div>
         <p className="aide-champ">La sauvegarde est un fichier. Sur iPhone, choisis « Enregistrer dans Fichiers » pour la garder.</p>
         <div className="rangee">
           {taches.some((t) => t.ex)
-            ? <button className="bouton second" onClick={() => quandFait(effacerExemples(), "Exemples effacés", "Pas effacé. Réessaie.")}>Effacer les exemples</button>
-            : <button className="bouton second" onClick={() => quandFait(remettreExemples(), "Exemples remis")}>Remettre les exemples</button>}
+            ? <button className="bouton second" disabled={occupe} onClick={() => { setOccupe(true); quandFait(effacerExemples(), "Exemples effacés", "Pas effacé. Réessaie.").finally(() => setOccupe(false)); }}>Effacer les exemples</button>
+            : <button className="bouton second" disabled={occupe} onClick={() => { setOccupe(true); quandFait(remettreExemples(), "Exemples remis").finally(() => setOccupe(false)); }}>Remettre les exemples</button>}
           <button className={`bouton danger${sur ? " sur" : ""}`} onClick={() => {
             if (!sur) { setSur(true); setTimeout(() => setSur(false), 4000); return; }
-            setSur(false); toutEffacer().then(() => toast("Tout est effacé"), () => toast("Pas effacé. Rien n'a changé. Réessaie.", { duration: 7000 }));
+            setSur(false); quandFait(toutEffacer(), "Tout est effacé", "Pas effacé. Rien n'a changé. Réessaie.");
           }}>{sur ? "Touche encore pour confirmer" : relie ? "Tout effacer, pour vous deux" : "Tout effacer"}</button>
         </div>
       </section>
