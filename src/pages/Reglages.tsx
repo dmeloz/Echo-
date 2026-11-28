@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { confirmer } from "../lib/messages";
 import { Bell, Calendar, CalendarDays, ChevronLeft, ChevronRight, HardDrive, House, LayoutGrid, ShoppingBasket, SlidersHorizontal, Sparkles, Users, Wallet } from "pulsoicon-react";
 import { toast } from "sonner";
 import { autre, type Noms, type Personne, type Tache } from "../lib/types";
@@ -165,7 +166,7 @@ function Corbeille({ toi }: { toi: string }) {
           {effaces.map((e) => (
             <li key={e.id}>
               <span><b>{e.tache.titre}</b><small>Effacé {e.par ? `par ${e.par === toi ? "toi" : e.par}, ` : ""}{ilYA(e.quand)}</small></span>
-              <button className="bouton second" onClick={() => { remettre(e.id); toast("Remis dans tes tâches"); }}>Remettre</button>
+              <button className="bouton second" onClick={() => { remettre(e.id); confirmer("Remis dans tes tâches"); }}>Remettre</button>
             </li>
           ))}
         </ul>
@@ -193,8 +194,8 @@ function SectionApp({ taches, onGuide, toi }: { taches: Tache[]; onGuide: () => 
         <p className="aide-champ">La sauvegarde est un fichier. Sur iPhone, choisis « Enregistrer dans Fichiers » pour la garder.</p>
         <div className="rangee">
           {taches.some((t) => t.ex)
-            ? <button className="bouton second" onClick={() => { effacerExemples(); toast("Exemples effacés"); }}>Effacer les exemples</button>
-            : <button className="bouton second" onClick={() => { remettreExemples(); toast("Exemples remis"); }}>Remettre les exemples</button>}
+            ? <button className="bouton second" onClick={() => { effacerExemples(); confirmer("Exemples effacés"); }}>Effacer les exemples</button>
+            : <button className="bouton second" onClick={() => { remettreExemples(); confirmer("Exemples remis"); }}>Remettre les exemples</button>}
           <button className={`bouton danger${sur ? " sur" : ""}`} onClick={() => {
             if (!sur) { setSur(true); setTimeout(() => setSur(false), 4000); return; }
             toutEffacer(); setSur(false); toast("Tout est effacé");
@@ -269,7 +270,7 @@ function SectionRappels({ relie }: { relie: boolean }) {
   const regler = async (x: Partial<Rappels>) => {
     if (occupe) return;
     setOccupe(true);
-    try { await reglerRappels({ ...r, ...x }); if (x.actif) toast("Rappels allumés sur ce téléphone"); }
+    try { await reglerRappels({ ...r, ...x }); if (x.actif) confirmer("Rappels allumés sur ce téléphone"); }
     catch (e) { toast(e instanceof Error ? e.message : "Ça n'a pas marché. Réessaie.", { duration: 7000 }); }
     setOccupe(false);
   };

@@ -133,10 +133,10 @@ async function entrer(foyerId: string, place: Personne, userId: string) {
       await db.cuisine_gouts.bulkPut(gouts.map((g) => ({ ...g, qui: inv(g.qui) })));
       const tickets = await db.cuisine_tickets.toArray();
       await db.cuisine_tickets.bulkPut(tickets.map((t) => ({ ...t, par: inv(t.par) })));
-      // Maison : à qui est la corvée, qui l'a faite la dernière fois, et les lignes « corvée faite » (l'équilibre entre les deux).
+      // Maison : à qui est la corvée, qui l'a faite la dernière fois, qui l'a prise pour la semaine (« Répartir la semaine »), et les lignes « corvée faite » (l'équilibre entre les deux).
       // Les papiers, les réparations, les appareils et les contacts ne sont à personne : rien à échanger.
       const corvees = await db.maison_corvees.toArray();
-      await db.maison_corvees.bulkPut(corvees.map((c) => ({ ...c, qui: c.qui === "libre" ? c.qui : inv(c.qui), ...(c.par ? { par: inv(c.par) } : {}) })));
+      await db.maison_corvees.bulkPut(corvees.map((c) => ({ ...c, qui: c.qui === "libre" ? c.qui : inv(c.qui), ...(c.par ? { par: inv(c.par) } : {}), ...(c.pris ? { pris: inv(c.pris) } : {}) })));
       const faits = await db.maison_faits.toArray();
       await db.maison_faits.bulkPut(faits.map((f) => ({ ...f, par: inv(f.par) })));
       // Budget : le salaire, les charges perso et le virement de chacun suivent la personne (les lignes de départ ont la place dans leur id).
@@ -468,8 +468,13 @@ async function prevenir(nouvelles: Array<{ par: string; texte: string }>) {
       if (mot) annoncer(mot);
     }
   }
-  if (nouvelles.length > 3) { toast(`${prenom(nouvelles[0].par)} a fait ${nouvelles.length} changements`); return; }
-  for (const n of nouvelles) toast(`${prenom(n.par)} ${n.texte}`, { duration: 5000 });
+  // Un message par personne pour les changements arrivés ensemble ; s'il serait trop long, le nombre suffit.
+  const parNom = new Map<string, string[]>();
+  for (const n of nouvelles) parNom.set(prenom(n.par), [...(parNom.get(prenom(n.par)) ?? []), n.texte]);
+  for (const [nom, textes] of parNom) {
+    const phrase = `${nom} ${textes.join(", puis ")}`;
+    toast(textes.length > 3 || phrase.length > 90 ? `${nom} a fait ${textes.length} changements` : phrase, { duration: 5000 });
+  }
 }
 
 // Les prénoms viennent du foyer : chacun a donné le sien au premier lancement.

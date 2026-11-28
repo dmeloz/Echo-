@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { confirmer } from "../lib/messages";
 import { auJour, heureFr, libelleJour, minutes, nouvelId } from "../lib/dates";
 import { NIVEAUX, niveau } from "../lib/importance";
 import type { Etape, Niveau, Noms, Personne, Qui, Repete, Tache } from "../lib/types";
@@ -68,7 +69,7 @@ export async function modifier(id: string, d: Brouillon, photos: Blob[] = [], ph
     await db.photos.bulkDelete(photosRetirees);
     await db.photos.bulkAdd(photos.map((blob, i) => ({ id: nouvelId() + i, tacheId: id, blob, cree: Date.now() + i })));
   });
-  toast("Enregistré");
+  confirmer("Enregistré");
 }
 
 export async function cocher(tache: Tache) {

@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { confirmer } from "../lib/messages";
 import type { Tache } from "../lib/types";
 import { nettoyerNoms, nettoyerTache } from "../lib/valider";
 import { NOMS_DEFAUT, db, type Photo } from "./db";
@@ -31,7 +32,7 @@ export async function exporter() {
   const a = Object.assign(document.createElement("a"), { href: url, download: nom });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
-  toast("Sauvegarde téléchargée");
+  confirmer("Sauvegarde téléchargée");
 }
 
 const REGLAGES_PARTAGES = ["noms", "modulesMasques"]; // le reste est propre à chaque téléphone
