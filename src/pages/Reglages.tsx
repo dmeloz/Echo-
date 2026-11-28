@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { confirmer, quandFait } from "../lib/messages";
+import { confirmer, echecEcriture, quandFait } from "../lib/messages";
 import { Bell, Calendar, CalendarDays, ChevronLeft, ChevronRight, HardDrive, House, LayoutGrid, ShoppingBasket, SlidersHorizontal, Sparkles, Users, Wallet } from "pulsoicon-react";
 import { toast } from "sonner";
 import { autre, type Noms, type Personne, type Tache } from "../lib/types";
@@ -158,6 +158,17 @@ function SectionModules({ masques }: { masques: string[] }) {
 function Corbeille({ toi }: { toi: string }) {
   const effaces = useLiveQuery(() => db.corbeille.orderBy("quand").reverse().toArray(), [], []);
   const ilYA = (quand: number) => { const j = Math.floor((Date.now() - quand) / 86400_000); return j < 1 ? "aujourd'hui" : j === 1 ? "hier" : `il y a ${j} jours`; };
+  const [enCours, setEnCours] = useState<string | null>(null);
+  // Remettre : la phrase arrive une fois la tâche vraiment revenue ; sinon on dit pourquoi.
+  const remettreIci = async (id: string) => {
+    if (enCours) return;
+    setEnCours(id);
+    try {
+      if (await remettre(id)) confirmer("Remis dans tes tâches");
+      else confirmer((await db.taches.get(id)) ? "Déjà remise dans tes tâches" : "Elle n'est plus dans la corbeille");
+    } catch (err) { toast(echecEcriture(err), { duration: 7000 }); }
+    finally { setEnCours(null); }
+  };
   return (
     <section className="g reglages">
       <span className="lab">Corbeille</span>
@@ -166,7 +177,7 @@ function Corbeille({ toi }: { toi: string }) {
           {effaces.map((e) => (
             <li key={e.id}>
               <span><b>{e.tache.titre}</b><small>Effacé {e.par ? `par ${e.par === toi ? "toi" : e.par}, ` : ""}{ilYA(e.quand)}</small></span>
-              <button className="bouton second" onClick={() => quandFait(remettre(e.id), "Remis dans tes tâches", undefined, "Déjà remise dans tes tâches")}>Remettre</button>
+              <button className="bouton second" disabled={!!enCours} onClick={() => remettreIci(e.id)}>Remettre</button>
             </li>
           ))}
         </ul>
@@ -188,7 +199,7 @@ function SectionApp({ taches, onGuide, toi }: { taches: Tache[]; onGuide: () => 
         <span className="lab">Tes données</span>
         <p>{nb} tâche{nb > 1 ? "s" : ""} enregistrée{nb > 1 ? "s" : ""} sur cet appareil.{relie ? " Tâches et horaires sont aussi gardés dans votre foyer ; les photos restent sur ce téléphone." : " Rien n'est envoyé ailleurs tant que le téléphone n'est pas relié au foyer."} Une sauvegarde de temps en temps ne fait pas de mal.</p>
         <div className="rangee">
-          <button className="bouton" onClick={() => exporter().catch(() => toast("La sauvegarde n'a pas pu être préparée. Réessaie.", { duration: 7000 }))}>Faire une sauvegarde</button>
+          <button className="bouton" onClick={() => exporter().catch((err) => toast(echecEcriture(err).replace("Pas enregistré", "La sauvegarde n'a pas pu être préparée"), { duration: 7000 }))}>Faire une sauvegarde</button>
           <label className="bouton second">Récupérer une sauvegarde
             <input type="file" accept="application/json,.json" className="vh" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) importer(f).catch(() => toast("La sauvegarde n'a pas pu être lue. Rien n'a changé.", { duration: 7000 })); }} /></label>
         </div>

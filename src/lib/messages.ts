@@ -9,10 +9,13 @@ export const confirmer = (texte: string) => toast(texte, { className: REMPLACABL
 
 // Confirmer seulement une fois que c'est vraiment fait : on attend l'écriture, et on dit l'échec s'il y en a un.
 // Le conseil « libère de la place » seulement quand c'est bien le stockage qui est plein.
+const plein = (e: unknown, n = 0): boolean => {
+  if (!e || typeof e !== "object" || n > 3) return false;
+  const x = e as { name?: string; inner?: unknown; failures?: unknown[] };
+  return x.name === "QuotaExceededError" || plein(x.inner, n + 1) || (Array.isArray(x.failures) && x.failures.some((f) => plein(f, n + 1)));
+};
 export const echecEcriture = (e: unknown) =>
-  (e as { name?: string; inner?: { name?: string } })?.name === "QuotaExceededError" || (e as { inner?: { name?: string } })?.inner?.name === "QuotaExceededError"
-    ? "Pas enregistré : le téléphone manque de place. Libère un peu de stockage, puis réessaie."
-    : "Pas enregistré. Réessaie.";
+  plein(e) ? "Pas enregistré : le téléphone manque de place. Libère un peu de stockage, puis réessaie." : "Pas enregistré. Réessaie.";
 // travail rend false quand il n'y avait rien à faire : on le dit au lieu de confirmer.
 export async function quandFait(travail: Promise<unknown>, texte: string, echec?: string, rien?: string) {
   let r: unknown;

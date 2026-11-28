@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { confirmer } from "../lib/messages";
+import { confirmer, quandFait } from "../lib/messages";
 import { auJour, heureFr, libelleJour, minutes, nouvelId } from "../lib/dates";
 import { NIVEAUX, niveau } from "../lib/importance";
 import type { Etape, Niveau, Noms, Personne, Qui, Repete, Tache } from "../lib/types";
@@ -125,7 +125,7 @@ export async function changerNiveau(t: Tache, sens: 1 | -1) {
 // Supprimer = mettre à la corbeille (30 jours). Les photos restent sur le téléphone jusqu'à la fin du délai.
 export const DELAI_CORBEILLE = 30 * 86400_000;
 export async function supprimer(id: string) {
-  if (await mettreCorbeille(id)) toast("Mis à la corbeille", { action: { label: "Annuler", onClick: () => remettre(id) } });
+  if (await mettreCorbeille(id)) toast("Mis à la corbeille", { action: { label: "Annuler", onClick: () => { quandFait(remettre(id), "Remis dans tes tâches"); } } });
 }
 // Mettre à la corbeille sans message (aussi utilisé par Echo). false : la tâche n'existe plus.
 export async function mettreCorbeille(id: string) {
