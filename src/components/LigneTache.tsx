@@ -27,6 +27,9 @@ const APPUI = 450; // le même appui long que l'étoile Echo
 export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau, aPhoto, onRanger }: Props) {
   const [dx, setDx] = useState(0);
   const [lache, setLache] = useState(true);
+  // Une couche graphique à part seulement pendant le glisser et le retour en place (pas une par ligne au repos).
+  const [couche, setCouche] = useState(false);
+  const finCouche = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [cocheeLocale, setCocheeLocale] = useState(false);
   const pretRef = useRef(false);
   const vientDeGlisser = useRef(false);
@@ -34,6 +37,8 @@ export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau, aPhoto, o
 
   const lier = useDrag(({ active, movement: [mx], last, tap }) => {
     if (tap || t.fait || porte.current) return;
+    clearTimeout(finCouche.current);
+    if (active) setCouche(true); else finCouche.current = setTimeout(() => setCouche(false), 500); // le retour en place dure .45 s
     const lim = 120;
     const d = Math.abs(mx) > lim ? Math.sign(mx) * (lim + (Math.abs(mx) - lim) * 0.25) : mx;
     setLache(!active);
@@ -109,7 +114,7 @@ export function LigneTache({ t, n, noms, onCocher, onOuvrir, onNiveau, aPhoto, o
       style={dy !== null ? { transform: `translateY(${dy}px)` } : undefined}
       {...lier()} onPointerDownCapture={appui} onPointerMoveCapture={bouge} onPointerUpCapture={lacher} onPointerCancelCapture={lacher}>
       <div className="fond" aria-hidden="true"><span className="haut">↑ Important</span><span className="bas">Plus tard ↓</span></div>
-      <div className="glisse" style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: lache ? "transform .45s var(--ressort, ease)" : "none" }}>
+      <div className="glisse" style={{ transform: dx ? `translateX(${dx}px)` : undefined, transition: lache ? "transform .45s var(--ressort, ease)" : "none", willChange: couche ? "transform" : undefined }}>
         <button
           className="coche"
           aria-label={`${t.fait ? "Marquer comme pas fait" : "Marquer comme fait"} : ${t.titre}`}
