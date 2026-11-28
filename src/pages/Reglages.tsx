@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { confirmer } from "../lib/messages";
+import { confirmer, quandFait } from "../lib/messages";
 import { Bell, Calendar, CalendarDays, ChevronLeft, ChevronRight, HardDrive, House, LayoutGrid, ShoppingBasket, SlidersHorizontal, Sparkles, Users, Wallet } from "pulsoicon-react";
 import { toast } from "sonner";
 import { autre, type Noms, type Personne, type Tache } from "../lib/types";
@@ -166,7 +166,7 @@ function Corbeille({ toi }: { toi: string }) {
           {effaces.map((e) => (
             <li key={e.id}>
               <span><b>{e.tache.titre}</b><small>Effacé {e.par ? `par ${e.par === toi ? "toi" : e.par}, ` : ""}{ilYA(e.quand)}</small></span>
-              <button className="bouton second" onClick={() => { remettre(e.id); confirmer("Remis dans tes tâches"); }}>Remettre</button>
+              <button className="bouton second" onClick={() => quandFait(remettre(e.id), "Remis dans tes tâches")}>Remettre</button>
             </li>
           ))}
         </ul>
@@ -187,18 +187,18 @@ function SectionApp({ taches, onGuide, toi }: { taches: Tache[]; onGuide: () => 
         <span className="lab">Tes données</span>
         <p>{nb} tâche{nb > 1 ? "s" : ""} enregistrée{nb > 1 ? "s" : ""} sur cet appareil.{relie ? " Tâches et horaires sont aussi gardés dans votre foyer ; les photos restent sur ce téléphone." : " Rien n'est envoyé ailleurs tant que le téléphone n'est pas relié au foyer."} Une sauvegarde de temps en temps ne fait pas de mal.</p>
         <div className="rangee">
-          <button className="bouton" onClick={() => exporter()}>Faire une sauvegarde</button>
+          <button className="bouton" onClick={() => exporter().catch(() => toast("La sauvegarde n'a pas pu être préparée. Réessaie.", { duration: 7000 }))}>Faire une sauvegarde</button>
           <label className="bouton second">Récupérer une sauvegarde
             <input type="file" accept="application/json,.json" className="vh" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) importer(f); }} /></label>
         </div>
         <p className="aide-champ">La sauvegarde est un fichier. Sur iPhone, choisis « Enregistrer dans Fichiers » pour la garder.</p>
         <div className="rangee">
           {taches.some((t) => t.ex)
-            ? <button className="bouton second" onClick={() => { effacerExemples(); confirmer("Exemples effacés"); }}>Effacer les exemples</button>
-            : <button className="bouton second" onClick={() => { remettreExemples(); confirmer("Exemples remis"); }}>Remettre les exemples</button>}
+            ? <button className="bouton second" onClick={() => quandFait(effacerExemples(), "Exemples effacés", "Pas effacé. Réessaie.")}>Effacer les exemples</button>
+            : <button className="bouton second" onClick={() => quandFait(remettreExemples(), "Exemples remis")}>Remettre les exemples</button>}
           <button className={`bouton danger${sur ? " sur" : ""}`} onClick={() => {
             if (!sur) { setSur(true); setTimeout(() => setSur(false), 4000); return; }
-            toutEffacer(); setSur(false); toast("Tout est effacé");
+            setSur(false); toutEffacer().then(() => toast("Tout est effacé"), () => toast("Pas effacé. Rien n'a changé. Réessaie.", { duration: 7000 }));
           }}>{sur ? "Touche encore pour confirmer" : relie ? "Tout effacer, pour vous deux" : "Tout effacer"}</button>
         </div>
       </section>
