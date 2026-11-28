@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import { confirmer } from "../../lib/messages";
+import { confirmer, echecEcriture } from "../../lib/messages";
 import { useState } from "react";
 import { toast } from "sonner";
 import { db } from "../../data/db";
@@ -18,7 +18,7 @@ export function FormGouts({ qui, depart, onFini, onPlusTard }: { qui: Personne; 
   const [rechauffe, setRechauffe] = useState<Rechauffe>(depart?.rechauffe ?? "");
   const basculer = (e: string) => setAime((a) => (a.includes(e) ? a.filter((x) => x !== e) : [...a, e]));
   return (
-    <form className="gouts-form" onSubmit={(e) => { e.preventDefault(); enregistrerGouts({ qui, aime, evite: evite.trim(), rechauffe }).then(onFini); }}>
+    <form className="gouts-form" onSubmit={(e) => { e.preventDefault(); enregistrerGouts({ qui, aime, evite: evite.trim(), rechauffe }).then(onFini, (err) => toast(echecEcriture(err), { duration: 7000 })); }}>
       <div className="champ">
         <span className="lab">Ce que tu aimes manger</span>
         <div className="rangee">{ENVIES.map((e) => <button key={e} type="button" className="puce" aria-pressed={aime.includes(e)} onClick={() => basculer(e)}>{e}</button>)}</div>

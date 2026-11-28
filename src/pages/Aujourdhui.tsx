@@ -7,6 +7,7 @@ import { DUREE_RESPIRE, vibrer } from "../lib/gestes";
 import { niveau } from "../lib/importance";
 import { autre, type Noms, type Personne, type Tache } from "../lib/types";
 import { changerNiveau, cocher, effacerExemples, ranger } from "../data/actions";
+import { quandFait } from "../lib/messages";
 import { triJour } from "../lib/ordre";
 import { plusJours } from "../lib/dates";
 import { poserReglage, useAvecPhoto, useHoraires, useReglage } from "../data/hooks";
@@ -106,7 +107,7 @@ export function Aujourdhui({ taches, noms, proprio, now, modules, onOuvrir, onAl
       {taches.some((t) => t.ex) && (
         <div className="exemples">
           <span>Exemples pour essayer. Glisse une tâche vers la droite pour la monter, vers la gauche pour la descendre.</span>
-          <button className="bouton-texte" onClick={() => effacerExemples()}>Effacer</button>
+          <button className="bouton-texte" onClick={() => quandFait(effacerExemples(), "Exemples effacés", "Pas effacé. Réessaie.")}>Effacer</button>
         </div>
       )}
 
