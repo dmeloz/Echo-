@@ -5,7 +5,7 @@ import { ajouterCorvees, ajouterPapier, ajouterReparation, faireCorvee, memeNom,
 import { completer } from "../../lib/fixes";
 import { CODES } from "../../lib/horaires";
 import { auJour, plusJours } from "../../lib/dates";
-import { minutesDeChacun, repartir } from "./repartition";
+import { heuresDites, minutesDeChacun, repartir } from "./repartition";
 import { DOSSIERS, ETATS_REPARATION, QUOIS, REPETES, aFairePapier, besoin, depuis, devinerDossier, equilibre, joursAvant, nomDossier, nomRythme, parts, quandPapier, texteMontant, trouverCorvees, vraiJour, type Corvee, type QuiCorvee, type Taille, prisPar } from "./donnees";
 
 // Ce que l'assistant Echo peut faire dans la Maison (décrit dans supabase/functions/_shared/echo-outils.ts).
@@ -62,17 +62,24 @@ export const OUTILS_MAISON: Record<string, Executant> = {
       if (!libres.length) return "Aucune corvée libre ne tombe dans les 7 jours : rien à répartir.";
       for (const ch of (Array.isArray(e.changements) ? e.changements : []).slice(0, 20)) {
         const o = (ch ?? {}) as Record<string, unknown>, dit = court(o.corvee, 80);
-        const c = trouverCorvees(dit, libres.map((p) => p.corvee))[0];
+        // Plusieurs noms peuvent aller (« Sols » et « Sols salle de bain ») : le nom exact, sinon le plus long.
+        const c = trouverCorvees(dit, libres.map((p) => p.corvee)).sort((a, b) => Number(memeNom(b.nom, dit)) - Number(memeNom(a.nom, dit)) || b.nom.length - a.nom.length)[0];
         if (!c) return `« ${dit} » n'est pas une corvée libre de la semaine. Regarde les noms avec voir_maison.`;
         if (o.qui !== "moi" && o.qui !== "elle") return "qui : « moi » ou « elle ».";
         libres.find((p) => p.corvee.id === c.id)!.qui = o.qui;
       }
       const m = minutesDeChacun(prop.parts);
+      const travail = (["moi", "elle"] as const).map((q) => `${ctx.noms[q]} ${prop.travail[q] ? heuresDites(prop.travail[q]) : "pas d'horaires posés"}`).join(", ");
       return {
         // Donner des corvées à l'autre : toujours demandé.
         outil: "repartir_semaine", genre: "gros", libelle: "Répartir la semaine",
-        details: [...libres.map((p) => `${p.corvee.nom} : ${ctx.noms[p.qui]}`), `${ctx.noms.moi} ${m.moi} min, ${ctx.noms.elle} ${m.elle} min`],
-        faire: () => poserRepartition(libres.map((p) => ({ id: p.corvee.id, qui: p.qui })), prop.jusqu, true),
+        details: [...libres.map((p) => `${p.corvee.nom} : ${ctx.noms[p.qui]}`), `Corvées : ${ctx.noms.moi} ${m.moi} min, ${ctx.noms.elle} ${m.elle} min`, `Au travail : ${travail}`],
+        // L'accord peut venir plus tard : on ne touche qu'aux corvées encore libres et pas changées entre-temps, et la semaine part du jour de l'accord.
+        faire: async () => {
+          const maintenant = (await db.maison_corvees.bulkGet(libres.map((p) => p.corvee.id)));
+          const encore = libres.filter((p, i) => { const c = maintenant[i]; return c && c.qui !== "moi" && c.qui !== "elle" && c.pris === p.corvee.pris && c.prisJusqu === p.corvee.prisJusqu; });
+          return poserRepartition(encore.map((p) => ({ id: p.corvee.id, qui: p.qui })), plusJours(auJour(0), 6), true);
+        },
       };
     },
   },

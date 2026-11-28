@@ -1,5 +1,6 @@
 import "fake-indexeddb/auto";
 import { describe, expect, it } from "vitest";
+import { auJour } from "../../lib/dates";
 import type { Horaire } from "../../lib/horaires";
 import { nettoyerCorvee, pour, pourMoi, type Corvee, type Fait } from "./donnees";
 import { minutesDeChacun, repartir } from "./repartition";
@@ -77,9 +78,26 @@ describe("Maison : Echo répartit la semaine", () => {
     expect(a.details).toContain("Sols : Sarah");
     expect((await db.maison_corvees.get("Sols"))?.pris).toBeUndefined();
     const defaire = await a.faire();
-    expect(await db.maison_corvees.get("Sols")).toMatchObject({ pris: "elle", prisJusqu: jour(6) });
+    expect(await db.maison_corvees.get("Sols")).toMatchObject({ pris: "elle", prisJusqu: auJour(6) }); // la semaine part du jour de l'accord
     expect((await db.maison_corvees.get("Litière"))?.pris).toBeUndefined();
     await defaire();
     expect((await db.maison_corvees.get("Sols"))?.pris).toBeUndefined();
+  });
+});
+
+describe("Maison : Echo répartit, cas de bord", () => {
+  it("prend le nom exact quand deux corvées vont, et laisse ce qui a changé avant l'accord", async () => {
+    const { db } = await import("../../data/db");
+    const { OUTILS_MAISON } = await import("./outilsEcho");
+    await db.maison_corvees.clear(); await db.maison_faits.clear(); await db.horaires.clear();
+    await db.maison_corvees.bulkPut([c({ nom: "Sols", taille: 3 }), c({ nom: "Sols salle de bain", taille: 2 }), c({ nom: "Vitres", taille: 2 })]);
+    const ctx = { noms: { moi: "Dany", elle: "Sarah" }, proprio: "moi" as const, now };
+    const a = await OUTILS_MAISON.repartir_semaine.preparer!({ changements: [{ corvee: "sols salle de bain", qui: "elle" }, { corvee: "sols", qui: "moi" }] }, ctx);
+    if (typeof a === "string") throw new Error(a);
+    expect(a.details).toEqual(expect.arrayContaining(["Sols salle de bain : Sarah", "Sols : Dany"]));
+    await db.maison_corvees.update("Vitres", { qui: "moi" });
+    await a.faire();
+    expect((await db.maison_corvees.get("Vitres"))?.pris).toBeUndefined();
+    expect((await db.maison_corvees.get("Sols salle de bain"))?.pris).toBe("elle");
   });
 });
