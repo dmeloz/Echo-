@@ -32,6 +32,9 @@ export interface Module {
   Reglages?: ComponentType<ContexteModule>; // sa sous-page dans les Réglages (une ligne du sommaire à son nom)
   // Une petite ligne dans la journée (accueil, sous « Ensuite », et vue Jour de l'Agenda, pour le jour regardé : ctx.jour). Rien à dire : elle ne rend rien.
   Journee?: ComponentType<ContexteModule>;
+  // Ce que le module a à dire dans le résumé du matin : de courtes phrases, sans mise en forme. Le résumé en montre 2 au plus par module.
+  // jour : la journée racontée (demain, pour le résumé du soir : demain vaut alors true). Rien à dire : une liste vide.
+  matin?: (c: { jour: string; demain: boolean }) => Promise<string[]>;
   // Ce que le module sait faire d'une phrase écrite dans la barre d'Echo. null : ce n'est pas pour lui.
   comprendre?: (texte: string) => PourModule | null;
   // Ce que l'assistant Echo peut faire dans ce module : nom de l'outil → ce que fait l'app.
