@@ -1,6 +1,6 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronLeft, ChevronRight, Plus, Users } from "pulsoicon-react";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { db } from "../../data/db";
 import { poserReglage, useReglage } from "../../data/hooks";
@@ -377,7 +377,7 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
   const [depense, setDepense] = useState(false);
   const [solde, setSolde] = useState<CompteSolde | null>(null);
   const [groupe, setGroupe] = useState<string | null>(null);
-  useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie, chacun, entreNous, point]);
+  useEffect(() => { document.querySelector(".defile")?.scrollTo(0, 0); }, [partie, chacun, entreNous, point, decalage]);
   // Le geste « retour » de l'app (glisser vers la droite) ferme le détail de chacun.
   useEffect(() => { const retour = () => { setChacun(null); setGroupe(null); setEntreNous(false); setPoint(false); }; window.addEventListener("echo-retour", retour); return () => window.removeEventListener("echo-retour", retour); }, []);
 
@@ -425,9 +425,9 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
     <>
       {entete && createPortal(<button type="button" className="pilule-entete" onClick={() => setDepense(true)}><Plus size={17} strokeWidth={2.4} />Dépense</button>, entete)}
       <div className="budget-mois" role="group" aria-label="Choisir le mois">
-        <button type="button" aria-label="Mois d'avant" onClick={() => { vibrer(4); setDecalage(decalage - 1); }}><ChevronLeft size={18} strokeWidth={2.4} animated={false} /></button>
+        <button type="button" aria-label="Mois d'avant" data-va="avant" onClick={() => { vibrer(4); setDecalage(decalage - 1); }}><ChevronLeft size={18} strokeWidth={2.4} animated={false} /></button>
         <div><b>{nomMois(mois)}</b><small>{periode(mois)}</small></div>
-        <button type="button" aria-label="Mois suivant" disabled={decalage >= 1} onClick={() => { vibrer(4); setDecalage(decalage + 1); }}><ChevronRight size={18} strokeWidth={2.4} animated={false} /></button>
+        <button type="button" aria-label="Mois suivant" data-va="apres" disabled={decalage >= 1} onClick={() => { vibrer(4); setDecalage(decalage + 1); }}><ChevronRight size={18} strokeWidth={2.4} animated={false} /></button>
         {decalage !== 0 && <button type="button" className="bouton-texte" onClick={() => setDecalage(0)}>Revenir à ce mois</button>}
       </div>
       {/* Les parties : trois mots et une goutte de verre, comme dans l'Agenda (règle de Dany pour toute l'app). */}
@@ -440,9 +440,13 @@ export function PageBudget({ noms, proprio, now }: ContexteModule) {
           <Users size={19} strokeWidth={1.8} />{aRendre > 0 && <i aria-hidden="true" />}
         </button>
       </div>
+      {/* key : la partie se redessine au changement de mois (le lot « Mouvement » la fait alors glisser du bon côté).
+          Un Fragment, pour que ses blocs restent des enfants directs de la page (l'arrivée en cascade). Les feuilles restent en dehors. */}
+      <Fragment key={mois}>
       {partie === "charges" ? <Charges {...vue} onChacun={setChacun} onNouveau={setNouveau} onGroupe={setGroupe} />
         : partie === "comptes" ? <Comptes {...vue} soldes={soldes} onSolde={setSolde} onNouveau={setNouveau} />
         : <Mois {...vue} depenses={depenses} categories={categories} apayer={apayer} today={today} onChacun={setChacun} onPartie={(p) => poserReglage("budgetPartie", p)} onPoint={() => setPoint(true)} />}
+      </Fragment>
       {feuilles}
     </>
   );

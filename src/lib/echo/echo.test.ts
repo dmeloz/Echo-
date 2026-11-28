@@ -51,6 +51,14 @@ describe("la liste fermée des outils", () => {
   });
 });
 
+describe("la limite des outils stricts", () => {
+  // L'API accepte au plus 20 outils « strict » par demande : un 21e ferait refuser TOUTES les demandes d'Echo.
+  // Avant d'ajouter un outil : retirer strict des outils qui ne font que lire (outilsPourClaude), puis ajuster cet essai.
+  it("pas plus de 20 outils stricts envoyés", () => {
+    expect(outilsPourClaude().filter((o) => o.strict).length).toBeLessThanOrEqual(20);
+  });
+});
+
 describe("le choix du modèle", () => {
   it("Sonnet pour organiser, Haiku pour une phrase simple", () => {
     expect(estPlan("Ok demain je dois fair les comision aller a landi aller chez fileman Sarah est occuper de 10h- 11h")).toBe(true);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { creerIcs, depuisZurich, estCalendrierEvenements, lienDans, lireEvenements, modifierIcs, prop, reponses, versZurich } from "../../supabase/functions/icloud/caldav";
+import { creerIcs, depuisZurich, echapperIcs, estCalendrierEvenements, lienDans, lireEvenements, modifierIcs, prop, reponses, texteIcs, versZurich, type Champs } from "../../supabase/functions/icloud/caldav";
+import { ecrireEvenement, ErreurApple, type Dav } from "../../supabase/functions/icloud/ecrire";
 
 const ICS = (corps: string) => `BEGIN:VCALENDAR\r\nVERSION:2.0\r\n${corps}END:VCALENDAR\r\n`;
 
@@ -59,5 +60,56 @@ describe("calendrier iCloud", () => {
     expect(apres).toContain("SEQUENCE:3");
     expect(apres).not.toContain("SUMMARY:Dentiste\r\n");
     expect(lireEvenements(apres)[0]).toMatchObject({ titre: "Dentiste (déplacé)", jour: "2026-12-04", heure: "09:00", fin: "10:00" });
+  });
+
+  it("10. relit bien une barre oblique inverse dans un titre (suivie d'un n, d'une virgule…)", () => {
+    for (const titre of ["C:\\notes", "a\\nb", "Pain, lait; œufs", "ligne 1\nligne 2", "fin\\"]) expect(texteIcs(echapperIcs(titre))).toBe(titre);
+    const ics = creerIcs({ uid: "u", titre: "Dossier C:\\nouveau", note: "", jour: "2026-12-03", heure: "", fin: "" });
+    expect(lireEvenements(ics)[0].titre).toBe("Dossier C:\\nouveau");
+  });
+});
+
+// Un faux iCloud : les fichiers par adresse, et le journal des requêtes.
+function fauxIcloud(fichiers: Record<string, string> = {}) {
+  const journal: string[] = [];
+  const dav: Dav = async (methode, url, corps, plus) => {
+    journal.push(`${methode} ${url.split("/").pop()}${plus?.["If-None-Match"] ? " (si absent)" : ""}`);
+    if (methode === "GET") return { status: url in fichiers ? 200 : 404, ok: url in fichiers, etag: "", texte: async () => fichiers[url] ?? "" };
+    if (plus?.["If-None-Match"] === "*" && url in fichiers) return { status: 412, ok: false, etag: "", texte: async () => "" };
+    fichiers[url] = corps ?? "";
+    return { status: 201, ok: true, etag: '"e"', texte: async () => "" };
+  };
+  return { dav, fichiers, journal };
+}
+
+describe("écrire dans iCloud", () => {
+  const CAL = "https://p1-caldav.icloud.com/1/calendars/home/";
+  const c: Champs = { uid: "abc", titre: "Dentiste", note: "", jour: "2026-12-03", heure: "15:00", fin: "16:00" };
+  const cal = () => Promise.resolve(CAL);
+
+  it("4. une création dont la réponse s'est perdue ne bloque pas : au nouvel essai, l'événement déjà là est mis à jour", async () => {
+    const ic = fauxIcloud();
+    // Premier essai : iCloud crée l'événement, mais le téléphone ne reçoit jamais la réponse (il ne connaît pas l'adresse).
+    await ecrireEvenement(ic.dav, c, "", cal);
+    // Il réessaie, toujours sans adresse, avec un titre changé entre-temps.
+    const r = await ecrireEvenement(ic.dav, { ...c, titre: "Dentiste (rappel)" }, "", cal);
+    expect(r.href).toBe(CAL + "abc.ics");
+    expect(lireEvenements(ic.fichiers[r.href]).map((e) => e.titre)).toEqual(["Dentiste (rappel)"]);
+    expect(ic.journal).toEqual(["PUT abc.ics (si absent)", "PUT abc.ics (si absent)", "GET abc.ics", "PUT abc.ics"]);
+  });
+
+  it("change un événement à son adresse, et le recrée s'il n'y est plus", async () => {
+    const ic = fauxIcloud();
+    const { href } = await ecrireEvenement(ic.dav, c, "", cal);
+    await ecrireEvenement(ic.dav, { ...c, heure: "17:00", fin: "18:00" }, href, () => Promise.reject(new Error("pas besoin du calendrier")));
+    expect(lireEvenements(ic.fichiers[href])[0]).toMatchObject({ heure: "17:00", fin: "18:00" });
+    delete ic.fichiers[href];
+    expect((await ecrireEvenement(ic.dav, c, href, cal)).href).toBe(href);
+    expect(href in ic.fichiers).toBe(true);
+  });
+
+  it("une vraie erreur d'iCloud reste une erreur", async () => {
+    const dav: Dav = async () => ({ status: 507, ok: false, etag: "", texte: async () => "" });
+    await expect(ecrireEvenement(dav, c, "", cal)).rejects.toBeInstanceOf(ErreurApple);
   });
 });
