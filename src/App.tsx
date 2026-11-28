@@ -187,7 +187,7 @@ export default function App() {
       )}
       {/* Les messages (avec Annuler) prennent la place de la barre rangée, à gauche de la capsule. */}
       <UnMessage />
-      <Toaster position="bottom-center" expand visibleToasts={2} gap={8} offset={BORDS_MESSAGE} mobileOffset={BORDS_MESSAGE} toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: 4000 }} />
+      <Toaster position="bottom-center" offset={BORDS_MESSAGE} mobileOffset={BORDS_MESSAGE} toastOptions={{ unstyled: true, classNames: { toast: "message" }, duration: 4000 }} />
     </>
   );
 }

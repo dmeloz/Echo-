@@ -275,8 +275,9 @@ async function prevenir(nouvelles: Array<{ par: string; texte: string }>) {
       if (mot) annoncer(mot);
     }
   }
+  // Un seul message (l'app n'en montre qu'un à la fois) : les changements arrivés ensemble y sont réunis.
   if (nouvelles.length > 3) { toast(`${prenom(nouvelles[0].par)} a fait ${nouvelles.length} changements`); return; }
-  for (const n of nouvelles) toast(`${prenom(n.par)} ${n.texte}`, { duration: 5000 });
+  if (nouvelles.length) toast(nouvelles.map((n, i) => (i && n.par === nouvelles[i - 1].par ? n.texte : `${prenom(n.par)} ${n.texte}`)).join(", puis "), { duration: 5000 + 1500 * (nouvelles.length - 1) });
 }
 
 // Les prénoms viennent du foyer : chacun a donné le sien au premier lancement.
